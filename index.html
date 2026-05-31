@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Was machen wir heute? 💬</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #ECE5DD; min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 2rem 1rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.wa-phone { width: 100%; max-width: 360px; background: #E5DDD5; border-radius: 18px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.15); }
+.wa-header { background: #075E54; padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
+.wa-avatar { width: 38px; height: 38px; border-radius: 50%; background: #25D366; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.wa-name { color: #fff; font-size: 15px; font-weight: 600; }
+.wa-status { color: #B2DFDB; font-size: 12px; }
+.wa-body { padding: 14px 10px; display: flex; flex-direction: column; gap: 10px; min-height: 320px; }
+.bubble { background: #fff; border-radius: 12px 12px 12px 2px; padding: 10px 14px; max-width: 88%; align-self: flex-start; font-size: 14px; color: #111; opacity: 0; transform: translateY(10px); animation: popin 0.4s ease forwards; }
+.bubble .time { font-size: 11px; color: #999; text-align: right; margin-top: 4px; }
+@keyframes popin { to { opacity: 1; transform: translateY(0); } }
+.options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; opacity: 0; animation: popin 0.4s ease 1.2s forwards; }
+.opt-btn { background: #fff; border: 1.5px solid #25D366; border-radius: 10px; padding: 10px 8px; text-align: center; cursor: pointer; font-size: 13px; color: #075E54; font-weight: 600; transition: background 0.2s, transform 0.1s; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.opt-btn:hover { background: #E8F5E9; transform: scale(1.03); }
+.opt-btn:active { transform: scale(0.97); }
+.opt-icon { font-size: 24px; }
+.custom-row { display: flex; gap: 6px; opacity: 0; animation: popin 0.4s ease 1.4s forwards; }
+.custom-input { flex: 1; border: 1.5px solid #25D366; border-radius: 10px; padding: 9px 10px; font-size: 13px; color: #111; background: #fff; outline: none; }
+.custom-input::placeholder { color: #aaa; }
+.custom-send { background: #25D366; border: none; border-radius: 10px; padding: 9px 12px; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
+.reply-bubble { background: #DCF8C6; border-radius: 12px 12px 2px 12px; padding: 10px 14px; max-width: 88%; align-self: flex-end; font-size: 14px; color: #111; display: none; animation: popin 0.4s ease forwards; }
+.reply-bubble .time { font-size: 11px; color: #999; text-align: right; margin-top: 4px; }
+.wa-inputbar { background: #fff; padding: 8px 12px; display: flex; align-items: center; gap: 8px; border-top: 0.5px solid #ddd; }
+.wa-inputbar input { flex: 1; background: #F0F0F0; border: none; border-radius: 20px; padding: 7px 12px; font-size: 13px; color: #333; outline: none; }
+.wa-inputbar button { background: #25D366; border: none; border-radius: 50%; width: 34px; height: 34px; color: #fff; font-size: 16px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="wa-phone">
+  <div class="wa-header">
+    <div class="wa-avatar">👩</div>
+    <div>
+      <div class="wa-name">Meine Frau ❤️</div>
+      <div class="wa-status">online</div>
+    </div>
+  </div>
+  <div class="wa-body">
+    <div class="bubble" style="animation-delay:0.3s">
+      Hey Schatz 😊 Was sollen wir heute machen?
+      <div class="time">jetzt</div>
+    </div>
+    <div class="bubble" style="animation-delay:0.8s">
+      Ich hab ein paar Ideen — such dir was aus oder schreib selbst was!
+      <div class="time">jetzt</div>
+    </div>
+    <div class="options-grid" id="opts">
+      <button class="opt-btn" onclick="choose('🏊 Schwimmbad')"><span class="opt-icon">🏊</span>Schwimmbad</button>
+      <button class="opt-btn" onclick="choose('🍦 Eisessen')"><span class="opt-icon">🍦</span>Eisessen</button>
+      <button class="opt-btn" onclick="choose('🍽️ Essen gehen')"><span class="opt-icon">🍽️</span>Essen gehen</button>
+      <button class="opt-btn" onclick="choose('🧹 Aufräumen')"><span class="opt-icon">🧹</span>Aufräumen</button>
+      <button class="opt-btn" onclick="choose('🚴 Fahrrad fahren')"><span class="opt-icon">🚴</span>Fahrrad fahren</button>
+      <button class="opt-btn" onclick="choose('🎬 Kino / Film')"><span class="opt-icon">🎬</span>Kino / Film</button>
+    </div>
+    <div class="custom-row" id="custom-row">
+      <input class="custom-input" id="custom-input" placeholder="Eigene Idee..." maxlength="40" />
+      <button class="custom-send" onclick="sendCustom()">Senden</button>
+    </div>
+    <div class="reply-bubble" id="reply">
+      <span id="reply-text"></span>
+      <div class="time">jetzt ✓✓</div>
+    </div>
+  </div>
+  <div class="wa-inputbar">
+    <input placeholder="Nachricht" readonly />
+    <button>➤</button>
+  </div>
+</div>
+<script>
+function choose(option) {
+  document.getElementById('opts').style.display = 'none';
+  document.getElementById('custom-row').style.display = 'none';
+  var r = document.getElementById('reply');
+  document.getElementById('reply-text').textContent = option + ' klingt perfekt! 😍';
+  r.style.display = 'block';
+}
+function sendCustom() {
+  var val = document.getElementById('custom-input').value.trim();
+  if (!val) return;
+  choose('✨ ' + val);
+}
+document.getElementById('custom-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') sendCustom();
+});
+</script>
+</body>
+</html>

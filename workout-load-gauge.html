@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workout Load Gauge — 15s Motion Graphic</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #0b0c10; }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; min-height: 100vh; padding: 24px 12px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  /* Checkerboard = preview aid only, proves the canvas itself is transparent.
+     It never appears in an exported frame — only #stage pixels are captured. */
+  .stage-wrap {
+    width: 100%; max-width: 380px; aspect-ratio: 9 / 16;
+    background-image:
+      repeating-conic-gradient(#2a2d33 0% 25%, #1c1e22 0% 50%);
+    background-size: 24px 24px;
+    border-radius: 12px; overflow: hidden;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  }
+  #stage { width: 100%; height: 100%; display: block; }
+  .controls {
+    display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 380px;
+  }
+  .controls button {
+    background: #1c1e22; color: #eee; border: 1px solid #3a3d44; border-radius: 8px;
+    padding: 9px 14px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  .controls button:hover { background: #26292f; }
+  .controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { color: #9aa0a6; font-size: 12px; min-height: 16px; text-align: center; }
+  .hint { color: #6a7078; font-size: 11px; max-width: 380px; text-align: center; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<div class="stage-wrap">
+  <canvas id="stage" width="1080" height="1920"></canvas>
+</div>
+
+<div class="controls">
+  <button id="btn-replay">▶ Replay</button>
+  <button id="btn-record">⬤ Als WebM exportieren</button>
+  <button id="btn-png">🖼 Aktuellen Frame als PNG</button>
+</div>
+<div class="status" id="status"></div>
+<div class="hint">
+  Die Karo-Fläche dient nur der Vorschau (zeigt Transparenz). Exportiert wird ausschließlich
+  der Canvas-Inhalt. WebM-Export rendert automatisch auf Schwarz — im Schnittprogramm
+  Blend-Modus „Screen“/„Aufhellen“ auf die Ebene legen, dann verschwindet Schwarz vollständig.
+</div>
+
+<script>
+/* ======================= EINSTELLBARE PARAMETER ======================= */
+const CONFIG = {
+  duration:  15,     // Sekunden — Dauer des Anstiegs 0 -> endLevel
+  startLevel: 0,     // Startwert der Skala (0-10)
+  endLevel:   8,     // Endwert der Skala (0-10)
+  maxLevel:   10,    // Skalenmaximum (Anzahl Segmente bleibt fix bei 10)
+  holdTime:   1,     // Sekunden, die der Endwert nach Ablauf gehalten wird
+  decimals:   1,     // 1 = "7.4", 0 = nur ganze Zahlen "7"
+  label:      "LEVEL", // z.B. "LEVEL" oder "LOAD"
+  autoStart:  true,
+  background: "transparent" // "transparent" für Overlay-Nutzung, sonst z.B. "#000000"
+};
+/* ======================================================================= */
+
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+let activeBackground = CONFIG.background;
+
+/* --- Easing: langsamer Start, gleichmäßiger Anstieg, dynamischeres Finish,
+   sauberes kontrolliertes Erreichen des Endwerts (Drehzahlmesser-Charakter). --- */
+function easeLoad(t) {
+  t = Math.min(Math.max(t, 0), 1);
+  const split = 0.82;   // Anteil der Zeit, an dem die Steigphase endet
+  const splitV = 0.88;  // Anteil des Wertebereichs, der bis dahin erreicht ist
+  if (t <= split) {
+    const u = t / split;
+    return splitV * Math.pow(u, 1.7);
+  }
+  const u = (t - split) / (1 - split);
+  return splitV + (1 - splitV) * (1 - Math.pow(1 - u, 3));
+}
+
+/* --- Farbverlauf grün -> gelb/orange -> rot, wie Telemetrie/Rev-Lights --- */
+const COLOR_STOPS = [
+  { p: 0.0,  c: [34, 197, 94] },
+  { p: 0.55, c: [245, 158, 11] },
+  { p: 1.0,  c: [239, 68, 68] }
+];
+function lerpColor(t) {
+  t = Math.min(Math.max(t, 0), 1);
+  for (let i = 0; i < COLOR_STOPS.length - 1; i++) {
+    const a = COLOR_STOPS[i], b = COLOR_STOPS[i + 1];
+    if (t >= a.p && t <= b.p) {
+      const local = (t - a.p) / (b.p - a.p);
+      const r = Math.round(a.c[0] + (b.c[0] - a.c[0]) * local);
+      const g = Math.round(a.c[1] + (b.c[1] - a.c[1]) * local);
+      const bl = Math.round(a.c[2] + (b.c[2] - a.c[2]) * local);
+      return `rgb(${r},${g},${bl})`;
+    }
+  }
+  const last = COLOR_STOPS[COLOR_STOPS.length - 1].c;
+  return `rgb(${last[0]},${last[1]},${last[2]})`;
+}
+function segmentColor(i) { return lerpColor(i / (LAYOUT.segCount - 1)); }
+
+function roundRect(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+
+/* --- Layout: kompakte Spalte am linken Rand, Bildmitte bleibt frei --- */
+const LAYOUT = {
+  panelX: 40, panelY: 380, panelW: 280, panelH: 1150, panelR: 28,
+  labelCX: 180,
+  numberCX: 180,
+  barX: 90, barW: 180, barTop: 640, barBottom: 1480, gap: 8, segCount: 10
+};
+
+function draw(level) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (activeBackground !== 'transparent') {
+    ctx.fillStyle = activeBackground;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  // Hintergrund-Panel für Lesbarkeit über jedem Video
+  ctx.fillStyle = 'rgba(8,10,14,0.38)';
+  roundRect(ctx, LAYOUT.panelX, LAYOUT.panelY, LAYOUT.panelW, LAYOUT.panelH, LAYOUT.panelR);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Label
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,0.72)';
+  ctx.font = '600 32px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+  try { ctx.letterSpacing = '6px'; } catch (e) {}
+  ctx.fillText(CONFIG.label, LAYOUT.labelCX, LAYOUT.panelY + 60);
+  try { ctx.letterSpacing = '0px'; } catch (e) {}
+
+  // Zahl
+  const numColor = lerpColor(level / CONFIG.maxLevel);
+  ctx.font = '800 128px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+  ctx.fillStyle = numColor;
+  ctx.shadowColor = numColor;
+  ctx.shadowBlur = 24;
+  ctx.fillText(level.toFixed(CONFIG.decimals), LAYOUT.numberCX, LAYOUT.panelY + 190);
+  ctx.shadowBlur = 0;
+  ctx.font = '600 40px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillText(`/ ${CONFIG.maxLevel}`, LAYOUT.numberCX, LAYOUT.panelY + 240);
+
+  // Segmentbalken
+  const segCount = LAYOUT.segCount;
+  const totalGap = LAYOUT.gap * (segCount - 1);
+  const segH = (LAYOUT.barBottom - LAYOUT.barTop - totalGap) / segCount;
+
+  for (let i = 0; i < segCount; i++) {
+    const y = LAYOUT.barBottom - (i + 1) * segH - i * LAYOUT.gap;
+    const color = segmentColor(i);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    roundRect(ctx, LAYOUT.barX, y, LAYOUT.barW, segH, 12);
+    ctx.fill();
+
+    const fillFrac = Math.min(Math.max(level - i, 0), 1);
+    if (fillFrac > 0) {
+      ctx.save();
+      roundRect(ctx, LAYOUT.barX, y, LAYOUT.barW, segH, 12);
+      ctx.clip();
+      const fh = segH * fillFrac;
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = fillFrac >= 0.98 ? 22 : 0;
+      ctx.fillRect(LAYOUT.barX, y + segH - fh, LAYOUT.barW, fh);
+      ctx.restore();
+    }
+
+    if ((i + 1) % 2 === 0) {
+      ctx.textAlign = 'left';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font = '500 22px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+      ctx.fillText(String(i + 1), LAYOUT.barX + LAYOUT.barW + 14, y + segH / 2 + 8);
+      ctx.textAlign = 'center';
+    }
+  }
+
+  // Zeiger auf exaktem kontinuierlichem Wert
+  const levelFrac = Math.min(Math.max(level / segCount, 0), 1);
+  const pointerY = LAYOUT.barBottom - levelFrac * (LAYOUT.barBottom - LAYOUT.barTop);
+  ctx.beginPath();
+  ctx.moveTo(LAYOUT.barX - 18, pointerY);
+  ctx.lineTo(LAYOUT.barX - 4, pointerY - 10);
+  ctx.lineTo(LAYOUT.barX - 4, pointerY + 10);
+  ctx.closePath();
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = '#ffffff';
+  ctx.shadowBlur = 10;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+/* --- Ablaufsteuerung --- */
+let startTime = null;
+let rafId = null;
+let recording = false;
+
+function frame(now) {
+  if (startTime === null) startTime = now;
+  const elapsed = (now - startTime) / 1000;
+  const rampT = Math.min(elapsed / CONFIG.duration, 1);
+  const eased = easeLoad(rampT);
+  const level = CONFIG.startLevel + (CONFIG.endLevel - CONFIG.startLevel) * eased;
+  draw(level);
+
+  if (elapsed < CONFIG.duration + CONFIG.holdTime) {
+    rafId = requestAnimationFrame(frame);
+  } else {
+    draw(CONFIG.endLevel);
+    if (recording) stopRecording();
+  }
+}
+
+function play() {
+  cancelAnimationFrame(rafId);
+  startTime = null;
+  rafId = requestAnimationFrame(frame);
+}
+
+/* --- Export: WebM (schwarzer Hintergrund, für Blend-Modus "Screen") --- */
+let mediaRecorder, recordedChunks = [];
+const statusEl = document.getElementById('status');
+const btnRecord = document.getElementById('btn-record');
+
+function recordWebM() {
+  if (!canvas.captureStream) {
+    statusEl.textContent = 'captureStream() wird von diesem Browser nicht unterstützt.';
+    return;
+  }
+  recordedChunks = [];
+  activeBackground = '#000000';
+  const stream = canvas.captureStream(30);
+  let options = { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 8000000 };
+  if (!MediaRecorder.isTypeSupported(options.mimeType)) options = { mimeType: 'video/webm' };
+  mediaRecorder = new MediaRecorder(stream, options);
+  mediaRecorder.ondataavailable = e => { if (e.data.size) recordedChunks.push(e.data); };
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'level-gauge.webm'; a.click();
+    URL.revokeObjectURL(url);
+    activeBackground = CONFIG.background;
+    btnRecord.disabled = false;
+    statusEl.textContent = 'WebM gespeichert (Schwarz -> Blend-Modus "Screen" im Schnittprogramm).';
+  };
+  mediaRecorder.start();
+  recording = true;
+  btnRecord.disabled = true;
+  statusEl.textContent = 'Nimmt auf ...';
+  play();
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  recording = false;
+}
+
+/* --- Export: einzelnes PNG-Frame mit echtem Alpha-Kanal --- */
+function savePNG() {
+  canvas.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'level-gauge-frame.png'; a.click();
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+}
+
+document.getElementById('btn-replay').addEventListener('click', play);
+document.getElementById('btn-record').addEventListener('click', recordWebM);
+document.getElementById('btn-png').addEventListener('click', savePNG);
+
+if (CONFIG.autoStart) play();
+else draw(CONFIG.startLevel);
+</script>
+</body>
+</html>

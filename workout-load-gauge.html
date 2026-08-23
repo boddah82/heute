@@ -64,6 +64,8 @@ const CONFIG = {
   holdTime:   1,     // Sekunden, die der Endwert nach Ablauf gehalten wird
   decimals:   1,     // 1 = "7.4", 0 = nur ganze Zahlen "7"
   label:      "LEVEL", // z.B. "LEVEL" oder "LOAD"
+  showTimer:  true,  // Countdown-Timer (Sekunden) im Feld anzeigen
+  timerDecimals: 1,  // Nachkommastellen des Timers, z.B. "15.0s"
   autoStart:  true,
   background: "transparent" // "transparent" für Overlay-Nutzung, sonst z.B. "#000000"
 };
@@ -122,13 +124,13 @@ function roundRect(c, x, y, w, h, r) {
 
 /* --- Layout: kompakte Spalte am linken Rand, Bildmitte bleibt frei --- */
 const LAYOUT = {
-  panelX: 40, panelY: 380, panelW: 280, panelH: 1150, panelR: 28,
+  panelX: 40, panelY: 380, panelW: 280, panelH: 1210, panelR: 28,
   labelCX: 180,
   numberCX: 180,
-  barX: 90, barW: 180, barTop: 640, barBottom: 1480, gap: 8, segCount: 10
+  barX: 90, barW: 180, barTop: 700, barBottom: 1540, gap: 8, segCount: 10
 };
 
-function draw(level) {
+function draw(level, remaining) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (activeBackground !== 'transparent') {
     ctx.fillStyle = activeBackground;
@@ -143,12 +145,20 @@ function draw(level) {
   ctx.lineWidth = 2;
   ctx.stroke();
 
+  // Countdown-Timer, eigene Zeile oben im Feld
+  if (CONFIG.showTimer && remaining !== undefined) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '600 30px "Segoe UI Mono", Menlo, Consolas, monospace';
+    ctx.fillText('⏱ ' + remaining.toFixed(CONFIG.timerDecimals) + 's', LAYOUT.labelCX, LAYOUT.panelY + 55);
+  }
+
   // Label
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(255,255,255,0.72)';
   ctx.font = '600 32px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
   try { ctx.letterSpacing = '6px'; } catch (e) {}
-  ctx.fillText(CONFIG.label, LAYOUT.labelCX, LAYOUT.panelY + 60);
+  ctx.fillText(CONFIG.label, LAYOUT.labelCX, LAYOUT.panelY + 120);
   try { ctx.letterSpacing = '0px'; } catch (e) {}
 
   // Zahl
@@ -157,11 +167,11 @@ function draw(level) {
   ctx.fillStyle = numColor;
   ctx.shadowColor = numColor;
   ctx.shadowBlur = 24;
-  ctx.fillText(level.toFixed(CONFIG.decimals), LAYOUT.numberCX, LAYOUT.panelY + 190);
+  ctx.fillText(level.toFixed(CONFIG.decimals), LAYOUT.numberCX, LAYOUT.panelY + 250);
   ctx.shadowBlur = 0;
   ctx.font = '600 40px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
-  ctx.fillText(`/ ${CONFIG.maxLevel}`, LAYOUT.numberCX, LAYOUT.panelY + 240);
+  ctx.fillText(`/ ${CONFIG.maxLevel}`, LAYOUT.numberCX, LAYOUT.panelY + 300);
 
   // Segmentbalken
   const segCount = LAYOUT.segCount;
@@ -224,12 +234,13 @@ function frame(now) {
   const rampT = Math.min(elapsed / CONFIG.duration, 1);
   const eased = easeLoad(rampT);
   const level = CONFIG.startLevel + (CONFIG.endLevel - CONFIG.startLevel) * eased;
-  draw(level);
+  const remaining = Math.max(CONFIG.duration - Math.min(elapsed, CONFIG.duration), 0);
+  draw(level, remaining);
 
   if (elapsed < CONFIG.duration + CONFIG.holdTime) {
     rafId = requestAnimationFrame(frame);
   } else {
-    draw(CONFIG.endLevel);
+    draw(CONFIG.endLevel, 0);
     if (recording) stopRecording();
   }
 }
@@ -294,7 +305,7 @@ document.getElementById('btn-record').addEventListener('click', recordWebM);
 document.getElementById('btn-png').addEventListener('click', savePNG);
 
 if (CONFIG.autoStart) play();
-else draw(CONFIG.startLevel);
+else draw(CONFIG.startLevel, CONFIG.duration);
 </script>
 </body>
 </html>

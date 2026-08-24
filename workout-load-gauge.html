@@ -33,7 +33,13 @@
   .controls button:hover { background: #26292f; }
   .controls button:disabled { opacity: 0.5; cursor: not-allowed; }
   .status { color: #9aa0a6; font-size: 12px; min-height: 16px; text-align: center; }
-  .hint { color: #6a7078; font-size: 11px; max-width: 380px; text-align: center; line-height: 1.5; }
+  .hint { color: #6a7078; font-size: 11px; max-width: 380px; text-align: center; line-height: 1.6; }
+  .hint b { color: #b7bcc2; }
+  .hint code {
+    display: inline-block; margin-top: 4px; background: #16181c; color: #a9e6c9;
+    border: 1px solid #2a2e35; border-radius: 6px; padding: 4px 8px; font-size: 10.5px;
+    word-break: break-all;
+  }
 </style>
 </head>
 <body>
@@ -44,14 +50,19 @@
 
 <div class="controls">
   <button id="btn-replay">▶ Replay</button>
-  <button id="btn-record">⬤ Als WebM exportieren</button>
+  <button id="btn-zip">📦 PNG-Sequenz (ZIP) — transparent &amp; scharf</button>
   <button id="btn-png">🖼 Aktuellen Frame als PNG</button>
+  <button id="btn-record">⬤ Als WebM exportieren (Screen-Blend)</button>
 </div>
 <div class="status" id="status"></div>
 <div class="hint">
-  Die Karo-Fläche dient nur der Vorschau (zeigt Transparenz). Exportiert wird ausschließlich
-  der Canvas-Inhalt. WebM-Export rendert automatisch auf Schwarz — im Schnittprogramm
-  Blend-Modus „Screen“/„Aufhellen“ auf die Ebene legen, dann verschwindet Schwarz vollständig.
+  Die Karo-Fläche dient nur der Vorschau. Empfohlen: <b>PNG-Sequenz (ZIP)</b> — verlustfrei,
+  echter Alpha-Kanal, ein Klick. Entpacken und in DaVinci Resolve / Premiere Pro direkt als
+  „Image Sequence" importieren (perfekte Qualität, echte Transparenz). Für CapCut die Frames
+  vorher mit ffmpeg in ein Alpha-Video wandeln:<br>
+  <code>ffmpeg -framerate 25 -i frame_%04d.png -c:v libvpx-vp9 -pix_fmt yuva420p -b:v 0 -crf 18 output.webm</code><br>
+  Der WebM-Button ist nur ein schneller Vorab-Check (schwarzer Hintergrund, Blend-Modus „Screen“ nötig,
+  verlustbehaftet — nicht für die finale Qualität gedacht).
 </div>
 
 <script>
@@ -300,9 +311,110 @@ function savePNG() {
   }, 'image/png');
 }
 
+/* --- Export: PNG-Sequenz als ZIP (verlustfrei, echter Alpha-Kanal) ---
+   Rendert die Sequenz deterministisch (nicht in Echtzeit), packt alle
+   Frames in ein selbst geschriebenes ZIP (Methode "store", keine
+   zusätzliche Kompression nötig, PNG ist schon komprimiert) und löst
+   genau einen Download aus. Keine externe Zip-Bibliothek nötig. */
+const CRC_TABLE = (() => {
+  const table = [];
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+function crc32(bytes) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ bytes[i]) & 0xFF];
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+function u16(n) { return [n & 0xFF, (n >>> 8) & 0xFF]; }
+function u32(n) { return [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF]; }
+
+async function buildZip(files) {
+  const enc = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  const dosTime = 0, dosDate = 0x21;
+
+  for (const f of files) {
+    const data = f.data;
+    const nameBytes = enc.encode(f.name);
+    const crc = crc32(data);
+    const localHeader = new Uint8Array([
+      0x50, 0x4b, 0x03, 0x04, 20, 0, 0, 0, 0, 0,
+      ...u16(dosTime), ...u16(dosDate),
+      ...u32(crc), ...u32(data.length), ...u32(data.length),
+      ...u16(nameBytes.length), ...u16(0)
+    ]);
+    localParts.push(localHeader, nameBytes, data);
+
+    const centralHeader = new Uint8Array([
+      0x50, 0x4b, 0x01, 0x02, 20, 0, 20, 0, 0, 0, 0, 0,
+      ...u16(dosTime), ...u16(dosDate),
+      ...u32(crc), ...u32(data.length), ...u32(data.length),
+      ...u16(nameBytes.length), ...u16(0), ...u16(0),
+      ...u16(0), ...u16(0),
+      ...u32(0), ...u32(offset)
+    ]);
+    centralParts.push(centralHeader, nameBytes);
+    offset += localHeader.length + nameBytes.length + data.length;
+  }
+
+  const centralStart = offset;
+  const centralSize = centralParts.reduce((s, p) => s + p.length, 0);
+  const eocd = new Uint8Array([
+    0x50, 0x4b, 0x05, 0x06, 0, 0, 0, 0,
+    ...u16(files.length), ...u16(files.length),
+    ...u32(centralSize), ...u32(centralStart), 0, 0
+  ]);
+
+  const allParts = [...localParts, ...centralParts, eocd];
+  const total = allParts.reduce((s, p) => s + p.length, 0);
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const p of allParts) { out.set(p, pos); pos += p.length; }
+  return new Blob([out], { type: 'application/zip' });
+}
+
+async function exportPNGZip() {
+  const fps = 25;
+  const totalFrames = Math.round((CONFIG.duration + CONFIG.holdTime) * fps);
+  const files = [];
+  btnZip.disabled = true;
+
+  for (let i = 0; i <= totalFrames; i++) {
+    const t = i / fps;
+    const rampT = Math.min(t / CONFIG.duration, 1);
+    const level = CONFIG.startLevel + (CONFIG.endLevel - CONFIG.startLevel) * easeLoad(rampT);
+    const remaining = Math.max(CONFIG.duration - Math.min(t, CONFIG.duration), 0);
+    draw(level, remaining);
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    const data = new Uint8Array(await blob.arrayBuffer());
+    files.push({ name: `frame_${String(i).padStart(4, '0')}.png`, data });
+    if (i % 20 === 0) statusEl.textContent = `Rendere Frame ${i}/${totalFrames} ...`;
+  }
+
+  statusEl.textContent = 'Packe ZIP ...';
+  const zipBlob = await buildZip(files);
+  const url = URL.createObjectURL(zipBlob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'level-gauge-frames.zip'; a.click();
+  URL.revokeObjectURL(url);
+
+  statusEl.textContent = `Fertig: ${files.length} PNG-Frames als ZIP gespeichert.`;
+  btnZip.disabled = false;
+  play();
+}
+
+const btnZip = document.getElementById('btn-zip');
 document.getElementById('btn-replay').addEventListener('click', play);
 document.getElementById('btn-record').addEventListener('click', recordWebM);
 document.getElementById('btn-png').addEventListener('click', savePNG);
+btnZip.addEventListener('click', exportPNGZip);
 
 if (CONFIG.autoStart) play();
 else draw(CONFIG.startLevel, CONFIG.duration);

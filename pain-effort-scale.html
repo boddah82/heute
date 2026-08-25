@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schmerz &amp; Anstrengung — Erklär-Animation</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #0c0e12; }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; min-height: 100vh; padding: 24px 12px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  .stage-wrap {
+    width: 100%; max-width: 380px; aspect-ratio: 9 / 16;
+    border-radius: 12px; overflow: hidden;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  }
+  #stage { width: 100%; height: 100%; display: block; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 380px; }
+  .controls button {
+    background: #1c1e22; color: #eee; border: 1px solid #3a3d44; border-radius: 8px;
+    padding: 9px 14px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  .controls button:hover { background: #26292f; }
+  .controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { color: #9aa0a6; font-size: 12px; min-height: 16px; text-align: center; }
+  .hint { color: #6a7078; font-size: 11px; max-width: 380px; text-align: center; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div class="stage-wrap">
+  <canvas id="stage" width="1080" height="1920"></canvas>
+</div>
+
+<div class="controls">
+  <button id="btn-replay">▶ Replay</button>
+  <button id="btn-zip">📦 PNG-Sequenz (ZIP)</button>
+</div>
+<div class="status" id="status"></div>
+<div class="hint">
+  Eigenständiger Erklär-Clip (kein transparentes Overlay) — undurchsichtiger Hintergrund,
+  fertig zum direkten Posten. ZIP exportiert die volle Sequenz als verlustfreie PNGs.
+</div>
+
+<script>
+/* ======================= EINSTELLBARE PARAMETER ======================= */
+/* Jede Phase: Dauer (s), Schmerz-/Anstrengungs-Bereich [von, bis],
+   Überschrift + Unterzeile, ob die Skalen sichtbar sind, und optional
+   eine "Wiederholungen im Tank"-Anzeige. Reihenfolge = Ablauf. */
+const PHASES = [
+  { id: 'intro',    duration: 2.5, pain: [0,0], effort: [0,0],
+    headline: 'SCHMERZ + ANSTRENGUNG', sub: 'ZUSAMMEN MAX. 10 VON 10', gauges: false },
+  { id: 'reveal',   duration: 1.8, pain: [0,0], effort: [0,0],
+    headline: 'SCHMERZ + ANSTRENGUNG', sub: 'ZUSAMMEN MAX. 10 VON 10', gauges: true, pop: true },
+  { id: 'ex1',      duration: 4.5, pain: [0,3], effort: [0,7],
+    headline: '3 VON 10 SCHMERZ', sub: '→ MAX. 7 ANSTRENGUNG', gauges: true },
+  { id: 'ex1-hold', duration: 2.0, pain: [3,3], effort: [7,7],
+    headline: '3 VON 10 SCHMERZ', sub: '→ MAX. 7 ANSTRENGUNG', gauges: true, tank: 3 },
+  { id: 'ex2',      duration: 4.0, pain: [3,5], effort: [7,5],
+    headline: '5 VON 10 SCHMERZ', sub: '→ MAX. 5 ANSTRENGUNG', gauges: true },
+  { id: 'ex2-hold', duration: 2.5, pain: [5,5], effort: [5,5],
+    headline: '5 VON 10 SCHMERZ', sub: '→ MAX. 5 ANSTRENGUNG', gauges: true, tank: 5 },
+  { id: 'outro',    duration: 3.2, pain: [5,5], effort: [5,5],
+    headline: 'SCHMERZ + ANSTRENGUNG ≤ 10', sub: 'SCHMERZ NIE ÜBER 5', gauges: true, tank: 5 },
+];
+const holdTime = 1.0; // Sekunden Standbild am Ende
+/* ======================================================================= */
+
+PHASES.forEach((p, i) => {
+  p._fadeIn = i === 0 || PHASES[i - 1].headline !== p.headline;
+  p._fadeOut = i === PHASES.length - 1 || PHASES[i + 1].headline !== p.headline;
+});
+const TOTAL = PHASES.reduce((s, p) => s + p.duration, 0);
+const GAUGES_START = PHASES[0].duration;
+
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+
+function clamp(v, a, b) { return Math.min(Math.max(v, a), b); }
+
+function easeRamp(t) {
+  t = clamp(t, 0, 1);
+  const split = 0.82, splitV = 0.88;
+  if (t <= split) { const u = t / split; return splitV * Math.pow(u, 1.7); }
+  const u = (t - split) / (1 - split);
+  return splitV + (1 - splitV) * (1 - Math.pow(1 - u, 3));
+}
+function easeOutBack(t) {
+  t = clamp(t, 0, 1);
+  const c1 = 1.70158, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+
+const COLOR_STOPS = [
+  { p: 0.0, c: [34, 197, 94] },
+  { p: 0.55, c: [245, 158, 11] },
+  { p: 1.0, c: [239, 68, 68] }
+];
+function lerpColor(t) {
+  t = clamp(t, 0, 1);
+  for (let i = 0; i < COLOR_STOPS.length - 1; i++) {
+    const a = COLOR_STOPS[i], b = COLOR_STOPS[i + 1];
+    if (t >= a.p && t <= b.p) {
+      const local = (t - a.p) / (b.p - a.p);
+      const r = Math.round(a.c[0] + (b.c[0] - a.c[0]) * local);
+      const g = Math.round(a.c[1] + (b.c[1] - a.c[1]) * local);
+      const bl = Math.round(a.c[2] + (b.c[2] - a.c[2]) * local);
+      return `rgb(${r},${g},${bl})`;
+    }
+  }
+  const last = COLOR_STOPS[COLOR_STOPS.length - 1].c;
+  return `rgb(${last[0]},${last[1]},${last[2]})`;
+}
+
+function roundRect(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+
+const LAYOUT = {
+  eyebrowY: 150, headlineY: 235, subY: 300,
+  gaugeLabelY: 560, gaugeNumberY: 700, gaugeSlashY: 760,
+  barTop: 820, barBottom: 1650, barW: 200, gap: 8, segCount: 10,
+  leftCX: 300, rightCX: 780,
+  combinedY: 1700, combinedH: 50, combinedX: 140, combinedW: 800,
+  tankY: 1840
+};
+
+function drawGaugeGroup(cx, label, value, tIn, phase, isLeft) {
+  const barX = cx - LAYOUT.barW / 2;
+  const anchorY = (LAYOUT.gaugeLabelY + LAYOUT.barBottom) / 2;
+
+  let scale = 1, alpha = 1;
+  if (phase.pop) {
+    const delay = isLeft ? 0 : 0.22;
+    const u = clamp((tIn - delay) / (phase.duration * 0.8), 0, 1);
+    scale = easeOutBack(u);
+    alpha = clamp((tIn - delay) / 0.3, 0, 1);
+  }
+  if (alpha <= 0) return;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(cx, anchorY);
+  ctx.scale(scale, scale);
+  ctx.translate(-cx, -anchorY);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,0.72)';
+  ctx.font = '600 30px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+  try { ctx.letterSpacing = '4px'; } catch (e) {}
+  ctx.fillText(label, cx, LAYOUT.gaugeLabelY);
+  try { ctx.letterSpacing = '0px'; } catch (e) {}
+
+  const numColor = lerpColor(value / 10);
+  ctx.font = '800 100px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+  ctx.fillStyle = numColor;
+  ctx.shadowColor = numColor;
+  ctx.shadowBlur = 20;
+  ctx.fillText(value.toFixed(1), cx, LAYOUT.gaugeNumberY);
+  ctx.shadowBlur = 0;
+  ctx.font = '600 30px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillText('/ 10', cx, LAYOUT.gaugeSlashY);
+
+  const segCount = LAYOUT.segCount;
+  const totalGap = LAYOUT.gap * (segCount - 1);
+  const segH = (LAYOUT.barBottom - LAYOUT.barTop - totalGap) / segCount;
+  for (let i = 0; i < segCount; i++) {
+    const y = LAYOUT.barBottom - (i + 1) * segH - i * LAYOUT.gap;
+    const color = lerpColor(i / (segCount - 1));
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    roundRect(ctx, barX, y, LAYOUT.barW, segH, 12);
+    ctx.fill();
+    const fillFrac = clamp(value - i, 0, 1);
+    if (fillFrac > 0) {
+      ctx.save();
+      roundRect(ctx, barX, y, LAYOUT.barW, segH, 12);
+      ctx.clip();
+      const fh = segH * fillFrac;
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = fillFrac >= 0.98 ? 20 : 0;
+      ctx.fillRect(barX, y + segH - fh, LAYOUT.barW, fh);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+function draw(tGlobal) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#0c0e12';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  let acc = 0, phase = PHASES[PHASES.length - 1], tIn = phase.duration, index = PHASES.length - 1;
+  for (let i = 0; i < PHASES.length; i++) {
+    if (tGlobal < acc + PHASES[i].duration) { phase = PHASES[i]; tIn = tGlobal - acc; index = i; break; }
+    acc += PHASES[i].duration;
+  }
+
+  const u = clamp(tIn / phase.duration, 0, 1);
+  const pain = phase.pain[0] + (phase.pain[1] - phase.pain[0]) * easeRamp(u);
+  const effort = phase.effort[0] + (phase.effort[1] - phase.effort[0]) * easeRamp(u);
+
+  // Eyebrow
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.font = '600 24px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+  try { ctx.letterSpacing = '5px'; } catch (e) {}
+  ctx.fillText('DIE REGEL', 540, LAYOUT.eyebrowY);
+  try { ctx.letterSpacing = '0px'; } catch (e) {}
+
+  // Headline / sub, crossfaded between phases
+  let hAlpha = 1;
+  if (phase._fadeIn) hAlpha = Math.min(hAlpha, clamp(tIn / 0.35, 0, 1));
+  if (phase._fadeOut) hAlpha = Math.min(hAlpha, clamp((phase.duration - tIn) / 0.35, 0, 1));
+
+  ctx.globalAlpha = hAlpha;
+  let headlineSize = 62;
+  ctx.font = `700 ${headlineSize}px -apple-system, "Segoe UI", Roboto, Arial, sans-serif`;
+  while (ctx.measureText(phase.headline).width > 980 && headlineSize > 34) {
+    headlineSize -= 2;
+    ctx.font = `700 ${headlineSize}px -apple-system, "Segoe UI", Roboto, Arial, sans-serif`;
+  }
+  ctx.fillStyle = '#eef0f3';
+  ctx.fillText(phase.headline, 540, LAYOUT.headlineY);
+
+  ctx.font = '600 32px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillText(phase.sub, 540, LAYOUT.subY);
+  ctx.globalAlpha = 1;
+
+  if (!phase.gauges) return;
+
+  drawGaugeGroup(LAYOUT.leftCX, 'SCHMERZ', pain, tIn, phase, true);
+  drawGaugeGroup(LAYOUT.rightCX, 'ANSTRENGUNG', effort, tIn, phase, false);
+
+  // "+" Badge zwischen den Skalen
+  const badgeY = (LAYOUT.gaugeLabelY + LAYOUT.barBottom) / 2;
+  ctx.beginPath();
+  ctx.arc(540, badgeY, 34, 0, Math.PI * 2);
+  ctx.fillStyle = '#14171c';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.font = '600 36px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('+', 540, badgeY + 2);
+  ctx.textBaseline = 'alphabetic';
+
+  // Kombi-Balken: Schmerz + Anstrengung, Obergrenze 10
+  const combinedAlpha = clamp((tGlobal - GAUGES_START) / 0.6, 0, 1);
+  if (combinedAlpha > 0) {
+    ctx.globalAlpha = combinedAlpha;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = '600 24px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+    try { ctx.letterSpacing = '2px'; } catch (e) {}
+    ctx.fillText('SCHMERZ + ANSTRENGUNG', 540, LAYOUT.combinedY - 16);
+    try { ctx.letterSpacing = '0px'; } catch (e) {}
+
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    roundRect(ctx, LAYOUT.combinedX, LAYOUT.combinedY, LAYOUT.combinedW, LAYOUT.combinedH, 16);
+    ctx.fill();
+    const sum = clamp(pain + effort, 0, 10);
+    const sumFrac = sum / 10;
+    if (sumFrac > 0) {
+      ctx.save();
+      roundRect(ctx, LAYOUT.combinedX, LAYOUT.combinedY, LAYOUT.combinedW, LAYOUT.combinedH, 16);
+      ctx.clip();
+      const col = lerpColor(sumFrac);
+      ctx.fillStyle = col;
+      ctx.shadowColor = col;
+      ctx.shadowBlur = sumFrac >= 0.98 ? 18 : 0;
+      ctx.fillRect(LAYOUT.combinedX, LAYOUT.combinedY, LAYOUT.combinedW * sumFrac, LAYOUT.combinedH);
+      ctx.restore();
+      ctx.shadowBlur = 0;
+    }
+    ctx.fillStyle = '#0c0e12';
+    ctx.font = '700 26px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+    ctx.textBaseline = 'middle';
+    if (sumFrac > 0.22) {
+      ctx.fillText(sum.toFixed(1) + ' / 10', LAYOUT.combinedX + LAYOUT.combinedW * sumFrac - 55, LAYOUT.combinedY + LAYOUT.combinedH / 2 + 2);
+    }
+    ctx.textBaseline = 'alphabetic';
+    ctx.globalAlpha = 1;
+  }
+
+  // "Wiederholungen im Tank"
+  const prevTank = index > 0 ? (PHASES[index - 1].tank || null) : null;
+  const nextTank = index < PHASES.length - 1 ? (PHASES[index + 1].tank || null) : null;
+  const tankValue = phase.tank || null;
+  if (tankValue != null) {
+    let tankAlpha = 1;
+    if (tankValue !== prevTank) tankAlpha = Math.min(tankAlpha, clamp(tIn / 0.4, 0, 1));
+    if (tankValue !== nextTank) tankAlpha = Math.min(tankAlpha, clamp((phase.duration - tIn) / 0.3, 0, 1));
+    ctx.globalAlpha = tankAlpha;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#4fd1ff';
+    ctx.font = '700 38px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+    ctx.fillText(`≈ ${tankValue} Wiederholungen im Tank lassen`, 540, LAYOUT.tankY);
+    ctx.globalAlpha = 1;
+  }
+}
+
+/* --- Ablaufsteuerung --- */
+let startTime = null;
+let rafId = null;
+
+function frame(now) {
+  if (startTime === null) startTime = now;
+  const elapsed = (now - startTime) / 1000;
+  draw(Math.min(elapsed, TOTAL));
+  if (elapsed < TOTAL + holdTime) {
+    rafId = requestAnimationFrame(frame);
+  } else {
+    draw(TOTAL);
+  }
+}
+function play() {
+  cancelAnimationFrame(rafId);
+  startTime = null;
+  rafId = requestAnimationFrame(frame);
+}
+document.getElementById('btn-replay').addEventListener('click', play);
+play();
+
+/* --- Export: PNG-Sequenz als ZIP (verlustfrei) --- */
+const CRC_TABLE = (() => {
+  const table = [];
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+function crc32(bytes) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ bytes[i]) & 0xFF];
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+function u16(n) { return [n & 0xFF, (n >>> 8) & 0xFF]; }
+function u32(n) { return [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF]; }
+
+async function buildZip(files) {
+  const enc = new TextEncoder();
+  const localParts = [], centralParts = [];
+  let offset = 0;
+  const dosTime = 0, dosDate = 0x21;
+  for (const f of files) {
+    const data = f.data;
+    const nameBytes = enc.encode(f.name);
+    const crc = crc32(data);
+    const localHeader = new Uint8Array([
+      0x50, 0x4b, 0x03, 0x04, 20, 0, 0, 0, 0, 0,
+      ...u16(dosTime), ...u16(dosDate),
+      ...u32(crc), ...u32(data.length), ...u32(data.length),
+      ...u16(nameBytes.length), ...u16(0)
+    ]);
+    localParts.push(localHeader, nameBytes, data);
+    const centralHeader = new Uint8Array([
+      0x50, 0x4b, 0x01, 0x02, 20, 0, 20, 0, 0, 0, 0, 0,
+      ...u16(dosTime), ...u16(dosDate),
+      ...u32(crc), ...u32(data.length), ...u32(data.length),
+      ...u16(nameBytes.length), ...u16(0), ...u16(0),
+      ...u16(0), ...u16(0), ...u32(0), ...u32(offset)
+    ]);
+    centralParts.push(centralHeader, nameBytes);
+    offset += localHeader.length + nameBytes.length + data.length;
+  }
+  const centralStart = offset;
+  const centralSize = centralParts.reduce((s, p) => s + p.length, 0);
+  const eocd = new Uint8Array([
+    0x50, 0x4b, 0x05, 0x06, 0, 0, 0, 0,
+    ...u16(files.length), ...u16(files.length),
+    ...u32(centralSize), ...u32(centralStart), 0, 0
+  ]);
+  const allParts = [...localParts, ...centralParts, eocd];
+  const total = allParts.reduce((s, p) => s + p.length, 0);
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const p of allParts) { out.set(p, pos); pos += p.length; }
+  return new Blob([out], { type: 'application/zip' });
+}
+
+const statusEl = document.getElementById('status');
+const btnZip = document.getElementById('btn-zip');
+async function exportPNGZip() {
+  const fps = 25;
+  const totalFrames = Math.round((TOTAL + holdTime) * fps);
+  const files = [];
+  btnZip.disabled = true;
+  for (let i = 0; i <= totalFrames; i++) {
+    const t = Math.min(i / fps, TOTAL);
+    draw(t);
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    const data = new Uint8Array(await blob.arrayBuffer());
+    files.push({ name: `frame_${String(i).padStart(4, '0')}.png`, data });
+    if (i % 20 === 0) statusEl.textContent = `Rendere Frame ${i}/${totalFrames} ...`;
+  }
+  statusEl.textContent = 'Packe ZIP ...';
+  const zipBlob = await buildZip(files);
+  const url = URL.createObjectURL(zipBlob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'pain-effort-scale-frames.zip'; a.click();
+  URL.revokeObjectURL(url);
+  statusEl.textContent = `Fertig: ${files.length} PNG-Frames als ZIP gespeichert.`;
+  btnZip.disabled = false;
+  play();
+}
+btnZip.addEventListener('click', exportPNGZip);
+</script>
+</body>
+</html>

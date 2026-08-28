@@ -68,7 +68,7 @@
 <script>
 /* ======================= EINSTELLBARE PARAMETER ======================= */
 const CONFIG = {
-  duration:  15,     // Sekunden — Dauer des Anstiegs 0 -> endLevel
+  duration:  20,     // Sekunden — Dauer des Anstiegs 0 -> endLevel
   startLevel: 0,     // Startwert der Skala (0-10)
   endLevel:   8,     // Endwert der Skala (0-10)
   maxLevel:   10,    // Skalenmaximum (Anzahl Segmente bleibt fix bei 10)
@@ -77,6 +77,7 @@ const CONFIG = {
   label:      "LEVEL", // z.B. "LEVEL" oder "LOAD"
   showTimer:  true,  // Countdown-Timer (Sekunden) im Feld anzeigen
   timerDecimals: 1,  // Nachkommastellen des Timers, z.B. "15.0s"
+  blinkWindow: 3,    // Sekunden vor Schluss, in denen das Licht grün blinkt
   autoStart:  true,
   background: "transparent" // "transparent" für Overlay-Nutzung, sonst z.B. "#000000"
 };
@@ -141,7 +142,7 @@ const LAYOUT = {
   barX: 90, barW: 180, barTop: 700, barBottom: 1540, gap: 8, segCount: 10
 };
 
-function draw(level, remaining) {
+function draw(level, remaining, elapsed) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (activeBackground !== 'transparent') {
     ctx.fillStyle = activeBackground;
@@ -162,6 +163,40 @@ function draw(level, remaining) {
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = '600 30px "Segoe UI Mono", Menlo, Consolas, monospace';
     ctx.fillText('⏱ ' + remaining.toFixed(CONFIG.timerDecimals) + 's', LAYOUT.labelCX, LAYOUT.panelY + 55);
+  }
+
+  // Status-Licht oben rechts: blinkt grün in den letzten Sekunden, wird zum Haken wenn fertig
+  if (remaining !== undefined) {
+    const dotX = LAYOUT.panelX + LAYOUT.panelW - 38;
+    const dotY = LAYOUT.panelY + 40;
+    const dotR = 18;
+    if (remaining <= 0) {
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
+      ctx.fillStyle = '#22c55e';
+      ctx.shadowColor = '#22c55e';
+      ctx.shadowBlur = 14;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(dotX - 7, dotY);
+      ctx.lineTo(dotX - 2, dotY + 6);
+      ctx.lineTo(dotX + 8, dotY - 7);
+      ctx.stroke();
+    } else if (remaining <= CONFIG.blinkWindow) {
+      const blink = 0.4 + 0.6 * Math.abs(Math.sin((elapsed || 0) * 10));
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(34,197,94,${blink})`;
+      ctx.shadowColor = '#22c55e';
+      ctx.shadowBlur = 16 * blink;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
   }
 
   // Label
@@ -246,12 +281,12 @@ function frame(now) {
   const eased = easeLoad(rampT);
   const level = CONFIG.startLevel + (CONFIG.endLevel - CONFIG.startLevel) * eased;
   const remaining = Math.max(CONFIG.duration - Math.min(elapsed, CONFIG.duration), 0);
-  draw(level, remaining);
+  draw(level, remaining, elapsed);
 
   if (elapsed < CONFIG.duration + CONFIG.holdTime) {
     rafId = requestAnimationFrame(frame);
   } else {
-    draw(CONFIG.endLevel, 0);
+    draw(CONFIG.endLevel, 0, elapsed);
     if (recording) stopRecording();
   }
 }
@@ -391,7 +426,7 @@ async function exportPNGZip() {
     const rampT = Math.min(t / CONFIG.duration, 1);
     const level = CONFIG.startLevel + (CONFIG.endLevel - CONFIG.startLevel) * easeLoad(rampT);
     const remaining = Math.max(CONFIG.duration - Math.min(t, CONFIG.duration), 0);
-    draw(level, remaining);
+    draw(level, remaining, t);
     const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
     const data = new Uint8Array(await blob.arrayBuffer());
     files.push({ name: `frame_${String(i).padStart(4, '0')}.png`, data });
@@ -417,7 +452,7 @@ document.getElementById('btn-png').addEventListener('click', savePNG);
 btnZip.addEventListener('click', exportPNGZip);
 
 if (CONFIG.autoStart) play();
-else draw(CONFIG.startLevel, CONFIG.duration);
+else draw(CONFIG.startLevel, CONFIG.duration, 0);
 </script>
 </body>
 </html>

@@ -17,7 +17,7 @@ const SECTIONS: { title: string; body: string }[] = [
   },
   {
     title: "Tab \"Rechner\"",
-    body: "Gib den Schmerz während einer Übung ein und erhalte eine Empfehlung für die Trainingsanstrengung (RPE/RIR). Liegt der Schmerz über 5, kommt statt einer Steigerung eine Warnung mit Anpassungsvorschlag.",
+    body: "Wähle Dein Trainingsziel (Kraft, Hypertrophie oder Athletik/Sprünge) und gib den Schmerz während der Übung ein. Du bekommst eine passende Stellschraube vorgeschlagen – z. B. Gewicht reduzieren, Bewegungsumfang verringern, Übung wechseln oder auf eine Vorbereitungsübung ausweichen – statt nur eine RPE-Zahl.",
   },
   {
     title: "Tab \"Verlauf\" – Ampel-Feedback",

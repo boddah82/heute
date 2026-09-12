@@ -30,3 +30,31 @@ export interface CheckInAssessment {
   recommendation: string;
   explanation: string;
 }
+
+// PDDM (Pain and Disability Drivers Management), nach Tousignant-Laflamme &
+// Cook. Jede Domäne wird nicht bepunktet, sondern kategorial eingeordnet:
+// nicht relevant / A (einfach zu adressieren) / B (komplex, ggf. Zuweisung).
+export type PDDMDomainId =
+  | "nociceptive"
+  | "nervousSystem"
+  | "comorbidities"
+  | "cognitiveEmotional"
+  | "contextual";
+
+export type PDDMStatus = "NONE" | "A" | "B";
+
+export interface PDDMDomainResult {
+  status: PDDMStatus;
+  // Nur bei nervousSystem genutzt: benennt explizit, ob der B-Befund eher
+  // peripher-neuropathisch oder zentral-sensibilisiert/nozizeptiv-plastisch ist.
+  subtype?: "peripheral" | "central_sensitization";
+}
+
+export interface PDDMAssessment {
+  id: string;
+  regionId: string;
+  date: string; // ISO date (yyyy-mm-dd)
+  answers: Record<string, boolean>;
+  results: Record<PDDMDomainId, PDDMDomainResult>;
+  createdAt: string; // ISO timestamp
+}

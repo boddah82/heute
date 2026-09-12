@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import { CheckIn } from "./types";
+import { CheckIn, PDDMAssessment } from "./types";
 
 const STORAGE_KEY = "rrt.checkins.v1";
 const REGION_KEY = "rrt.activeRegion.v1";
+const PDDM_KEY = "rrt.pddm.v1";
 
 // Minimal external-store wrapper around localStorage so reads happen during
 // render (via useSyncExternalStore) instead of in an effect, and writes from
@@ -49,6 +50,7 @@ function createLocalStorageStore<T>(key: string, defaultValue: T) {
 
 const checkInsStore = createLocalStorageStore<CheckIn[]>(STORAGE_KEY, []);
 const regionStore = createLocalStorageStore<string | null>(REGION_KEY, null);
+const pddmStore = createLocalStorageStore<PDDMAssessment[]>(PDDM_KEY, []);
 
 export function useCheckIns(regionId: string) {
   const all = useSyncExternalStore(
@@ -79,6 +81,31 @@ export function useCheckIns(regionId: string) {
   }, []);
 
   return { entries, addEntry, updateEntry, deleteEntry };
+}
+
+export function usePDDMAssessments(regionId: string) {
+  const all = useSyncExternalStore(
+    pddmStore.subscribe,
+    pddmStore.getSnapshot,
+    pddmStore.getServerSnapshot
+  );
+
+  const assessments = useMemo(() => all.filter((a) => a.regionId === regionId), [all, regionId]);
+
+  const addAssessment = useCallback((assessment: Omit<PDDMAssessment, "id" | "createdAt">) => {
+    const newAssessment: PDDMAssessment = {
+      ...assessment,
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+    };
+    pddmStore.set([newAssessment, ...pddmStore.getSnapshot()]);
+  }, []);
+
+  const deleteAssessment = useCallback((id: string) => {
+    pddmStore.set(pddmStore.getSnapshot().filter((a) => a.id !== id));
+  }, []);
+
+  return { assessments, addAssessment, deleteAssessment };
 }
 
 export function useActiveRegion(defaultRegion: string) {

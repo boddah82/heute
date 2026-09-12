@@ -108,6 +108,29 @@ export function usePDDMAssessments(regionId: string) {
   return { assessments, addAssessment, deleteAssessment };
 }
 
+// Ersetzt alle Einträge einer Region durch die übergebenen Demo-Datensätze.
+// Bewusst außerhalb eines Hooks: reine Schreiboperation auf die Stores, alle
+// über useSyncExternalStore angebundenen Komponenten aktualisieren sich automatisch.
+export function seedDemoData(
+  regionId: string,
+  checkIns: Omit<CheckIn, "id" | "createdAt">[],
+  pddm: Omit<PDDMAssessment, "id" | "createdAt">
+) {
+  const now = new Date().toISOString();
+
+  const newCheckIns: CheckIn[] = checkIns.map((c) => ({
+    ...c,
+    id: crypto.randomUUID(),
+    createdAt: now,
+  }));
+  const otherCheckIns = checkInsStore.getSnapshot().filter((e) => e.regionId !== regionId);
+  checkInsStore.set([...newCheckIns, ...otherCheckIns]);
+
+  const newAssessment: PDDMAssessment = { ...pddm, id: crypto.randomUUID(), createdAt: now };
+  const otherAssessments = pddmStore.getSnapshot().filter((a) => a.regionId !== regionId);
+  pddmStore.set([newAssessment, ...otherAssessments]);
+}
+
 export function useActiveRegion(defaultRegion: string) {
   const stored = useSyncExternalStore(
     regionStore.subscribe,

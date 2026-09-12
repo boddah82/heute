@@ -8,6 +8,7 @@ import PDDMForm from "@/components/PDDMForm";
 import PDDMResultCard from "@/components/PDDMResultCard";
 import DemoPatientPicker from "@/components/DemoPatientPicker";
 import ExportPanel from "@/components/ExportPanel";
+import HelpPanel from "@/components/HelpPanel";
 import { useActiveRegion, useCheckIns, usePDDMAssessments } from "@/lib/storage";
 
 type Tab = "heute" | "verlauf" | "pddm";
@@ -23,7 +24,10 @@ export default function Home() {
     <main className="min-h-screen bg-slate-50">
       <header className="bg-teal-800 text-white px-4 pt-6 pb-4 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Reiz-Reaktions-Tracker</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold">Reiz-Reaktions-Tracker</h1>
+            <HelpPanel />
+          </div>
           <p className="text-sm text-teal-100">Belastbarkeit verstehen statt raten.</p>
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">

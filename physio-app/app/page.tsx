@@ -12,9 +12,10 @@ import HelpPanel from "@/components/HelpPanel";
 import PainMixer from "@/components/PainMixer";
 import MriEducation from "@/components/MriEducation";
 import StabilizationParadox from "@/components/StabilizationParadox";
+import RuleOfTenCalculator from "@/components/RuleOfTenCalculator";
 import { useActiveRegion, useCheckIns, usePDDMAssessments } from "@/lib/storage";
 
-type Tab = "heute" | "verlauf" | "pddm" | "wissen";
+type Tab = "heute" | "rechner" | "verlauf" | "pddm" | "wissen";
 
 export default function Home() {
   const { regionId, select } = useActiveRegion("knie");
@@ -51,6 +52,7 @@ export default function Home() {
       <nav className="px-4 mt-2 flex gap-2">
         {[
           { id: "heute" as Tab, label: "Heute" },
+          { id: "rechner" as Tab, label: "Rechner" },
           { id: "verlauf" as Tab, label: `Verlauf (${entries.length})` },
           { id: "pddm" as Tab, label: "Bereiche" },
           { id: "wissen" as Tab, label: "Wissen" },
@@ -71,6 +73,8 @@ export default function Home() {
 
       <div className="px-4 py-4 max-w-xl mx-auto space-y-4 pb-12">
         {tab === "heute" && <CheckInForm regionId={regionId} onSubmit={addEntry} />}
+
+        {tab === "rechner" && <RuleOfTenCalculator />}
 
         {tab === "verlauf" &&
           (entries.length === 0 ? (

@@ -16,6 +16,10 @@ const SECTIONS: { title: string; body: string }[] = [
     body: "Trage nach einer Aktivität (Training, aber auch Alltag wie langes Sitzen) ein: was Du gemacht hast, wie stark der Schmerz direkt davor und direkt danach war (0 = kein Schmerz, 10 = maximaler Schmerz). Dauert etwa 30 Sekunden.",
   },
   {
+    title: "Tab \"Rechner\"",
+    body: "Gib den Schmerz während einer Übung ein und erhalte eine Empfehlung für die Trainingsanstrengung (RPE/RIR). Liegt der Schmerz über 5, kommt statt einer Steigerung eine Warnung mit Anpassungsvorschlag.",
+  },
+  {
     title: "Tab \"Verlauf\" – Ampel-Feedback",
     body: "Jeder Eintrag bekommt automatisch eine Ampel-Bewertung in drei Punkten: Intensität (wie hoch war der Schmerz), Anstieg (wie stark ist er durch die Aktivität gestiegen) und Erholung (wie schnell war er wieder auf dem Ausgangsniveau). Grün = Belastung kann gesteigert werden, Gelb = Belastung halten und beobachten, Rot = Belastung anpassen/reduzieren. Trage 24 und 48 Stunden später den Schmerz über \"Verlauf nachtragen\" nach – erst dann ist die Erholungs-Ampel vollständig.",
   },

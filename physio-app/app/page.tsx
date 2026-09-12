@@ -7,6 +7,7 @@ import EntryCard from "@/components/EntryCard";
 import PDDMForm from "@/components/PDDMForm";
 import PDDMResultCard from "@/components/PDDMResultCard";
 import DemoPatientPicker from "@/components/DemoPatientPicker";
+import ExportPanel from "@/components/ExportPanel";
 import { useActiveRegion, useCheckIns, usePDDMAssessments } from "@/lib/storage";
 
 type Tab = "heute" | "verlauf" | "pddm";
@@ -25,12 +26,15 @@ export default function Home() {
           <h1 className="text-lg font-semibold">Reiz-Reaktions-Tracker</h1>
           <p className="text-sm text-teal-100">Belastbarkeit verstehen statt raten.</p>
         </div>
-        <DemoPatientPicker
-          onLoaded={(loadedRegion) => {
-            select(loadedRegion);
-            setTab("verlauf");
-          }}
-        />
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <ExportPanel />
+          <DemoPatientPicker
+            onLoaded={(loadedRegion) => {
+              select(loadedRegion);
+              setTab("verlauf");
+            }}
+          />
+        </div>
       </header>
 
       <div className="px-4 pt-4">

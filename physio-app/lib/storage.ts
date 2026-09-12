@@ -131,6 +131,11 @@ export function seedDemoData(
   pddmStore.set([newAssessment, ...otherAssessments]);
 }
 
+// Roh-Zugriff auf alle Daten (alle Regionen), z. B. für den Export.
+export function getAllData(): { checkIns: CheckIn[]; pddm: PDDMAssessment[] } {
+  return { checkIns: checkInsStore.getSnapshot(), pddm: pddmStore.getSnapshot() };
+}
+
 export function useActiveRegion(defaultRegion: string) {
   const stored = useSyncExternalStore(
     regionStore.subscribe,

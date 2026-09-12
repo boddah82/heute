@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import RegionSelector from "@/components/RegionSelector";
 import CheckInForm from "@/components/CheckInForm";
 import EntryCard from "@/components/EntryCard";
@@ -13,16 +13,38 @@ import PainMixer from "@/components/PainMixer";
 import MriEducation from "@/components/MriEducation";
 import StabilizationParadox from "@/components/StabilizationParadox";
 import RuleOfTenCalculator from "@/components/RuleOfTenCalculator";
-import { useActiveRegion, useCheckIns, usePDDMAssessments } from "@/lib/storage";
+import PlanBuilder from "@/components/PlanBuilder";
+import { useActiveRegion, useCheckIns, usePDDMAssessments, usePlan, importPlan } from "@/lib/storage";
+import { readPlanFromLocation, clearPlanFromUrl } from "@/lib/planLink";
+import { getRegion } from "@/lib/regions";
 
-type Tab = "heute" | "rechner" | "verlauf" | "pddm" | "wissen";
+type Tab = "heute" | "rechner" | "verlauf" | "pddm" | "wissen" | "plan";
 
 export default function Home() {
   const { regionId, select } = useActiveRegion("knie");
   const { entries, addEntry, updateEntry, deleteEntry } = useCheckIns(regionId);
   const { assessments, addAssessment, deleteAssessment } = usePDDMAssessments(regionId);
+  const { plan, setPlan } = usePlan(regionId);
   const [tab, setTab] = useState<Tab>("heute");
   const [showPDDMForm, setShowPDDMForm] = useState(false);
+
+  useEffect(() => {
+    const incoming = readPlanFromLocation();
+    if (!incoming) return;
+    const region = getRegion(incoming.regionId);
+    const confirmed = window.confirm(
+      `Trainingsplan für "${region.label}" von Deiner Therapeutin/Deinem Therapeuten laden? Ein evtl. vorhandener Plan für diesen Bereich wird ersetzt.`
+    );
+    clearPlanFromUrl();
+    if (!confirmed) return;
+    importPlan(incoming);
+    select(incoming.regionId);
+    // Einmaliger Import, ausgelöst durch einen externen Link-Parameter (nicht
+    // durch Render-State) – die Auswahl des Tabs ist Teil dieser Aktion.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTab("heute");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -49,18 +71,19 @@ export default function Home() {
         <RegionSelector value={regionId} onChange={select} />
       </div>
 
-      <nav className="px-4 mt-2 flex gap-2">
+      <nav className="px-4 mt-2 flex gap-2 overflow-x-auto">
         {[
           { id: "heute" as Tab, label: "Heute" },
           { id: "rechner" as Tab, label: "Rechner" },
           { id: "verlauf" as Tab, label: `Verlauf (${entries.length})` },
           { id: "pddm" as Tab, label: "Bereiche" },
           { id: "wissen" as Tab, label: "Wissen" },
+          { id: "plan" as Tab, label: "Plan" },
         ].map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2 rounded-t-lg text-sm font-medium ${
+            className={`px-4 py-2 rounded-t-lg text-sm font-medium shrink-0 ${
               tab === t.id
                 ? "bg-white text-teal-800 border-b-2 border-teal-700"
                 : "text-slate-500"
@@ -72,7 +95,9 @@ export default function Home() {
       </nav>
 
       <div className="px-4 py-4 max-w-xl mx-auto space-y-4 pb-12">
-        {tab === "heute" && <CheckInForm regionId={regionId} onSubmit={addEntry} />}
+        {tab === "heute" && (
+          <CheckInForm regionId={regionId} planExercises={plan?.exercises} onSubmit={addEntry} />
+        )}
 
         {tab === "rechner" && <RuleOfTenCalculator />}
 
@@ -121,6 +146,8 @@ export default function Home() {
             <StabilizationParadox />
           </div>
         )}
+
+        {tab === "plan" && <PlanBuilder regionId={regionId} plan={plan} onSave={setPlan} />}
       </div>
     </main>
   );

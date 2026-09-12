@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { getRegion } from "@/lib/regions";
-import { CheckIn } from "@/lib/types";
+import { CheckIn, PlanExercise } from "@/lib/types";
 import PainSlider from "./PainSlider";
+import ActivityPicker from "./ActivityPicker";
 
 interface Props {
   regionId: string;
+  planExercises?: PlanExercise[];
   onSubmit: (entry: Omit<CheckIn, "id" | "createdAt">) => void;
 }
 
@@ -14,7 +16,7 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export default function CheckInForm({ regionId, onSubmit }: Props) {
+export default function CheckInForm({ regionId, planExercises, onSubmit }: Props) {
   const region = getRegion(regionId);
   const [date, setDate] = useState(today());
   const [activity, setActivity] = useState("");
@@ -74,6 +76,9 @@ export default function CheckInForm({ regionId, onSubmit }: Props) {
         <label className="text-sm font-medium text-slate-700 block mb-1">
           Reiz / Aktivität (Belastung oder Entlastung)
         </label>
+        <div className="mb-2">
+          <ActivityPicker planExercises={planExercises} onPick={setActivity} />
+        </div>
         <input
           type="text"
           value={activity}

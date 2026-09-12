@@ -58,3 +58,19 @@ export interface PDDMAssessment {
   results: Record<PDDMDomainId, PDDMDomainResult>;
   createdAt: string; // ISO timestamp
 }
+
+export interface PlanExercise {
+  id: string;
+  label: string;
+  icon: string;
+  notes?: string; // z. B. "3x12, Pause 60s"
+}
+
+// Von der Therapeutin/dem Therapeuten vorgegebener Plan für eine Region,
+// per Link übertragen (siehe lib/planLink.ts). Kein Server, kein Live-Sync –
+// ein neuer Plan überschreibt beim Import den bisherigen für diese Region.
+export interface TrainingPlan {
+  regionId: string;
+  exercises: PlanExercise[];
+  createdAt: string; // ISO timestamp
+}

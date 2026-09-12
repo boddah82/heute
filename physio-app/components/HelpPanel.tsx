@@ -32,6 +32,14 @@ const SECTIONS: { title: string; body: string }[] = [
     body: "Interaktive Hintergrundinfos zum Thema Schmerz: das Schmerz-Mischpult zeigt, wie Stress, Schlaf und Bewegungsangst die Schmerzwahrnehmung mitbeeinflussen können, ein Abschnitt zu Bildgebungsbefunden (MRT) und einer zum sogenannten Stabilisations-Paradoxon.",
   },
   {
+    title: "Tab \"Plan\" (für Therapeutinnen/Therapeuten)",
+    body: "Hier stellst Du einen Trainingsplan für den aktuell gewählten Bereich zusammen und erstellst daraus einen Link. Der Patient öffnet den Link auf seinem eigenen Gerät – der Plan wird dort automatisch geladen, kein Konto nötig. Achtung: kein Live-Sync – bei Änderungen am Plan muss ein neuer Link verschickt werden, und die Trainingsdaten des Patienten fließen nicht automatisch zu Dir zurück (dafür die Export-Funktion nutzen).",
+  },
+  {
+    title: "Icon-Schnellauswahl",
+    body: "Im Check-in kannst Du häufige Aktivitäten per Icon antippen, statt sie einzutippen – das Freitextfeld bleibt trotzdem für alles Individuelle nutzbar. Ist ein Plan geladen, erscheinen dessen Übungen zusätzlich oben als eigene Kacheln.",
+  },
+  {
     title: "Daten exportieren",
     body: "Erzeugt eine Text-Übersicht all Deiner Einträge, die Du kopieren und z. B. per WhatsApp oder E-Mail an Deine Therapeutin/Deinen Therapeuten schicken kannst.",
   },

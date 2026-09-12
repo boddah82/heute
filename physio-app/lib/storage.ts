@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import { CheckIn, PDDMAssessment } from "./types";
+import { CheckIn, PDDMAssessment, TrainingPlan } from "./types";
 
 const STORAGE_KEY = "rrt.checkins.v1";
 const REGION_KEY = "rrt.activeRegion.v1";
 const PDDM_KEY = "rrt.pddm.v1";
+const PLAN_KEY = "rrt.plans.v1";
 
 // Minimal external-store wrapper around localStorage so reads happen during
 // render (via useSyncExternalStore) instead of in an effect, and writes from
@@ -51,6 +52,7 @@ function createLocalStorageStore<T>(key: string, defaultValue: T) {
 const checkInsStore = createLocalStorageStore<CheckIn[]>(STORAGE_KEY, []);
 const regionStore = createLocalStorageStore<string | null>(REGION_KEY, null);
 const pddmStore = createLocalStorageStore<PDDMAssessment[]>(PDDM_KEY, []);
+const planStore = createLocalStorageStore<TrainingPlan[]>(PLAN_KEY, []);
 
 export function useCheckIns(regionId: string) {
   const all = useSyncExternalStore(
@@ -134,6 +136,30 @@ export function seedDemoData(
 // Roh-Zugriff auf alle Daten (alle Regionen), z. B. für den Export.
 export function getAllData(): { checkIns: CheckIn[]; pddm: PDDMAssessment[] } {
   return { checkIns: checkInsStore.getSnapshot(), pddm: pddmStore.getSnapshot() };
+}
+
+export function usePlan(regionId: string) {
+  const all = useSyncExternalStore(planStore.subscribe, planStore.getSnapshot, planStore.getServerSnapshot);
+
+  const plan = useMemo(() => all.find((p) => p.regionId === regionId), [all, regionId]);
+
+  const setPlan = useCallback((next: TrainingPlan) => {
+    const others = planStore.getSnapshot().filter((p) => p.regionId !== next.regionId);
+    planStore.set([next, ...others]);
+  }, []);
+
+  const clearPlan = useCallback((forRegionId: string) => {
+    planStore.set(planStore.getSnapshot().filter((p) => p.regionId !== forRegionId));
+  }, []);
+
+  return { plan, setPlan, clearPlan };
+}
+
+// Importiert einen von einem Plan-Link gelesenen Plan direkt in den Store
+// (außerhalb eines Hooks, analog zu seedDemoData).
+export function importPlan(plan: TrainingPlan) {
+  const others = planStore.getSnapshot().filter((p) => p.regionId !== plan.regionId);
+  planStore.set([plan, ...others]);
 }
 
 export function useActiveRegion(defaultRegion: string) {

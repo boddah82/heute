@@ -24,6 +24,10 @@ const SECTIONS: { title: string; body: string }[] = [
     body: "Eine kurze Fragerunde (ca. alle 4 Wochen sinnvoll), die zeigt, ob neben der reinen Belastung auch andere Bereiche eine Rolle spielen könnten (z. B. Nervensystem, Stimmung, Arbeitsumfeld). Es gibt keine Punktzahl, nur eine Einordnung je Bereich. Ersetzt keine ärztliche oder therapeutische Diagnose.",
   },
   {
+    title: "Tab \"Wissen\"",
+    body: "Interaktive Hintergrundinfos zum Thema Schmerz: das Schmerz-Mischpult zeigt, wie Stress, Schlaf und Bewegungsangst die Schmerzwahrnehmung mitbeeinflussen können, ein Abschnitt zu Bildgebungsbefunden (MRT) und einer zum sogenannten Stabilisations-Paradoxon.",
+  },
+  {
     title: "Daten exportieren",
     body: "Erzeugt eine Text-Übersicht all Deiner Einträge, die Du kopieren und z. B. per WhatsApp oder E-Mail an Deine Therapeutin/Deinen Therapeuten schicken kannst.",
   },

@@ -9,9 +9,12 @@ import PDDMResultCard from "@/components/PDDMResultCard";
 import DemoPatientPicker from "@/components/DemoPatientPicker";
 import ExportPanel from "@/components/ExportPanel";
 import HelpPanel from "@/components/HelpPanel";
+import PainMixer from "@/components/PainMixer";
+import MriEducation from "@/components/MriEducation";
+import StabilizationParadox from "@/components/StabilizationParadox";
 import { useActiveRegion, useCheckIns, usePDDMAssessments } from "@/lib/storage";
 
-type Tab = "heute" | "verlauf" | "pddm";
+type Tab = "heute" | "verlauf" | "pddm" | "wissen";
 
 export default function Home() {
   const { regionId, select } = useActiveRegion("knie");
@@ -50,6 +53,7 @@ export default function Home() {
           { id: "heute" as Tab, label: "Heute" },
           { id: "verlauf" as Tab, label: `Verlauf (${entries.length})` },
           { id: "pddm" as Tab, label: "Bereiche" },
+          { id: "wissen" as Tab, label: "Wissen" },
         ].map((t) => (
           <button
             key={t.id}
@@ -105,6 +109,14 @@ export default function Home() {
               )}
             </div>
           ))}
+
+        {tab === "wissen" && (
+          <div className="space-y-4">
+            <PainMixer />
+            <MriEducation />
+            <StabilizationParadox />
+          </div>
+        )}
       </div>
     </main>
   );

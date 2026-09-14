@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import RegionSelector from "@/components/RegionSelector";
 import CheckInForm from "@/components/CheckInForm";
 import EntryCard from "@/components/EntryCard";
@@ -14,6 +14,7 @@ import MriEducation from "@/components/MriEducation";
 import StabilizationParadox from "@/components/StabilizationParadox";
 import RuleOfTenCalculator from "@/components/RuleOfTenCalculator";
 import PlanBuilder from "@/components/PlanBuilder";
+import PlanImportModal from "@/components/PlanImportModal";
 import PSFSPanel from "@/components/PSFSPanel";
 import {
   useActiveRegion,
@@ -25,9 +26,20 @@ import {
   usePSFSRatings,
 } from "@/lib/storage";
 import { readPlanFromLocation, clearPlanFromUrl } from "@/lib/planLink";
-import { getRegion } from "@/lib/regions";
+import { TrainingPlan } from "@/lib/types";
 
 type Tab = "heute" | "rechner" | "verlauf" | "pddm" | "wissen" | "plan" | "ziele";
+
+// Liest einen evtl. im Link enthaltenen Plan synchron beim ersten Rendern
+// (kein Effekt nötig) und räumt den Link sofort auf, damit ein Reload nicht
+// erneut fragt. Der native window.confirm()-Dialog wird in der
+// Artifact-Vorschau teils stillschweigend unterdrückt – deshalb ein eigenes
+// Bestätigungs-Fenster (PlanImportModal) statt confirm().
+function readAndClearPendingPlan(): TrainingPlan | null {
+  const incoming = readPlanFromLocation();
+  if (incoming) clearPlanFromUrl();
+  return incoming;
+}
 
 export default function Home() {
   const { regionId, select } = useActiveRegion("knie");
@@ -38,24 +50,15 @@ export default function Home() {
   const { ratings, addRating } = usePSFSRatings(regionId);
   const [tab, setTab] = useState<Tab>("heute");
   const [showPDDMForm, setShowPDDMForm] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<TrainingPlan | null>(readAndClearPendingPlan);
 
-  useEffect(() => {
-    const incoming = readPlanFromLocation();
-    if (!incoming) return;
-    const region = getRegion(incoming.regionId);
-    const confirmed = window.confirm(
-      `Trainingsplan für "${region.label}" von Deiner Therapeutin/Deinem Therapeuten laden? Ein evtl. vorhandener Plan für diesen Bereich wird ersetzt.`
-    );
-    clearPlanFromUrl();
-    if (!confirmed) return;
-    importPlan(incoming);
-    select(incoming.regionId);
-    // Einmaliger Import, ausgelöst durch einen externen Link-Parameter (nicht
-    // durch Render-State) – die Auswahl des Tabs ist Teil dieser Aktion.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+  function confirmPlanImport() {
+    if (!pendingPlan) return;
+    importPlan(pendingPlan);
+    select(pendingPlan.regionId);
     setTab("heute");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setPendingPlan(null);
+  }
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -171,6 +174,14 @@ export default function Home() {
           />
         )}
       </div>
+
+      {pendingPlan && (
+        <PlanImportModal
+          plan={pendingPlan}
+          onConfirm={confirmPlanImport}
+          onDismiss={() => setPendingPlan(null)}
+        />
+      )}
     </main>
   );
 }

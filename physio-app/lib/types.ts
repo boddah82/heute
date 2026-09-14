@@ -74,3 +74,23 @@ export interface TrainingPlan {
   exercises: PlanExercise[];
   createdAt: string; // ISO timestamp
 }
+
+// Patient-Specific Functional Scale (Stratford et al. 1995): der Patient
+// benennt selbst die für ihn bedeutsamen Alltags-/Sportaktivitäten und
+// bewertet periodisch, wie nah er wieder daran ist, sie wie vor der
+// Beschwerde ausführen zu können (0 = nicht möglich, 10 = wie vorher).
+export interface PSFSGoal {
+  id: string;
+  regionId: string;
+  label: string;
+  createdAt: string; // ISO timestamp
+}
+
+export interface PSFSRating {
+  id: string;
+  regionId: string;
+  goalId: string;
+  date: string; // ISO date (yyyy-mm-dd)
+  value: number; // 0-10
+  createdAt: string; // ISO timestamp
+}

@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import { CheckIn, PDDMAssessment, TrainingPlan } from "./types";
+import { CheckIn, PDDMAssessment, TrainingPlan, PSFSGoal, PSFSRating } from "./types";
 
 const STORAGE_KEY = "rrt.checkins.v1";
 const REGION_KEY = "rrt.activeRegion.v1";
 const PDDM_KEY = "rrt.pddm.v1";
 const PLAN_KEY = "rrt.plans.v1";
+const PSFS_GOALS_KEY = "rrt.psfsGoals.v1";
+const PSFS_RATINGS_KEY = "rrt.psfsRatings.v1";
 
 // Minimal external-store wrapper around localStorage so reads happen during
 // render (via useSyncExternalStore) instead of in an effect, and writes from
@@ -53,6 +55,8 @@ const checkInsStore = createLocalStorageStore<CheckIn[]>(STORAGE_KEY, []);
 const regionStore = createLocalStorageStore<string | null>(REGION_KEY, null);
 const pddmStore = createLocalStorageStore<PDDMAssessment[]>(PDDM_KEY, []);
 const planStore = createLocalStorageStore<TrainingPlan[]>(PLAN_KEY, []);
+const psfsGoalsStore = createLocalStorageStore<PSFSGoal[]>(PSFS_GOALS_KEY, []);
+const psfsRatingsStore = createLocalStorageStore<PSFSRating[]>(PSFS_RATINGS_KEY, []);
 
 export function useCheckIns(regionId: string) {
   const all = useSyncExternalStore(
@@ -160,6 +164,62 @@ export function usePlan(regionId: string) {
 export function importPlan(plan: TrainingPlan) {
   const others = planStore.getSnapshot().filter((p) => p.regionId !== plan.regionId);
   planStore.set([plan, ...others]);
+}
+
+export function usePSFSGoals(regionId: string) {
+  const all = useSyncExternalStore(
+    psfsGoalsStore.subscribe,
+    psfsGoalsStore.getSnapshot,
+    psfsGoalsStore.getServerSnapshot
+  );
+
+  const goals = useMemo(() => all.filter((g) => g.regionId === regionId), [all, regionId]);
+
+  const addGoal = useCallback(
+    (label: string) => {
+      const goal: PSFSGoal = { id: crypto.randomUUID(), regionId, label, createdAt: new Date().toISOString() };
+      psfsGoalsStore.set([goal, ...psfsGoalsStore.getSnapshot()]);
+    },
+    [regionId]
+  );
+
+  const deleteGoal = useCallback((id: string) => {
+    psfsGoalsStore.set(psfsGoalsStore.getSnapshot().filter((g) => g.id !== id));
+    psfsRatingsStore.set(psfsRatingsStore.getSnapshot().filter((r) => r.goalId !== id));
+  }, []);
+
+  return { goals, addGoal, deleteGoal };
+}
+
+export function usePSFSRatings(regionId: string) {
+  const all = useSyncExternalStore(
+    psfsRatingsStore.subscribe,
+    psfsRatingsStore.getSnapshot,
+    psfsRatingsStore.getServerSnapshot
+  );
+
+  const ratings = useMemo(() => all.filter((r) => r.regionId === regionId), [all, regionId]);
+
+  const addRating = useCallback(
+    (goalId: string, value: number) => {
+      const rating: PSFSRating = {
+        id: crypto.randomUUID(),
+        regionId,
+        goalId,
+        date: new Date().toISOString().slice(0, 10),
+        value,
+        createdAt: new Date().toISOString(),
+      };
+      psfsRatingsStore.set([rating, ...psfsRatingsStore.getSnapshot()]);
+    },
+    [regionId]
+  );
+
+  const deleteRating = useCallback((id: string) => {
+    psfsRatingsStore.set(psfsRatingsStore.getSnapshot().filter((r) => r.id !== id));
+  }, []);
+
+  return { ratings, addRating, deleteRating };
 }
 
 export function useActiveRegion(defaultRegion: string) {

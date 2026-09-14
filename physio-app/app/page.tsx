@@ -14,17 +14,28 @@ import MriEducation from "@/components/MriEducation";
 import StabilizationParadox from "@/components/StabilizationParadox";
 import RuleOfTenCalculator from "@/components/RuleOfTenCalculator";
 import PlanBuilder from "@/components/PlanBuilder";
-import { useActiveRegion, useCheckIns, usePDDMAssessments, usePlan, importPlan } from "@/lib/storage";
+import PSFSPanel from "@/components/PSFSPanel";
+import {
+  useActiveRegion,
+  useCheckIns,
+  usePDDMAssessments,
+  usePlan,
+  importPlan,
+  usePSFSGoals,
+  usePSFSRatings,
+} from "@/lib/storage";
 import { readPlanFromLocation, clearPlanFromUrl } from "@/lib/planLink";
 import { getRegion } from "@/lib/regions";
 
-type Tab = "heute" | "rechner" | "verlauf" | "pddm" | "wissen" | "plan";
+type Tab = "heute" | "rechner" | "verlauf" | "pddm" | "wissen" | "plan" | "ziele";
 
 export default function Home() {
   const { regionId, select } = useActiveRegion("knie");
   const { entries, addEntry, updateEntry, deleteEntry } = useCheckIns(regionId);
   const { assessments, addAssessment, deleteAssessment } = usePDDMAssessments(regionId);
   const { plan, setPlan } = usePlan(regionId);
+  const { goals, addGoal, deleteGoal } = usePSFSGoals(regionId);
+  const { ratings, addRating } = usePSFSRatings(regionId);
   const [tab, setTab] = useState<Tab>("heute");
   const [showPDDMForm, setShowPDDMForm] = useState(false);
 
@@ -79,6 +90,7 @@ export default function Home() {
           { id: "pddm" as Tab, label: "Bereiche" },
           { id: "wissen" as Tab, label: "Wissen" },
           { id: "plan" as Tab, label: "Plan" },
+          { id: "ziele" as Tab, label: "Ziele" },
         ].map((t) => (
           <button
             key={t.id}
@@ -148,6 +160,16 @@ export default function Home() {
         )}
 
         {tab === "plan" && <PlanBuilder regionId={regionId} plan={plan} onSave={setPlan} />}
+
+        {tab === "ziele" && (
+          <PSFSPanel
+            goals={goals}
+            ratings={ratings}
+            onAddGoal={addGoal}
+            onDeleteGoal={deleteGoal}
+            onRate={addRating}
+          />
+        )}
       </div>
     </main>
   );

@@ -16,6 +16,7 @@ import RuleOfTenCalculator from "@/components/RuleOfTenCalculator";
 import PlanBuilder from "@/components/PlanBuilder";
 import PlanImportModal from "@/components/PlanImportModal";
 import PSFSPanel from "@/components/PSFSPanel";
+import PainTrendChart from "@/components/PainTrendChart";
 import {
   useActiveRegion,
   useCheckIns,
@@ -122,9 +123,12 @@ export default function Home() {
               Noch keine Einträge für diesen Bereich. Starte im Reiter &quot;Heute&quot; mit Deinem ersten Check-in.
             </p>
           ) : (
-            entries.map((entry) => (
-              <EntryCard key={entry.id} entry={entry} onUpdate={updateEntry} onDelete={deleteEntry} />
-            ))
+            <>
+              <PainTrendChart entries={entries} />
+              {entries.map((entry) => (
+                <EntryCard key={entry.id} entry={entry} onUpdate={updateEntry} onDelete={deleteEntry} />
+              ))}
+            </>
           ))}
 
         {tab === "pddm" &&

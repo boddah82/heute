@@ -89,3 +89,12 @@ export const LIGHT_COLORS: Record<TrafficLight, { bg: string; text: string; labe
   RED: { bg: "bg-red-500", text: "text-red-700", label: "Rot" },
   PENDING: { bg: "bg-slate-400", text: "text-slate-600", label: "Offen" },
 };
+
+// Hex-Äquivalente derselben Ampelfarben für SVG-Charts (Tailwind-Klassen
+// wirken dort nicht als fill-Attribut).
+export const LIGHT_HEX: Record<TrafficLight, string> = {
+  GREEN: "#10b981",
+  YELLOW: "#f59e0b",
+  RED: "#ef4444",
+  PENDING: "#94a3b8",
+};

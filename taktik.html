@@ -1,0 +1,1562 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taktik-Editor</title>
+<style>
+:root{
+  --own:#2563eb; --own-dark:#1d4ed8;
+  --opp:#dc2626; --opp-dark:#b91c1c;
+  --ball:#f59e0b;
+  --hl:#facc15;
+  --bg:#0f172a; --panel:#1e293b; --panel2:#243247; --border:#334155;
+  --text:#e2e8f0; --text-dim:#94a3b8;
+  --accent:#38bdf8; --danger:#f87171; --ok:#4ade80;
+  --pitch:#2e7d4f; --pitch-line:rgba(255,255,255,.75);
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;font-size:13px;overflow:hidden;}
+button{font-family:inherit;font-size:12.5px;cursor:pointer;border:1px solid var(--border);background:var(--panel2);color:var(--text);border-radius:6px;padding:6px 10px;}
+button:hover{background:#2d3d54;}
+button:disabled{opacity:.4;cursor:default;}
+button.primary{background:var(--accent);border-color:var(--accent);color:#03202e;font-weight:600;}
+button.primary:hover{background:#5cc9fb;}
+button.danger{border-color:var(--danger);color:var(--danger);}
+button.ghost{background:transparent;}
+button.small{padding:3px 7px;font-size:11.5px;}
+input[type=text],input[type=number],select,textarea{
+  background:#0b1424;border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 7px;font-family:inherit;font-size:12.5px;
+}
+input:focus,select:focus,textarea:focus{outline:1.5px solid var(--accent);}
+label{font-size:11px;color:var(--text-dim);}
+h1,h2,h3{margin:0;}
+#app{height:100vh;display:flex;flex-direction:column;}
+
+/* Header */
+#app-header{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap;flex-shrink:0;}
+#app-header .brand{font-weight:700;font-size:14px;color:var(--accent);white-space:nowrap;}
+.hgroup{display:flex;align-items:center;gap:6px;padding:0 8px;border-left:1px solid var(--border);flex-wrap:wrap;}
+.hgroup:first-of-type{border-left:none;}
+#situation-select{min-width:160px;}
+.mode-toggle{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+.mode-toggle button{border:none;border-radius:0;background:var(--panel2);}
+.mode-toggle button.active{background:var(--accent);color:#03202e;font-weight:700;}
+#save-status{font-size:11.5px;padding:4px 9px;border-radius:12px;background:#0b1424;border:1px solid var(--border);white-space:nowrap;}
+#save-status.dirty{background:#3a2410;border-color:#a35b12;color:#fbbf24;}
+#save-status.clean{background:#0f2b1a;border-color:#1f6b3a;color:var(--ok);}
+.spacer{flex:1;}
+
+/* Body layout */
+#app-body{flex:1;display:flex;min-height:0;}
+aside{background:var(--panel);border-color:var(--border);flex-shrink:0;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:12px;}
+#sidebar-left{width:270px;border-right:1px solid var(--border);}
+#sidebar-right{width:290px;border-left:1px solid var(--border);}
+.panel-box{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;}
+.panel-box h3{font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;display:flex;justify-content:space-between;align-items:center;}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.row.between{justify-content:space-between;}
+.grow{flex:1;min-width:0;}
+
+/* object rows */
+.obj-row{display:flex;align-items:center;gap:4px;padding:4px 4px;border-radius:5px;background:#0b1424;border:1px solid transparent;}
+.obj-row.selected{border-color:var(--accent);}
+.obj-row.ghosted{opacity:.5;}
+.obj-row input[type=text]{width:100%;}
+.obj-row .num{width:34px;text-align:center;flex-shrink:0;}
+.obj-row .nm{width:64px;flex-shrink:0;}
+.obj-row .rl{width:48px;flex-shrink:0;}
+.obj-list{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto;}
+.swatch{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.swatch.own{background:var(--own);} .swatch.opp{background:var(--opp);}
+
+/* Field */
+#field-main{flex:1;display:flex;flex-direction:column;min-width:0;padding:10px;gap:8px;}
+#field-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;}
+#field{position:relative;width:100%;max-width:100%;max-height:100%;background:
+  repeating-linear-gradient(90deg,#2e7d4f 0,#2e7d4f 40px,#357f52 40px,#357f52 80px);
+  border-radius:6px;box-shadow:0 0 0 1px var(--border),0 10px 30px rgba(0,0,0,.4);overflow:hidden;}
+#field-svg{position:absolute;inset:0;width:100%;height:100%;}
+#field-svg .line{stroke:var(--pitch-line);stroke-width:.35;fill:none;}
+#field-svg .spot{fill:var(--pitch-line);}
+#markers-layer{position:absolute;inset:0;}
+.marker{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;cursor:grab;user-select:none;touch-action:none;transition:opacity .15s;}
+.marker .dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;border:2px solid rgba(255,255,255,.85);box-shadow:0 2px 6px rgba(0,0,0,.5);}
+.marker.player .dot{background:var(--own);}
+.marker.opponent .dot{background:var(--opp);}
+.marker.ball .dot{width:15px;height:15px;background:var(--ball);border-color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.6);}
+.marker .tag{margin-top:2px;font-size:9.5px;background:rgba(2,10,20,.72);padding:1px 4px;border-radius:4px;white-space:nowrap;color:#fff;}
+.marker.ghost .dot{opacity:.35;border-style:dashed;}
+.marker.highlighted .dot{box-shadow:0 0 0 3px var(--hl),0 2px 6px rgba(0,0,0,.5);}
+.marker.dimmed{opacity:.28;}
+.marker.focused .dot{width:32px;height:32px;box-shadow:0 0 0 4px var(--hl),0 0 14px 2px rgba(250,204,21,.7);}
+.marker.dragging{cursor:grabbing;z-index:50;}
+.marker.selected .dot{box-shadow:0 0 0 3px #fff;}
+#field.presentation .marker{cursor:default;}
+#paths-layer path{fill:none;}
+#paths-layer .path-own{stroke:var(--own);stroke-width:.55;stroke-dasharray:1.4 1.2;}
+#paths-layer .path-opp{stroke:var(--opp);stroke-width:.55;stroke-dasharray:1.4 1.2;}
+#paths-layer .path-ball{stroke:var(--ball);stroke-width:.45;stroke-dasharray:.6 1;}
+
+/* timeline */
+#timeline-list{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto;}
+.step-item{display:flex;align-items:center;gap:4px;background:#0b1424;border:1px solid var(--border);border-radius:6px;padding:5px 6px;cursor:pointer;}
+.step-item.active{border-color:var(--accent);background:#0e2436;}
+.step-item .idx{width:18px;height:18px;border-radius:50%;background:var(--panel2);display:flex;align-items:center;justify-content:center;font-size:10.5px;flex-shrink:0;}
+.step-item .lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;}
+.step-item .btns{display:flex;gap:2px;}
+
+/* presentation bar */
+#presentation-bar{display:none;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 10px;flex-wrap:wrap;gap:10px;align-items:center;}
+#presentation-bar.show{display:flex;}
+.persp-toggle{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+.persp-toggle button{border:none;border-radius:0;}
+.persp-toggle button.active{background:var(--accent);color:#03202e;font-weight:700;}
+#playpause{width:38px;}
+
+/* context panel */
+#context-panel textarea{width:100%;min-height:50px;resize:vertical;}
+.hint{color:var(--text-dim);font-size:11.5px;}
+
+/* modal & toast */
+#modal-root{position:fixed;inset:0;pointer-events:none;z-index:200;}
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;pointer-events:all;}
+.modal-box{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.6);}
+.modal-box h3{margin-bottom:8px;font-size:14px;}
+.modal-box p{font-size:12.5px;color:var(--text-dim);margin-bottom:14px;line-height:1.4;}
+.modal-box .btns{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
+#toast-wrap{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;gap:6px;pointer-events:none;}
+.toast{background:#0b1424;border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.5);animation:toastin .2s ease;}
+.toast.err{border-color:var(--danger);color:#fecaca;}
+.toast.ok{border-color:var(--ok);color:#bbf7d0;}
+@keyframes toastin{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+.hidden{display:none !important;}
+#file-input{display:none;}
+.chk-row{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-dim);}
+::-webkit-scrollbar{width:8px;height:8px;}
+::-webkit-scrollbar-thumb{background:#334155;border-radius:4px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="app-header">
+    <div class="brand">⚽ Taktik-Editor</div>
+    <div class="hgroup">
+      <select id="situation-select"></select>
+      <button id="btn-sit-new" class="small">+ Neu</button>
+      <button id="btn-sit-rename" class="small">Umbenennen</button>
+      <button id="btn-sit-delete" class="small danger">Löschen</button>
+    </div>
+    <div class="hgroup">
+      <div class="mode-toggle">
+        <button id="btn-mode-editor" data-mode="editor">Editor</button>
+        <button id="btn-mode-presentation" data-mode="presentation">Präsentation</button>
+      </div>
+    </div>
+    <div class="hgroup" id="editor-save-group">
+      <span id="save-status" class="clean">Gespeichert</span>
+      <button id="btn-update-step" class="small primary">💾 Aktualisieren</button>
+      <button id="btn-add-step" class="small">➕ Neuer Schritt</button>
+      <button id="btn-reset-field" class="small ghost">↺ Zurücksetzen</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="hgroup">
+      <button id="btn-demo" class="small">Demo laden</button>
+      <button id="btn-export" class="small">Export</button>
+      <button id="btn-import" class="small">Import</button>
+      <input type="file" id="file-input" accept="application/json">
+    </div>
+  </header>
+
+  <div id="app-body">
+    <aside id="sidebar-left">
+      <div class="panel-box" id="situation-meta-box">
+        <h3>Situation</h3>
+        <div class="row"><label class="grow">Kategorie</label></div>
+        <select id="sit-category"></select>
+        <div class="row"><label class="grow">Spielfeldausschnitt</label></div>
+        <select id="sit-fieldview"></select>
+      </div>
+      <div class="panel-box">
+        <h3>Eigene Spieler <button id="btn-add-player" class="small">+ Spieler</button></h3>
+        <div class="row">
+          <select id="own-formation-select" class="grow"></select>
+          <button id="btn-apply-own-formation" class="small">Formation anwenden</button>
+        </div>
+        <div class="obj-list" id="own-list"></div>
+      </div>
+      <div class="panel-box">
+        <h3>Gegner <button id="btn-add-opponent" class="small">+ Gegner</button></h3>
+        <div class="row">
+          <select id="opp-formation-select" class="grow"></select>
+          <button id="btn-apply-opp-formation" class="small">Formation anwenden</button>
+        </div>
+        <div class="obj-list" id="opp-list"></div>
+      </div>
+      <div class="panel-box">
+        <h3>Ball</h3>
+        <div class="row between">
+          <label class="chk-row"><input type="checkbox" id="ball-visible"> sichtbar</label>
+        </div>
+        <div class="row"><label class="grow">Ballbesitz</label></div>
+        <select id="ball-owner"></select>
+      </div>
+      <div class="panel-box">
+        <h3>Darstellung</h3>
+        <label class="chk-row"><input type="checkbox" id="chk-show-labels" checked> Name/Rolle anzeigen</label>
+        <label class="chk-row"><input type="checkbox" id="chk-show-paths" checked> Laufwege anzeigen</label>
+      </div>
+    </aside>
+
+    <main id="field-main">
+      <div id="field-wrap">
+        <div id="field">
+          <svg id="field-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <g id="markings"></g>
+            <g id="paths-layer"></g>
+          </svg>
+          <div id="markers-layer"></div>
+        </div>
+      </div>
+      <div id="presentation-bar">
+        <div class="row">
+          <button id="btn-prev" title="Zurück">⏮</button>
+          <button id="playpause" title="Play/Pause">▶</button>
+          <button id="btn-next" title="Weiter">⏭</button>
+          <button id="btn-p-reset" title="Reset">↺</button>
+        </div>
+        <div class="row">
+          <label>Tempo</label>
+          <select id="speed-select">
+            <option value="slow">Langsam</option>
+            <option value="normal" selected>Normal</option>
+            <option value="fast">Schnell</option>
+          </select>
+        </div>
+        <div class="row">
+          <div class="persp-toggle">
+            <button data-persp="overview" class="active">Gesamtbild</button>
+            <button data-persp="sequence">Bewegungsablauf</button>
+            <button data-persp="myplayer">Mein Spieler</button>
+          </div>
+        </div>
+        <div class="row" id="focus-player-row">
+          <label>Spieler</label>
+          <select id="focus-player-select"></select>
+        </div>
+      </div>
+    </main>
+
+    <aside id="sidebar-right">
+      <div class="panel-box">
+        <h3>Schritte</h3>
+        <div id="timeline-list"></div>
+      </div>
+      <div class="panel-box" id="context-panel">
+        <h3>Kontext</h3>
+        <div id="step-meta-editor">
+          <label>Schrittname</label>
+          <input type="text" id="step-name-input" class="grow">
+          <label>Taktischer Hinweis</label>
+          <textarea id="step-note-input"></textarea>
+        </div>
+        <div id="focus-info" class="hint"></div>
+        <div id="selected-object-editor"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+<div id="modal-root"></div>
+<div id="toast-wrap"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* =========================================================
+   1. KONSTANTEN & DATENMODELL
+   ========================================================= */
+var SCHEMA_VERSION = 1;
+var STORAGE_KEY = "taktik-editor-state-v1";
+var PITCH_LENGTH = 105, PITCH_WIDTH = 68;
+
+var CATEGORIES = {
+  "corner-off":"Standard – Offensive Ecke", "corner-def":"Standard – Defensive Ecke",
+  "freekick-off":"Standard – Offensiver Freistoß", "freekick-def":"Standard – Defensiver Freistoß",
+  "buildup":"Spiel mit Ball – Aufbau", "attack":"Spiel mit Ball – Angriff",
+  "organization":"Spiel ohne Ball – Organisation", "pressing":"Spiel ohne Ball – Pressing",
+  "transition-off":"Umschalten – Offensiv", "transition-def":"Umschalten – Defensiv",
+  "formation":"Grundordnung / Formation", "custom":"Sonstige Taktik"
+};
+/* Formationsvorlagen nach Vierer-/Dreierkette-Systematik (Trainer-Referenzmaterial),
+   x=0 eigenes Tor -> x=100 gegnerisches Tor, y=0..100 Spielfeldbreite */
+var FORMATIONS = {
+  "4-4-2": [["TW",5,50],["IV",20,38],["IV",20,62],["AV",22,15],["AV",22,85],
+    ["LM",50,15],["ZM",48,40],["ZM",48,60],["RM",50,85],["ST",75,38],["ST",75,62]],
+  "4-3-3": [["TW",5,50],["IV",20,38],["IV",20,62],["AV",22,15],["AV",22,85],
+    ["ZDM",40,50],["ZM",52,32],["ZM",52,68],["LA",75,15],["ST",80,50],["RA",75,85]],
+  "4-2-3-1": [["TW",5,50],["IV",20,38],["IV",20,62],["AV",22,15],["AV",22,85],
+    ["ZDM",38,40],["ZDM",38,60],["ZOM",60,50],["LA",65,18],["RA",65,82],["ST",85,50]],
+  "3-5-2": [["TW",5,50],["IV",18,30],["IV",15,50],["IV",18,70],
+    ["FS",45,12],["FS",45,88],["ZM",42,38],["ZM",42,62],["ZOM",58,50],["ST",78,40],["ST",78,60]],
+  "5-3-2": [["TW",5,50],["IV",18,30],["IV",15,50],["IV",18,70],["AV",22,12],["AV",22,88],
+    ["ZM",45,35],["ZM",42,50],["ZM",45,65],["ST",78,40],["ST",78,60]]
+};
+var FIELD_VIEWS = {
+  full:{label:"Komplettes Feld", vx:0, vy:0, vw:100, vh:100},
+  half:{label:"Halbes Feld", vx:50, vy:0, vw:50, vh:100},
+  penalty:{label:"Strafraum/Standard", vx:76, vy:12, vw:24, vh:76}
+};
+var SPEEDS = {slow:1700, normal:950, fast:480};
+var HOLD_MS = {slow:750, normal:450, fast:250};
+
+function uid(prefix){
+  return prefix + "-" + Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2,7);
+}
+function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function lerp(a,b,t){ return a + (b-a)*t; }
+function easeInOut(t){ return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
+
+function makeObj(id, number, name, role, x, y){
+  return {id:id, number:number, name:name||"", role:role||"", x:x, y:y, orientation:0, visible:true, highlighted:false, task:""};
+}
+function makeBall(x,y){ return {x:x, y:y, ownerId:null, visible:true}; }
+function makeStep(name){
+  return {id:uid("step"), name:name||"Schritt", note:"", players:[], opponents:[], ball:makeBall(50,50), paths:[]};
+}
+function makeSituation(name, category, fieldView){
+  return {id:uid("sit"), name:name||"Neue Situation", category:category||"custom", fieldView:fieldView||"full", activeStepId:null, steps:[]};
+}
+function emptyRootState(){
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    situations: [],
+    activeSituationId: null,
+    ui: {mode:"editor", perspective:"overview", focusPlayerId:null, showPaths:true, showLabels:true, speed:"normal"}
+  };
+}
+
+/* =========================================================
+   2. LAUFZEIT-ZUSTAND (nicht persistiert)
+   ========================================================= */
+var state = null; // persistiertes Datenmodell
+var runtime = {
+  workingField: {players:[], opponents:[], ball: makeBall(50,50)},
+  dirty: false,
+  selectedObjectId: null,
+  drag: null,
+  currentViewBox: FIELD_VIEWS.full,
+  presentation: {playing:false, raf:null, playTimeout:null, stopRequested:false}
+};
+
+/* =========================================================
+   3. PERSISTENZ
+   ========================================================= */
+function persist(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch(e){ showToast("Speichern in localStorage fehlgeschlagen: "+e.message, "err"); }
+}
+
+function validateStateShape(raw){
+  if (!raw || typeof raw !== "object") throw new Error("Kein gültiges Objekt.");
+  if (typeof raw.schemaVersion !== "number") throw new Error("schemaVersion fehlt.");
+  if (raw.schemaVersion > SCHEMA_VERSION) throw new Error("Datei stammt aus einer neueren, nicht unterstützten Version ("+raw.schemaVersion+").");
+  if (!Array.isArray(raw.situations)) throw new Error("Feld 'situations' fehlt oder ist kein Array.");
+  raw.situations.forEach(function(sit, si){
+    if (!sit || typeof sit.id !== "string") throw new Error("Situation #"+si+" hat keine gültige id.");
+    if (!Array.isArray(sit.steps)) throw new Error("Situation '"+(sit.name||sit.id)+"' hat kein 'steps'-Array.");
+    sit.steps.forEach(function(st, sti){
+      if (!st || typeof st.id !== "string") throw new Error("Schritt #"+sti+" in Situation '"+sit.name+"' hat keine gültige id.");
+      ["players","opponents"].forEach(function(k){
+        if (!Array.isArray(st[k])) throw new Error("Schritt '"+st.name+"': Feld '"+k+"' fehlt.");
+        st[k].forEach(function(o){
+          if (typeof o.id !== "string" || typeof o.x !== "number" || typeof o.y !== "number"){
+            throw new Error("Schritt '"+st.name+"': ungültiges Objekt in '"+k+"'.");
+          }
+        });
+      });
+      if (!st.ball || typeof st.ball.x !== "number" || typeof st.ball.y !== "number"){
+        throw new Error("Schritt '"+st.name+"': Ballobjekt fehlt oder ungültig.");
+      }
+    });
+  });
+  return true;
+}
+
+function migrateState(raw){
+  // Platz für künftige Migrationen: if (raw.schemaVersion < 2) { ... raw.schemaVersion = 2; }
+  validateStateShape(raw);
+  return raw;
+}
+
+function loadPersisted(){
+  var raw = null;
+  try{
+    var txt = localStorage.getItem(STORAGE_KEY);
+    if (txt) raw = JSON.parse(txt);
+  }catch(e){ raw = null; }
+  if (raw){
+    try{
+      state = migrateState(raw);
+      return;
+    }catch(e){
+      console.warn("Gespeicherter Zustand ungültig, starte mit Demo-Daten:", e.message);
+    }
+  }
+  state = emptyRootState();
+  var demo = buildDemoSituation();
+  state.situations.push(demo);
+  state.activeSituationId = demo.id;
+  persist();
+}
+
+/* =========================================================
+   4. DEMO-SITUATION
+   ========================================================= */
+function buildDemoSituation(){
+  var sit = makeSituation("Demo: Offensive Ecke – Variante 1", "corner-off", "penalty");
+  function P(id,num,x,y){ return makeObj(id,num,"", "", x, y); }
+
+  var s1 = makeStep("1 – Ausgangsposition");
+  s1.note = "Ecke von rechts. Zonale Ausgangsstellung, Spieler 7 tritt an.";
+  s1.players = [
+    P("d-p1",7,99,3), P("d-p2",9,91,30), P("d-p3",5,90,50),
+    P("d-p4",4,91,68), P("d-p5",8,80,50), P("d-p6",6,75,35)
+  ];
+  s1.opponents = [
+    P("d-o1",1,97,50), P("d-o2",2,92,32), P("d-o3",5,91,50),
+    P("d-o4",4,92,66), P("d-o5",6,83,50), P("d-o6",8,78,40)
+  ];
+  s1.ball = {x:99,y:3,ownerId:"d-p1",visible:true};
+  s1.players[0].task = "Ecke ausführen – flacher Ball auf den kurzen Pfosten.";
+  s1.players[1].task = "Start am kurzen Pfosten, Timing für Laufweg abwarten.";
+
+  var s2 = makeStep("2 – Anlaufbewegungen");
+  s2.note = "Läufe zum kurzen und langen Pfosten starten gleichzeitig.";
+  s2.players = deepClone(s1.players);
+  s2.opponents = deepClone(s1.opponents);
+  s2.ball = deepClone(s1.ball);
+  s2.players[1].x=93; s2.players[1].y=40;
+  s2.players[2].x=92; s2.players[2].y=52;
+  s2.players[3].x=93; s2.players[3].y=60;
+  s2.players[4].x=85; s2.players[4].y=55;
+  s2.opponents[1].x=94; s2.opponents[1].y=40;
+  s2.opponents[2].x=91; s2.opponents[2].y=51;
+  s2.opponents[3].x=93; s2.opponents[3].y=60;
+  s2.opponents[4].x=84; s2.opponents[4].y=52;
+
+  var s3 = makeStep("3 – Ballaktion am kurzen Pfosten");
+  s3.note = "Spieler 9 verlängert am kurzen Pfosten Richtung Tormitte.";
+  s3.players = deepClone(s2.players);
+  s3.opponents = deepClone(s2.opponents);
+  s3.players[1].x=93; s3.players[1].y=42;
+  s3.players[3].x=95; s3.players[3].y=63;
+  s3.players[0].x=98; s3.players[0].y=5;
+  s3.ball = {x:93,y:42,ownerId:"d-p2",visible:true};
+  s3.players[1].task = "Kopfballverlängerung Richtung Tormitte / zweiter Pfosten.";
+
+  sit.steps = [s1,s2,s3];
+  sit.activeStepId = s1.id;
+  return sit;
+}
+
+/* =========================================================
+   5. STATE-ZUGRIFF & MUTATIONEN
+   ========================================================= */
+function getActiveSituation(){
+  if (!state.activeSituationId) return null;
+  return state.situations.find(function(s){ return s.id===state.activeSituationId; }) || null;
+}
+function getStepById(sit, id){
+  if (!sit) return null;
+  return sit.steps.find(function(s){ return s.id===id; }) || null;
+}
+function getActiveStep(){
+  var sit = getActiveSituation();
+  if (!sit) return null;
+  return getStepById(sit, sit.activeStepId);
+}
+function getStepIndex(sit, id){
+  if (!sit) return -1;
+  return sit.steps.findIndex(function(s){ return s.id===id; });
+}
+function getNextStep(sit, id){
+  var i = getStepIndex(sit,id);
+  if (i<0 || i>=sit.steps.length-1) return null;
+  return sit.steps[i+1];
+}
+
+function loadWorkingFieldFromStep(step){
+  if (step){
+    runtime.workingField = {players:deepClone(step.players), opponents:deepClone(step.opponents), ball:deepClone(step.ball)};
+  } else {
+    runtime.workingField = {players:[], opponents:[], ball: makeBall(50,50)};
+  }
+  runtime.dirty = false;
+  runtime.selectedObjectId = null;
+}
+
+function markDirty(){ runtime.dirty = true; }
+
+function snapshotFromWorking(){
+  return {players:deepClone(runtime.workingField.players), opponents:deepClone(runtime.workingField.opponents), ball:deepClone(runtime.workingField.ball)};
+}
+
+function saveActiveStepField(){
+  var step = getActiveStep();
+  if (!step) return;
+  var snap = snapshotFromWorking();
+  step.players = snap.players; step.opponents = snap.opponents; step.ball = snap.ball;
+  runtime.dirty = false;
+  persist();
+  render();
+  showToast("Schritt aktualisiert.", "ok");
+}
+
+function addStepFromWorking(){
+  var sit = getActiveSituation();
+  if (!sit) return;
+  var snap = snapshotFromWorking();
+  var step = makeStep((sit.steps.length+1)+" – Neuer Schritt");
+  step.players = snap.players; step.opponents = snap.opponents; step.ball = snap.ball;
+  var insertAt = getStepIndex(sit, sit.activeStepId);
+  if (insertAt<0) sit.steps.push(step); else sit.steps.splice(insertAt+1, 0, step);
+  sit.activeStepId = step.id;
+  runtime.dirty = false;
+  persist();
+  render();
+  showToast("Neuer Schritt gespeichert.", "ok");
+}
+
+function duplicateStep(stepId){
+  var sit = getActiveSituation(); if (!sit) return;
+  var idx = getStepIndex(sit, stepId); if (idx<0) return;
+  var orig = sit.steps[idx];
+  var copy = deepClone(orig);
+  copy.id = uid("step");
+  copy.name = orig.name + " (Kopie)";
+  sit.steps.splice(idx+1, 0, copy);
+  doSwitchStep(copy.id);
+  persist();
+  render();
+}
+
+function deleteStep(stepId){
+  var sit = getActiveSituation(); if (!sit) return;
+  var idx = getStepIndex(sit, stepId); if (idx<0) return;
+  showConfirm("Schritt löschen", "Diesen Schritt wirklich unwiderruflich löschen?", function(){
+    sit.steps.splice(idx,1);
+    if (sit.activeStepId === stepId){
+      var newIdx = clamp(idx-1, 0, sit.steps.length-1);
+      sit.activeStepId = sit.steps.length ? sit.steps[newIdx].id : null;
+      loadWorkingFieldFromStep(getActiveStep());
+    }
+    persist();
+    render();
+  });
+}
+
+function renameStep(stepId, name){
+  var sit = getActiveSituation(); if (!sit) return;
+  var step = getStepById(sit, stepId); if (!step) return;
+  step.name = name;
+  persist();
+  render();
+}
+
+function moveStep(stepId, dir){
+  var sit = getActiveSituation(); if (!sit) return;
+  var idx = getStepIndex(sit, stepId);
+  var newIdx = idx+dir;
+  if (idx<0 || newIdx<0 || newIdx>=sit.steps.length) return;
+  var arr = sit.steps;
+  var tmp = arr[idx]; arr[idx]=arr[newIdx]; arr[newIdx]=tmp;
+  persist();
+  render();
+}
+
+function resetActiveStepField(){
+  loadWorkingFieldFromStep(getActiveStep());
+  render();
+  showToast("Feld auf letzten Speicherstand zurückgesetzt.", "ok");
+}
+
+/* --- Schrittwechsel mit Schutz vor Datenverlust --- */
+function doSwitchStep(stepId){
+  var sit = getActiveSituation(); if (!sit) return;
+  sit.activeStepId = stepId;
+  loadWorkingFieldFromStep(getStepById(sit, stepId));
+  persist();
+}
+function requestSwitchStep(stepId){
+  var sit = getActiveSituation(); if (!sit) return;
+  if (sit.activeStepId === stepId){ return; }
+  guardUnsavedThen(function(){ doSwitchStep(stepId); render(); });
+}
+
+function guardUnsavedThen(proceed){
+  if (!runtime.dirty){ proceed(); return; }
+  showModal({
+    title: "Ungespeicherte Änderungen",
+    message: "Der aktuelle Feldzustand wurde seit dem letzten Speichern verändert. Was möchtest du tun?",
+    buttons: [
+      {label:"Speichern & wechseln", cls:"primary", action:function(){ saveActiveStepField(); proceed(); }},
+      {label:"Verwerfen & wechseln", cls:"danger", action:function(){ proceed(); }},
+      {label:"Abbrechen", cls:"ghost", action:function(){}}
+    ]
+  });
+}
+
+/* --- Situationen --- */
+function selectSituation(id){
+  if (state.activeSituationId === id) return;
+  guardUnsavedThen(function(){
+    state.activeSituationId = id;
+    var sit = getActiveSituation();
+    if (sit && !sit.activeStepId && sit.steps.length) sit.activeStepId = sit.steps[0].id;
+    loadWorkingFieldFromStep(getActiveStep());
+    state.ui.focusPlayerId = null;
+    persist();
+    render();
+  });
+}
+function createSituation(name, category, fieldView){
+  var sit = makeSituation(name, category, fieldView);
+  state.situations.push(sit);
+  state.activeSituationId = sit.id;
+  loadWorkingFieldFromStep(null);
+  persist();
+  render();
+}
+function renameSituation(id, name){
+  var sit = state.situations.find(function(s){ return s.id===id; });
+  if (!sit) return;
+  sit.name = name;
+  persist(); render();
+}
+function deleteSituation(id){
+  showConfirm("Situation löschen", "Diese Situation inklusive aller Schritte wirklich löschen?", function(){
+    state.situations = state.situations.filter(function(s){ return s.id!==id; });
+    if (state.activeSituationId === id){
+      state.activeSituationId = state.situations.length ? state.situations[0].id : null;
+      var sit = getActiveSituation();
+      if (sit && !sit.activeStepId && sit.steps.length) sit.activeStepId = sit.steps[0].id;
+      loadWorkingFieldFromStep(getActiveStep());
+    }
+    persist(); render();
+  });
+}
+
+/* --- Objektbearbeitung (wirkt auf runtime.workingField) --- */
+function nextNumber(list){
+  var max=0;
+  list.forEach(function(o){ var n=parseInt(o.number,10); if (!isNaN(n)&&n>max) max=n; });
+  return max+1;
+}
+function addOwnPlayer(){
+  var list = runtime.workingField.players;
+  var n = list.length;
+  var x = 45 + (n%5)*3, y = 15 + Math.floor(n/5)*16;
+  list.push(makeObj(uid("p"), nextNumber(list), "", "", clamp(x,2,98), clamp(y,2,98)));
+  markDirty(); render();
+}
+function applyFormationTo(kind, formationKey){
+  var def = FORMATIONS[formationKey]; if (!def) return;
+  var key = kind==="player" ? "players" : "opponents";
+  var mirrorX = kind==="opponent"; // Gegner steht der eigenen Mannschaft gegenüber (eigenes Tor x=0, Gegner-Tor x=100)
+  function doApply(){
+    runtime.workingField[key] = def.map(function(row, i){
+      var x = mirrorX ? (100 - row[1]) : row[1];
+      var obj = makeObj(uid(kind==="player"?"p":"o"), i+1, "", row[0], x, row[2]);
+      return obj;
+    });
+    markDirty(); render();
+    showToast("Formation " + formationKey + " angewendet.", "ok");
+  }
+  if (runtime.workingField[key].length){
+    showConfirm("Formation anwenden", "Die bestehende Aufstellung (" + runtime.workingField[key].length + " Objekte) wird durch die Formation " + formationKey + " ersetzt. Fortfahren?", doApply);
+  } else {
+    doApply();
+  }
+}
+function addOpponent(){
+  var list = runtime.workingField.opponents;
+  var n = list.length;
+  var x = 55 + (n%5)*3, y = 15 + Math.floor(n/5)*16;
+  list.push(makeObj(uid("o"), nextNumber(list), "", "", clamp(x,2,98), clamp(y,2,98)));
+  markDirty(); render();
+}
+function removeObject(kind, id){
+  showConfirm("Objekt entfernen", "Dieses Objekt aus dem aktuellen Feldzustand entfernen?", function(){
+    var key = kind==="player" ? "players" : "opponents";
+    runtime.workingField[key] = runtime.workingField[key].filter(function(o){ return o.id!==id; });
+    if (runtime.selectedObjectId === id) runtime.selectedObjectId = null;
+    if (state.ui.focusPlayerId === id) state.ui.focusPlayerId = null;
+    markDirty(); render();
+  });
+}
+function findWorkingObject(kind, id){
+  if (kind==="ball") return runtime.workingField.ball;
+  var key = kind==="player" ? "players" : "opponents";
+  return runtime.workingField[key].find(function(o){ return o.id===id; });
+}
+function updateObjectField(kind, id, field, value){
+  var obj = findWorkingObject(kind, id); if (!obj) return;
+  obj[field] = value;
+  markDirty(); render();
+}
+function toggleVisible(kind, id){
+  var obj = findWorkingObject(kind, id); if (!obj) return;
+  obj.visible = obj.visible===false ? true : false;
+  markDirty(); render();
+}
+function toggleHighlight(kind, id){
+  var obj = findWorkingObject(kind, id); if (!obj) return;
+  obj.highlighted = !obj.highlighted;
+  markDirty(); render();
+}
+function setBallOwner(ownerId){
+  runtime.workingField.ball.ownerId = ownerId || null;
+  markDirty(); render();
+}
+function toggleBallVisible(){
+  runtime.workingField.ball.visible = !runtime.workingField.ball.visible;
+  markDirty(); render();
+}
+function setFieldView(view){
+  var sit = getActiveSituation(); if (!sit) return;
+  sit.fieldView = view;
+  persist(); render();
+}
+function setCategory(cat){
+  var sit = getActiveSituation(); if (!sit) return;
+  sit.category = cat;
+  persist(); render();
+}
+
+/* --- Modus / Präsentation Einstellungen --- */
+function setMode(mode){
+  if (state.ui.mode === mode) return;
+  if (mode === "presentation"){
+    guardUnsavedThen(function(){
+      state.ui.mode = "presentation";
+      persist(); render();
+    });
+  } else {
+    stopPlayback();
+    state.ui.mode = mode;
+    persist(); render();
+  }
+}
+function setPerspective(p){
+  state.ui.perspective = p;
+  persist(); render();
+}
+function setFocusPlayer(id){
+  state.ui.focusPlayerId = id || null;
+  persist(); render();
+}
+function setSpeed(s){ state.ui.speed = s; persist(); }
+function toggleShowPaths(v){ state.ui.showPaths = v; persist(); render(); }
+function toggleShowLabels(v){ state.ui.showLabels = v; render(); }
+
+/* =========================================================
+   6. IMPORT / EXPORT
+   ========================================================= */
+function exportJSON(){
+  var payload = deepClone(state);
+  payload.exportedAt = new Date().toISOString();
+  var blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = "taktik-export-" + new Date().toISOString().slice(0,19).replace(/[:T]/g,"-") + ".json";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+  showToast("Export erstellt.", "ok");
+}
+function importJSONFile(file){
+  var reader = new FileReader();
+  reader.onload = function(){
+    var parsed;
+    try{ parsed = JSON.parse(reader.result); }
+    catch(e){ showToast("Import fehlgeschlagen: ungültiges JSON ("+e.message+").", "err"); return; }
+    try{
+      migrateState(parsed);
+    }catch(e){
+      showToast("Import fehlgeschlagen: " + e.message, "err");
+      return;
+    }
+    showConfirm("Import bestätigen", "Der komplette lokale Datenstand wird durch die importierte Datei ersetzt. Fortfahren?", function(){
+      state = parsed;
+      if (!state.ui) state.ui = emptyRootState().ui;
+      if (!state.activeSituationId && state.situations.length) state.activeSituationId = state.situations[0].id;
+      var sit = getActiveSituation();
+      if (sit && !sit.activeStepId && sit.steps.length) sit.activeStepId = sit.steps[0].id;
+      loadWorkingFieldFromStep(getActiveStep());
+      persist();
+      render();
+      showToast("Import erfolgreich.", "ok");
+    });
+  };
+  reader.onerror = function(){ showToast("Datei konnte nicht gelesen werden.", "err"); };
+  reader.readAsText(file);
+}
+
+/* =========================================================
+   7. UI-HILFEN: MODAL / TOAST
+   ========================================================= */
+function showModal(opts){
+  var root = document.getElementById("modal-root");
+  root.innerHTML = "";
+  var backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop";
+  var box = document.createElement("div");
+  box.className = "modal-box";
+  var h = document.createElement("h3"); h.textContent = opts.title; box.appendChild(h);
+  if (opts.message){ var p = document.createElement("p"); p.textContent = opts.message; box.appendChild(p); }
+  var btns = document.createElement("div"); btns.className = "btns";
+  opts.buttons.forEach(function(b){
+    var el = document.createElement("button");
+    el.textContent = b.label;
+    if (b.cls) el.className = b.cls;
+    el.addEventListener("click", function(){ closeModal(); b.action && b.action(); });
+    btns.appendChild(el);
+  });
+  box.appendChild(btns);
+  backdrop.appendChild(box);
+  root.appendChild(backdrop);
+}
+function closeModal(){ document.getElementById("modal-root").innerHTML = ""; }
+function showConfirm(title, message, onYes){
+  showModal({title:title, message:message, buttons:[
+    {label:"Abbrechen", cls:"ghost", action:function(){}},
+    {label:"Löschen", cls:"danger", action:onYes}
+  ]});
+}
+function showPromptModal(title, defaultValue, onOk){
+  var root = document.getElementById("modal-root");
+  root.innerHTML = "";
+  var backdrop = document.createElement("div"); backdrop.className = "modal-backdrop";
+  var box = document.createElement("div"); box.className = "modal-box";
+  var h = document.createElement("h3"); h.textContent = title; box.appendChild(h);
+  var input = document.createElement("input");
+  input.type = "text"; input.value = defaultValue || ""; input.style.width="100%"; input.style.marginBottom="14px";
+  box.appendChild(input);
+  var btns = document.createElement("div"); btns.className = "btns";
+  var cancel = document.createElement("button"); cancel.textContent="Abbrechen"; cancel.className="ghost";
+  cancel.addEventListener("click", closeModal);
+  var ok = document.createElement("button"); ok.textContent="OK"; ok.className="primary";
+  ok.addEventListener("click", function(){ var v=input.value.trim(); closeModal(); if (v) onOk(v); });
+  input.addEventListener("keydown", function(e){ if (e.key==="Enter") ok.click(); if (e.key==="Escape") closeModal(); });
+  btns.appendChild(cancel); btns.appendChild(ok);
+  box.appendChild(btns);
+  backdrop.appendChild(box); root.appendChild(backdrop);
+  setTimeout(function(){ input.focus(); input.select(); }, 30);
+}
+function showToast(msg, type){
+  var wrap = document.getElementById("toast-wrap");
+  var t = document.createElement("div");
+  t.className = "toast" + (type==="err" ? " err" : type==="ok" ? " ok" : "");
+  t.textContent = msg;
+  wrap.appendChild(t);
+  setTimeout(function(){ t.remove(); }, 3200);
+}
+
+/* =========================================================
+   8. FELD: KOORDINATEN / MARKIERUNGEN
+   ========================================================= */
+function xToPercent(x){ var v=runtime.currentViewBox; return (x - v.vx)/v.vw*100; }
+function yToPercent(y){ var v=runtime.currentViewBox; return (y - v.vy)/v.vh*100; }
+function percentToX(px){ var v=runtime.currentViewBox; return v.vx + px/100*v.vw; }
+function percentToY(py){ var v=runtime.currentViewBox; return v.vy + py/100*v.vh; }
+
+function applyFieldView(viewKey){
+  var v = FIELD_VIEWS[viewKey] || FIELD_VIEWS.full;
+  runtime.currentViewBox = v;
+  var svg = document.getElementById("field-svg");
+  svg.setAttribute("viewBox", v.vx + " " + v.vy + " " + v.vw + " " + v.vh);
+  var ratio = (v.vw*PITCH_LENGTH) / (v.vh*PITCH_WIDTH);
+  document.getElementById("field").style.aspectRatio = ratio.toFixed(4);
+}
+
+function pitchMarkingsSVG(){
+  return '' +
+    '<rect x="0" y="0" width="100" height="100" class="line"/>' +
+    '<line x1="50" y1="0" x2="50" y2="100" class="line"/>' +
+    '<circle cx="50" cy="50" r="9" class="line"/>' +
+    '<circle cx="50" cy="50" r="0.45" class="spot"/>' +
+    '<rect x="0" y="36.5" width="5.5" height="27" class="line"/>' +
+    '<rect x="94.5" y="36.5" width="5.5" height="27" class="line"/>' +
+    '<rect x="0" y="20.3" width="15.7" height="59.4" class="line"/>' +
+    '<rect x="84.3" y="20.3" width="15.7" height="59.4" class="line"/>' +
+    '<circle cx="11" cy="50" r="0.45" class="spot"/>' +
+    '<circle cx="89" cy="50" r="0.45" class="spot"/>' +
+    '<path d="M 15.7 41 A 9 9 0 0 1 15.7 59" class="line"/>' +
+    '<path d="M 84.3 41 A 9 9 0 0 0 84.3 59" class="line"/>' +
+    '<path d="M 0 8 A 8 8 0 0 0 8 0" class="line"/>' +
+    '<path d="M 92 0 A 8 8 0 0 0 100 8" class="line"/>' +
+    '<path d="M 100 92 A 8 8 0 0 0 92 100" class="line"/>' +
+    '<path d="M 8 100 A 8 8 0 0 0 0 92" class="line"/>';
+}
+
+/* =========================================================
+   9. RENDERING
+   ========================================================= */
+function el(tag, cls, html){
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html !== undefined) e.innerHTML = html;
+  return e;
+}
+
+function render(){
+  document.getElementById("markings").innerHTML = pitchMarkingsSVG();
+  var sit = getActiveSituation();
+  applyFieldView(sit ? sit.fieldView : "full");
+
+  renderHeader(sit);
+  renderSituationMeta(sit);
+  renderObjectPanels();
+  renderBallPanel();
+  renderTimeline(sit);
+  renderContextPanel(sit);
+  renderPresentationBar(sit);
+  renderFieldIdle();
+}
+
+function renderHeader(sit){
+  var select = document.getElementById("situation-select");
+  select.innerHTML = "";
+  state.situations.forEach(function(s){
+    var o = el("option"); o.value = s.id; o.textContent = s.name;
+    if (s.id === state.activeSituationId) o.selected = true;
+    select.appendChild(o);
+  });
+
+  var editorBtn = document.getElementById("btn-mode-editor");
+  var presBtn = document.getElementById("btn-mode-presentation");
+  editorBtn.classList.toggle("active", state.ui.mode==="editor");
+  presBtn.classList.toggle("active", state.ui.mode==="presentation");
+
+  document.getElementById("editor-save-group").style.visibility = state.ui.mode==="editor" ? "visible" : "hidden";
+  var status = document.getElementById("save-status");
+  if (runtime.dirty){ status.textContent = "● Nicht gespeichert"; status.className="dirty"; }
+  else { status.textContent = "Gespeichert"; status.className="clean"; }
+  document.getElementById("btn-update-step").disabled = !runtime.dirty || !getActiveStep();
+  document.getElementById("btn-reset-field").disabled = !runtime.dirty || !getActiveStep();
+  document.getElementById("btn-add-step").disabled = !sit;
+
+  document.getElementById("sidebar-left").style.display = state.ui.mode==="editor" ? "flex" : "none";
+}
+
+function renderSituationMeta(sit){
+  var catSel = document.getElementById("sit-category");
+  catSel.innerHTML = "";
+  Object.keys(CATEGORIES).forEach(function(k){
+    var o = el("option"); o.value=k; o.textContent=CATEGORIES[k];
+    if (sit && sit.category===k) o.selected=true;
+    catSel.appendChild(o);
+  });
+  catSel.disabled = !sit;
+
+  var fvSel = document.getElementById("sit-fieldview");
+  fvSel.innerHTML = "";
+  Object.keys(FIELD_VIEWS).forEach(function(k){
+    var o = el("option"); o.value=k; o.textContent=FIELD_VIEWS[k].label;
+    if (sit && sit.fieldView===k) o.selected=true;
+    fvSel.appendChild(o);
+  });
+  fvSel.disabled = !sit;
+}
+
+function objRowHTML(kind, o){
+  return '';
+}
+function buildObjectRow(kind, o){
+  var row = el("div", "obj-row" + (runtime.selectedObjectId===o.id?" selected":"") + (o.visible===false?" ghosted":""));
+  row.dataset.kind = kind; row.dataset.id = o.id;
+
+  var sw = el("span", "swatch " + (kind==="player"?"own":"opp"));
+  row.appendChild(sw);
+
+  var num = el("input"); num.type="text"; num.className="num"; num.value=o.number!=null?o.number:"";
+  num.addEventListener("change", function(){ updateObjectField(kind, o.id, "number", num.value); });
+  row.appendChild(num);
+
+  var nm = el("input"); nm.type="text"; nm.className="nm"; nm.placeholder="Name"; nm.value=o.name||"";
+  nm.addEventListener("change", function(){ updateObjectField(kind, o.id, "name", nm.value); });
+  row.appendChild(nm);
+
+  var rl = el("input"); rl.type="text"; rl.className="rl"; rl.placeholder="Rolle"; rl.value=o.role||"";
+  rl.addEventListener("change", function(){ updateObjectField(kind, o.id, "role", rl.value); });
+  row.appendChild(rl);
+
+  var vis = el("button","small ghost", o.visible===false ? "🚫" : "👁");
+  vis.title = "Sichtbarkeit umschalten";
+  vis.addEventListener("click", function(){ toggleVisible(kind, o.id); });
+  row.appendChild(vis);
+
+  var hl = el("button","small ghost", o.highlighted ? "★" : "☆");
+  hl.title = "Hervorheben";
+  hl.addEventListener("click", function(){ toggleHighlight(kind, o.id); });
+  row.appendChild(hl);
+
+  var del = el("button","small danger","✕");
+  del.title = "Entfernen";
+  del.addEventListener("click", function(){ removeObject(kind, o.id); });
+  row.appendChild(del);
+
+  row.addEventListener("click", function(e){
+    if (e.target.tagName==="INPUT" || e.target.tagName==="BUTTON") return;
+    runtime.selectedObjectId = o.id;
+    render();
+  });
+  return row;
+}
+
+function fillFormationSelect(selectEl){
+  if (selectEl.options.length) return;
+  Object.keys(FORMATIONS).forEach(function(k){
+    var o = el("option"); o.value=k; o.textContent=k; selectEl.appendChild(o);
+  });
+}
+function renderObjectPanels(){
+  fillFormationSelect(document.getElementById("own-formation-select"));
+  fillFormationSelect(document.getElementById("opp-formation-select"));
+  var ownList = document.getElementById("own-list");
+  var oppList = document.getElementById("opp-list");
+  ownList.innerHTML=""; oppList.innerHTML="";
+  runtime.workingField.players.forEach(function(o){ ownList.appendChild(buildObjectRow("player", o)); });
+  runtime.workingField.opponents.forEach(function(o){ oppList.appendChild(buildObjectRow("opponent", o)); });
+}
+
+function renderBallPanel(){
+  var vis = document.getElementById("ball-visible");
+  vis.checked = runtime.workingField.ball.visible !== false;
+  var ownerSel = document.getElementById("ball-owner");
+  ownerSel.innerHTML = "";
+  var noneOpt = el("option"); noneOpt.value=""; noneOpt.textContent="— kein Besitzer —"; ownerSel.appendChild(noneOpt);
+  runtime.workingField.players.forEach(function(o){
+    var opt = el("option"); opt.value=o.id; opt.textContent="Eigen #"+(o.number||"?")+" "+(o.name||"");
+    if (runtime.workingField.ball.ownerId===o.id) opt.selected=true;
+    ownerSel.appendChild(opt);
+  });
+  runtime.workingField.opponents.forEach(function(o){
+    var opt = el("option"); opt.value=o.id; opt.textContent="Gegner #"+(o.number||"?")+" "+(o.name||"");
+    if (runtime.workingField.ball.ownerId===o.id) opt.selected=true;
+    ownerSel.appendChild(opt);
+  });
+}
+
+function renderTimeline(sit){
+  var list = document.getElementById("timeline-list");
+  list.innerHTML = "";
+  if (!sit || !sit.steps.length){
+    list.appendChild(el("div","hint","Noch keine Schritte. Positioniere Objekte und klicke „Neuer Schritt“."));
+    return;
+  }
+  sit.steps.forEach(function(step, idx){
+    var item = el("div", "step-item" + (sit.activeStepId===step.id ? " active":""));
+    var ix = el("div","idx", String(idx+1));
+    var lbl = el("div","lbl", step.name);
+    var btns = el("div","btns");
+    var up = el("button","small ghost","▲"); up.disabled = idx===0;
+    up.addEventListener("click", function(e){ e.stopPropagation(); moveStep(step.id,-1); });
+    var down = el("button","small ghost","▼"); down.disabled = idx===sit.steps.length-1;
+    down.addEventListener("click", function(e){ e.stopPropagation(); moveStep(step.id,1); });
+    var dup = el("button","small ghost","⎘");
+    dup.title="Duplizieren";
+    dup.addEventListener("click", function(e){ e.stopPropagation(); duplicateStep(step.id); });
+    var ren = el("button","small ghost","✎");
+    ren.title="Umbenennen";
+    ren.addEventListener("click", function(e){ e.stopPropagation(); showPromptModal("Schritt umbenennen", step.name, function(v){ renameStep(step.id, v); }); });
+    var del = el("button","small danger","✕");
+    del.title="Löschen";
+    del.addEventListener("click", function(e){ e.stopPropagation(); deleteStep(step.id); });
+    [up,down,dup,ren,del].forEach(function(b){ btns.appendChild(b); });
+    item.appendChild(ix); item.appendChild(lbl); item.appendChild(btns);
+    item.addEventListener("click", function(){
+      if (state.ui.mode==="editor") requestSwitchStep(step.id);
+      else { stopPlayback(); presGoToStep(step.id, false); }
+    });
+    list.appendChild(item);
+  });
+}
+
+function renderContextPanel(sit){
+  var step = getActiveStep();
+  var nameInput = document.getElementById("step-name-input");
+  var noteInput = document.getElementById("step-note-input");
+  var metaBlock = document.getElementById("step-meta-editor");
+  if (step){
+    metaBlock.style.display="block";
+    nameInput.value = step.name;
+    noteInput.value = step.note || "";
+    nameInput.disabled = state.ui.mode!=="editor";
+    noteInput.disabled = state.ui.mode!=="editor";
+  } else {
+    metaBlock.style.display="none";
+  }
+
+  var focusInfo = document.getElementById("focus-info");
+  focusInfo.innerHTML = "";
+  if (state.ui.mode==="presentation" && state.ui.perspective==="myplayer"){
+    var fp = findFocusPlayerInStep(step);
+    if (fp){
+      focusInfo.innerHTML = "<b>#"+(fp.number||"?")+" "+(escapeHtml(fp.name||""))+"</b>" +
+        (fp.role ? " – "+escapeHtml(fp.role) : "") +
+        (fp.task ? "<br>Aufgabe: "+escapeHtml(fp.task) : "<br><i>Keine Aufgabenbeschreibung hinterlegt.</i>");
+    } else {
+      focusInfo.textContent = "Bitte im Perspektivwechsel einen Fokusspieler auswählen.";
+    }
+  }
+
+  var selBlock = document.getElementById("selected-object-editor");
+  selBlock.innerHTML = "";
+  if (state.ui.mode==="editor" && runtime.selectedObjectId){
+    var kind = runtime.workingField.players.find(function(o){return o.id===runtime.selectedObjectId;}) ? "player" : "opponent";
+    var obj = findWorkingObject(kind, runtime.selectedObjectId);
+    if (obj){
+      selBlock.appendChild(el("h3", null, "Ausgewählt: #"+(obj.number||"?")));
+      if (kind==="player"){
+        var taskLbl = el("label", null, "Aufgabe in diesem Schritt"); selBlock.appendChild(taskLbl);
+        var task = el("textarea"); task.value = obj.task || "";
+        task.addEventListener("change", function(){ updateObjectField("player", obj.id, "task", task.value); });
+        selBlock.appendChild(task);
+      }
+    }
+  }
+}
+
+function findFocusPlayerInStep(step){
+  if (!step || !state.ui.focusPlayerId) return null;
+  return step.players.find(function(p){ return p.id===state.ui.focusPlayerId; }) || null;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; });
+}
+
+function renderPresentationBar(sit){
+  var bar = document.getElementById("presentation-bar");
+  var isPresentation = state.ui.mode==="presentation";
+  bar.classList.toggle("show", isPresentation);
+  if (!isPresentation) return;
+
+  var toggles = bar.querySelectorAll(".persp-toggle button");
+  toggles.forEach(function(b){ b.classList.toggle("active", b.dataset.persp===state.ui.perspective); });
+
+  document.getElementById("focus-player-row").style.visibility = state.ui.perspective==="myplayer" ? "visible" : "hidden";
+  var focusSel = document.getElementById("focus-player-select");
+  focusSel.innerHTML = "";
+  var noneOpt = el("option"); noneOpt.value=""; noneOpt.textContent="Bitte wählen…"; focusSel.appendChild(noneOpt);
+  var seen = {};
+  (sit ? sit.steps : []).forEach(function(st){
+    st.players.forEach(function(p){
+      if (seen[p.id]) return; seen[p.id]=true;
+      var opt = el("option"); opt.value=p.id; opt.textContent="#"+(p.number||"?")+" "+(p.name||"");
+      if (state.ui.focusPlayerId===p.id) opt.selected=true;
+      focusSel.appendChild(opt);
+    });
+  });
+
+  document.getElementById("speed-select").value = state.ui.speed;
+
+  var step = getActiveStep();
+  var idx = sit ? getStepIndex(sit, sit.activeStepId) : -1;
+  document.getElementById("btn-prev").disabled = idx<=0;
+  document.getElementById("btn-next").disabled = !sit || idx>=sit.steps.length-1;
+  document.getElementById("playpause").textContent = runtime.presentation.playing ? "⏸" : "▶";
+}
+
+/* --- Feld-Marker (Ruhezustand, keine Animation) --- */
+function renderFieldIdle(){
+  cancelAnimation();
+  var mode = state.ui.mode;
+  var sit = getActiveSituation();
+  var step = getActiveStep();
+  var snap;
+  if (mode==="editor"){
+    snap = runtime.workingField;
+  } else {
+    snap = step ? {players:step.players, opponents:step.opponents, ball:step.ball} : {players:[],opponents:[],ball:{x:50,y:50,visible:false}};
+  }
+  document.getElementById("field").classList.toggle("presentation", mode!=="editor");
+
+  var layer = document.getElementById("markers-layer");
+  layer.innerHTML = "";
+
+  function shouldShow(o){
+    if (mode==="editor") return true;
+    return o.visible !== false;
+  }
+
+  snap.players.forEach(function(p){ if (shouldShow(p)) layer.appendChild(buildMarkerEl("player", p, mode)); });
+  snap.opponents.forEach(function(o){ if (shouldShow(o)) layer.appendChild(buildMarkerEl("opponent", o, mode)); });
+  if (mode==="editor" || snap.ball.visible!==false){
+    layer.appendChild(buildMarkerEl("ball", snap.ball, mode));
+  }
+
+  if (state.ui.showPaths && sit && step){
+    var next = getNextStep(sit, step.id);
+    if (next) renderPathsBetween(step, next); else clearPaths();
+  } else {
+    clearPaths();
+  }
+}
+
+function buildMarkerEl(kind, o, mode){
+  var m = el("div", "marker " + kind);
+  m.dataset.kind = kind;
+  m.dataset.id = kind==="ball" ? "ball" : o.id;
+  m.style.left = xToPercent(o.x) + "%";
+  m.style.top = yToPercent(o.y) + "%";
+  if (o.visible===false) m.classList.add("ghost");
+  if (o.highlighted) m.classList.add("highlighted");
+  if (mode==="editor" && runtime.selectedObjectId===o.id) m.classList.add("selected");
+
+  if (mode==="presentation" && state.ui.perspective==="myplayer"){
+    if (state.ui.focusPlayerId){
+      if (kind==="player" && o.id===state.ui.focusPlayerId) m.classList.add("focused");
+      else m.classList.add("dimmed");
+    }
+  }
+
+  var dot = el("div","dot", kind==="ball" ? "" : (o.number!=null?o.number:""));
+  m.appendChild(dot);
+  if (kind!=="ball" && state.ui.showLabels && (o.name || o.role)){
+    m.appendChild(el("div","tag", [o.name,o.role].filter(Boolean).join(" · ")));
+  }
+  return m;
+}
+
+function clearPaths(){ document.getElementById("paths-layer").innerHTML = ""; }
+
+function renderPathsBetween(fromStep, toStep){
+  var layer = document.getElementById("paths-layer");
+  layer.innerHTML = markerDefsSVG();
+  var tracks = buildTracks(fromStep, toStep);
+  tracks.forEach(function(tr){
+    var dist = Math.hypot(tr.x1-tr.x0, tr.y1-tr.y0);
+    if (dist < 0.8) return;
+    if (tr.op0<0.05 || tr.op1<0.05) return;
+    var cls = tr.kind==="ball" ? "path-ball" : (tr.kind==="opponent" ? "path-opp" : "path-own");
+    var marker = tr.kind==="ball" ? "arrow-ball" : (tr.kind==="opponent" ? "arrow-opp" : "arrow-own");
+    var path = document.createElementNS("http://www.w3.org/2000/svg","path");
+    path.setAttribute("class", cls);
+    path.setAttribute("marker-end", "url(#"+marker+")");
+    path.setAttribute("d", "M "+tr.x0+" "+tr.y0+" L "+tr.x1+" "+tr.y1);
+    layer.appendChild(path);
+  });
+}
+
+function markerDefsSVG(){
+  return '<defs>' +
+    '<marker id="arrow-own" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="'+ 'var(--own)' +'"/></marker>' +
+    '<marker id="arrow-opp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="'+ 'var(--opp)' +'"/></marker>' +
+    '<marker id="arrow-ball" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="'+ 'var(--ball)' +'"/></marker>' +
+    '</defs>';
+}
+
+/* =========================================================
+   10. DRAG & DROP
+   ========================================================= */
+function initDragHandling(){
+  var layer = document.getElementById("markers-layer");
+  layer.addEventListener("pointerdown", function(e){
+    if (state.ui.mode !== "editor") return;
+    var markerEl = e.target.closest(".marker");
+    if (!markerEl) return;
+    var kind = markerEl.dataset.kind;
+    var id = markerEl.dataset.id;
+    var fieldEl = document.getElementById("field");
+    var moved = false;
+    var startX = e.clientX, startY = e.clientY;
+
+    markerEl.classList.add("dragging");
+    markerEl.setPointerCapture && markerEl.setPointerCapture(e.pointerId);
+
+    function onMove(ev){
+      var dx = ev.clientX-startX, dy = ev.clientY-startY;
+      if (!moved && (Math.abs(dx)>3 || Math.abs(dy)>3)) moved = true;
+      if (!moved) return;
+      var rect = fieldEl.getBoundingClientRect();
+      var px = clamp((ev.clientX-rect.left)/rect.width*100, 0, 100);
+      var py = clamp((ev.clientY-rect.top)/rect.height*100, 0, 100);
+      var x = clamp(percentToX(px), 0, 100);
+      var y = clamp(percentToY(py), 0, 100);
+      var obj = kind==="ball" ? runtime.workingField.ball : findWorkingObject(kind, id);
+      if (obj){ obj.x = x; obj.y = y; }
+      markerEl.style.left = xToPercent(x)+"%";
+      markerEl.style.top = yToPercent(y)+"%";
+    }
+    function onUp(ev){
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("pointercancel", onUp);
+      markerEl.classList.remove("dragging");
+      if (moved){
+        markDirty();
+        render();
+      } else {
+        if (kind!=="ball"){ runtime.selectedObjectId = id; render(); }
+      }
+    }
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("pointercancel", onUp);
+  });
+}
+
+/* =========================================================
+   11. ANIMATION & PRÄSENTATION
+   ========================================================= */
+function buildTracks(fromSnap, toSnap){
+  var ids = {};
+  (fromSnap.players||[]).forEach(function(o){ ids["p:"+o.id]=1; });
+  (toSnap.players||[]).forEach(function(o){ ids["p:"+o.id]=1; });
+  (fromSnap.opponents||[]).forEach(function(o){ ids["o:"+o.id]=1; });
+  (toSnap.opponents||[]).forEach(function(o){ ids["o:"+o.id]=1; });
+  ids["b:ball"]=1;
+
+  var tracks = [];
+  Object.keys(ids).forEach(function(key){
+    var kindChar = key.charAt(0);
+    var id = key.slice(2);
+    var kind = kindChar==="p" ? "player" : kindChar==="o" ? "opponent" : "ball";
+    var fromList = kind==="player" ? fromSnap.players : kind==="opponent" ? fromSnap.opponents : null;
+    var toList = kind==="player" ? toSnap.players : kind==="opponent" ? toSnap.opponents : null;
+    var fromObj = kind==="ball" ? fromSnap.ball : (fromList||[]).find(function(o){return o.id===id;});
+    var toObj = kind==="ball" ? toSnap.ball : (toList||[]).find(function(o){return o.id===id;});
+    if (!fromObj && !toObj) return;
+    var ref = toObj || fromObj;
+    var x0,y0,op0,x1,y1,op1;
+    if (fromObj && toObj){
+      x0=fromObj.x; y0=fromObj.y; op0=fromObj.visible===false?0:1;
+      x1=toObj.x; y1=toObj.y; op1=toObj.visible===false?0:1;
+    } else if (toObj && !fromObj){
+      x0=toObj.x; y0=toObj.y; op0=0; x1=toObj.x; y1=toObj.y; op1=toObj.visible===false?0:1;
+    } else {
+      x0=fromObj.x; y0=fromObj.y; op0=fromObj.visible===false?0:1; x1=fromObj.x; y1=fromObj.y; op1=0;
+    }
+    tracks.push({
+      key: kind==="ball" ? "ball" : (kind==="player"?"p:":"o:")+id,
+      kind: kind, id: id,
+      number: ref.number, name: ref.name, role: ref.role, highlighted: ref.highlighted,
+      x0:x0,y0:y0,op0:op0, x1:x1,y1:y1,op1:op1
+    });
+  });
+  return tracks;
+}
+
+function cancelAnimation(){
+  if (runtime.presentation.raf){ cancelAnimationFrame(runtime.presentation.raf); runtime.presentation.raf = null; }
+}
+
+function animateTransition(fromStep, toStep, duration, onDone){
+  cancelAnimation();
+  var tracks = buildTracks(fromStep, toStep);
+  var layer = document.getElementById("markers-layer");
+  layer.innerHTML = "";
+  document.getElementById("field").classList.add("presentation");
+
+  var focusMode = state.ui.mode==="presentation" && state.ui.perspective==="myplayer" && state.ui.focusPlayerId;
+
+  var trackEls = tracks.map(function(tr){
+    var pseudo = {id:tr.id, number:tr.number, name:tr.name, role:tr.role, highlighted:tr.highlighted, x:tr.x0, y:tr.y0, visible:true};
+    var elm = buildMarkerEl(tr.kind==="ball"?"ball":(tr.kind==="player"?"player":"opponent"), pseudo, "presentation");
+    if (focusMode){
+      elm.classList.remove("dimmed","focused");
+      if (tr.kind==="player" && tr.id===state.ui.focusPlayerId) elm.classList.add("focused");
+      else elm.classList.add("dimmed");
+    }
+    layer.appendChild(elm);
+    return {tr:tr, elm:elm};
+  });
+
+  renderPathsBetween(fromStep, toStep);
+
+  var start = null;
+  function frame(now){
+    if (start===null) start = now;
+    var t = Math.min(1, (now-start)/duration);
+    var e2 = easeInOut(t);
+    trackEls.forEach(function(pair){
+      var tr = pair.tr;
+      var x = lerp(tr.x0, tr.x1, e2), y = lerp(tr.y0, tr.y1, e2), op = lerp(tr.op0, tr.op1, e2);
+      pair.elm.style.left = xToPercent(x)+"%";
+      pair.elm.style.top = yToPercent(y)+"%";
+      pair.elm.style.opacity = op;
+    });
+    if (t<1){ runtime.presentation.raf = requestAnimationFrame(frame); }
+    else { runtime.presentation.raf = null; onDone && onDone(); }
+  }
+  runtime.presentation.raf = requestAnimationFrame(frame);
+}
+
+function presGoToStep(stepId, animate){
+  var sit = getActiveSituation(); if (!sit) return;
+  var fromStep = getActiveStep();
+  sit.activeStepId = stepId;
+  persist();
+  var toStep = getActiveStep();
+  if (!animate || !fromStep || fromStep.id===toStep.id){
+    render();
+    return;
+  }
+  var duration = SPEEDS[state.ui.speed] || SPEEDS.normal;
+  animateTransition(fromStep, toStep, duration, function(){ render(); });
+}
+
+function presNext(cb){
+  var sit = getActiveSituation(); if (!sit) return;
+  var idx = getStepIndex(sit, sit.activeStepId);
+  if (idx<0 || idx>=sit.steps.length-1){ cb && cb(false); return; }
+  var target = sit.steps[idx+1];
+  var fromStep = getActiveStep();
+  sit.activeStepId = target.id;
+  persist();
+  var duration = SPEEDS[state.ui.speed] || SPEEDS.normal;
+  renderPresentationBar(sit);
+  animateTransition(fromStep, target, duration, function(){ render(); cb && cb(true); });
+}
+function presPrev(){
+  var sit = getActiveSituation(); if (!sit) return;
+  var idx = getStepIndex(sit, sit.activeStepId);
+  if (idx<=0) return;
+  presGoToStep(sit.steps[idx-1].id, true);
+}
+function presResetToStart(){
+  var sit = getActiveSituation(); if (!sit || !sit.steps.length) return;
+  stopPlayback();
+  presGoToStep(sit.steps[0].id, false);
+}
+function stopPlayback(){
+  runtime.presentation.playing = false;
+  runtime.presentation.stopRequested = true;
+  if (runtime.presentation.playTimeout){ clearTimeout(runtime.presentation.playTimeout); runtime.presentation.playTimeout=null; }
+}
+function togglePlay(){
+  if (runtime.presentation.playing){ stopPlayback(); render(); return; }
+  var sit = getActiveSituation(); if (!sit || sit.steps.length<2) return;
+  runtime.presentation.playing = true;
+  runtime.presentation.stopRequested = false;
+  renderPresentationBar(sit);
+  stepLoop();
+}
+function stepLoop(){
+  if (runtime.presentation.stopRequested){ runtime.presentation.playing=false; render(); return; }
+  presNext(function(advanced){
+    if (!advanced){ runtime.presentation.playing=false; render(); return; }
+    if (runtime.presentation.stopRequested){ runtime.presentation.playing=false; render(); return; }
+    var hold = HOLD_MS[state.ui.speed] || HOLD_MS.normal;
+    runtime.presentation.playTimeout = setTimeout(function(){
+      if (runtime.presentation.stopRequested){ runtime.presentation.playing=false; render(); return; }
+      stepLoop();
+    }, hold);
+  });
+}
+
+/* =========================================================
+   12. EVENT-BINDUNG (INIT)
+   ========================================================= */
+function initEvents(){
+  document.getElementById("situation-select").addEventListener("change", function(e){ selectSituation(e.target.value); });
+  document.getElementById("btn-sit-new").addEventListener("click", function(){
+    showPromptModal("Neue Situation – Name", "Neue Situation", function(name){
+      createSituation(name, "custom", "full");
+    });
+  });
+  document.getElementById("btn-sit-rename").addEventListener("click", function(){
+    var sit = getActiveSituation(); if (!sit) return;
+    showPromptModal("Situation umbenennen", sit.name, function(name){ renameSituation(sit.id, name); });
+  });
+  document.getElementById("btn-sit-delete").addEventListener("click", function(){
+    var sit = getActiveSituation(); if (!sit) return;
+    deleteSituation(sit.id);
+  });
+
+  document.getElementById("btn-mode-editor").addEventListener("click", function(){ setMode("editor"); });
+  document.getElementById("btn-mode-presentation").addEventListener("click", function(){ setMode("presentation"); });
+
+  document.getElementById("btn-update-step").addEventListener("click", saveActiveStepField);
+  document.getElementById("btn-add-step").addEventListener("click", addStepFromWorking);
+  document.getElementById("btn-reset-field").addEventListener("click", resetActiveStepField);
+
+  document.getElementById("btn-demo").addEventListener("click", function(){
+    showConfirm("Demo laden", "Die mitgelieferte Demo-Situation wird zusätzlich geladen und aktiviert. Fortfahren?", function(){
+      var demo = buildDemoSituation();
+      demo.id = uid("sit");
+      state.situations.push(demo);
+      state.activeSituationId = demo.id;
+      loadWorkingFieldFromStep(getActiveStep());
+      persist(); render();
+    });
+  });
+  document.getElementById("btn-export").addEventListener("click", exportJSON);
+  document.getElementById("btn-import").addEventListener("click", function(){ document.getElementById("file-input").click(); });
+  document.getElementById("file-input").addEventListener("change", function(e){
+    var f = e.target.files[0];
+    if (f) importJSONFile(f);
+    e.target.value = "";
+  });
+
+  document.getElementById("sit-category").addEventListener("change", function(e){ setCategory(e.target.value); });
+  document.getElementById("sit-fieldview").addEventListener("change", function(e){ setFieldView(e.target.value); });
+
+  document.getElementById("btn-add-player").addEventListener("click", addOwnPlayer);
+  document.getElementById("btn-add-opponent").addEventListener("click", addOpponent);
+  document.getElementById("btn-apply-own-formation").addEventListener("click", function(){
+    applyFormationTo("player", document.getElementById("own-formation-select").value);
+  });
+  document.getElementById("btn-apply-opp-formation").addEventListener("click", function(){
+    applyFormationTo("opponent", document.getElementById("opp-formation-select").value);
+  });
+
+  document.getElementById("ball-visible").addEventListener("change", toggleBallVisible);
+  document.getElementById("ball-owner").addEventListener("change", function(e){ setBallOwner(e.target.value); });
+
+  document.getElementById("chk-show-labels").addEventListener("change", function(e){ toggleShowLabels(e.target.checked); });
+  document.getElementById("chk-show-paths").addEventListener("change", function(e){ toggleShowPaths(e.target.checked); });
+
+  document.getElementById("step-name-input").addEventListener("change", function(e){
+    var step = getActiveStep(); if (!step) return;
+    renameStep(step.id, e.target.value);
+  });
+  document.getElementById("step-note-input").addEventListener("change", function(e){
+    var step = getActiveStep(); if (!step) return;
+    step.note = e.target.value; persist(); render();
+  });
+
+  document.getElementById("btn-prev").addEventListener("click", function(){ stopPlayback(); presPrev(); });
+  document.getElementById("btn-next").addEventListener("click", function(){ stopPlayback(); presNext(); });
+  document.getElementById("btn-p-reset").addEventListener("click", presResetToStart);
+  document.getElementById("playpause").addEventListener("click", togglePlay);
+  document.getElementById("speed-select").addEventListener("change", function(e){ setSpeed(e.target.value); });
+  document.querySelectorAll(".persp-toggle button").forEach(function(b){
+    b.addEventListener("click", function(){ setPerspective(b.dataset.persp); });
+  });
+  document.getElementById("focus-player-select").addEventListener("change", function(e){ setFocusPlayer(e.target.value); });
+
+  initDragHandling();
+}
+
+/* =========================================================
+   13. START
+   ========================================================= */
+function init(){
+  loadPersisted();
+  var sit = getActiveSituation();
+  if (sit && !sit.activeStepId && sit.steps.length) sit.activeStepId = sit.steps[0].id;
+  loadWorkingFieldFromStep(getActiveStep());
+  initEvents();
+  render();
+}
+
+document.addEventListener("DOMContentLoaded", init);
+})();
+</script>
+</body>
+</html>

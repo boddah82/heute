@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { CheckIn } from "@/lib/types";
 import { assess, LIGHT_HEX, LIGHT_COLORS } from "@/lib/trafficLight";
 import { computeTrend, TREND_LABEL, TREND_COLOR } from "@/lib/painTrend";
+import BeforeAfterChart from "./BeforeAfterChart";
 import MiniLineChart from "./MiniLineChart";
 import RecoveryStrip from "./RecoveryStrip";
 
@@ -16,13 +17,8 @@ export default function PainTrendChart({ entries }: { entries: CheckIn[] }) {
     [entries]
   );
 
-  const intensityPoints = useMemo(
-    () =>
-      sorted.map((e) => ({
-        date: e.date,
-        value: Math.max(e.painBefore, e.painAfter),
-        status: assess(e).intensity,
-      })),
+  const beforeAfterPoints = useMemo(
+    () => sorted.map((e) => ({ date: e.date, before: e.painBefore, after: e.painAfter })),
     [sorted]
   );
 
@@ -40,12 +36,20 @@ export default function PainTrendChart({ entries }: { entries: CheckIn[] }) {
     [sorted]
   );
 
+  const spikeYMax = useMemo(() => {
+    const maxSpike = Math.max(0, ...spikePoints.map((p) => p.value));
+    return Math.max(2, Math.ceil(maxSpike / 2) * 2);
+  }, [spikePoints]);
+
   const recoveryPoints = useMemo(
     () => sorted.map((e) => ({ date: e.date, status: assess(e).recovery })),
     [sorted]
   );
 
-  const trend = useMemo(() => computeTrend(intensityPoints.map((p) => p.value)), [intensityPoints]);
+  const trend = useMemo(
+    () => computeTrend(sorted.map((e) => Math.max(e.painBefore, e.painAfter))),
+    [sorted]
+  );
 
   const statuses: (keyof typeof LIGHT_COLORS)[] = ["GREEN", "YELLOW", "RED", "PENDING"];
 
@@ -69,15 +73,18 @@ export default function PainTrendChart({ entries }: { entries: CheckIn[] }) {
       </div>
 
       <div>
-        <p className="text-sm font-medium text-slate-700 mb-1">Intensität</p>
-        <MiniLineChart points={intensityPoints} yMax={10} />
-        <p className="text-xs text-slate-400 mt-1">Höherer Wert aus Schmerz davor/danach je Eintrag (0–10).</p>
+        <p className="text-sm font-medium text-slate-700 mb-1">Schmerz davor &amp; danach</p>
+        <BeforeAfterChart points={beforeAfterPoints} />
+        <p className="text-xs text-slate-400 mt-1">Die genauen Werte, die Du je Check-in eingetragen hast.</p>
       </div>
 
       <div className="pt-1 border-t border-slate-100">
-        <p className="text-sm font-medium text-slate-700 mb-1">Anstieg</p>
-        <MiniLineChart points={spikePoints} yMax={10} fillColor="#b45309" />
-        <p className="text-xs text-slate-400 mt-1">Schmerzanstieg durch die Aktivität (danach − davor).</p>
+        <p className="text-sm font-medium text-slate-700 mb-1">Anstieg durch die Aktivität</p>
+        <MiniLineChart points={spikePoints} yMax={spikeYMax} fillColor="#b45309" />
+        <p className="text-xs text-slate-400 mt-1">
+          Differenz &quot;danach minus davor&quot; – andere Skala als oben. 0 = kein Anstieg durch die
+          Aktivität, höher = stärkerer Anstieg.
+        </p>
       </div>
 
       <div className="pt-1 border-t border-slate-100">
@@ -96,6 +103,7 @@ export default function PainTrendChart({ entries }: { entries: CheckIn[] }) {
             {LIGHT_COLORS[s].label}
           </span>
         ))}
+        <span className="text-xs text-slate-400">(Punktfarben bei &quot;Anstieg&quot; und &quot;Erholung&quot;)</span>
       </div>
     </div>
   );

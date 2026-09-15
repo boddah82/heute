@@ -54,7 +54,7 @@ aside{background:var(--panel);border-color:var(--border);flex-shrink:0;overflow-
 #sidebar-left{width:270px;border-right:1px solid var(--border);}
 #sidebar-right{width:290px;border-left:1px solid var(--border);}
 .panel-box{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;}
-.panel-box h3{font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;display:flex;justify-content:space-between;align-items:center;}
+.panel-box h3{font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;display:flex;justify-content:flex-start;align-items:center;gap:6px;}
 .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
 .row.between{justify-content:space-between;}
 .grow{flex:1;min-width:0;}
@@ -126,6 +126,15 @@ aside{background:var(--panel);border-color:var(--border);flex-shrink:0;overflow-
 .modal-box h3{margin-bottom:8px;font-size:14px;}
 .modal-box p{font-size:12.5px;color:var(--text-dim);margin-bottom:14px;line-height:1.4;}
 .modal-box .btns{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
+.modal-box.template-gallery{max-width:900px;max-height:85vh;overflow-y:auto;}
+.template-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-bottom:14px;}
+.template-card{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:5px;}
+.template-cat{font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--accent);}
+.template-name{font-weight:700;font-size:13px;}
+.template-desc{font-size:11.5px;color:var(--text-dim);flex:1;line-height:1.35;}
+.panel-box h3{cursor:default;}
+.collapse-toggle{margin-left:auto;flex-shrink:0;}
+.panel-box.collapsed > *:not(h3){display:none;}
 #toast-wrap{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;gap:6px;pointer-events:none;}
 .toast{background:#0b1424;border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.5);animation:toastin .2s ease;}
 .toast.err{border-color:var(--danger);color:#fecaca;}
@@ -162,7 +171,7 @@ aside{background:var(--panel);border-color:var(--border);flex-shrink:0;overflow-
     </div>
     <div class="spacer"></div>
     <div class="hgroup">
-      <button id="btn-demo" class="small">Demo laden</button>
+      <button id="btn-templates" class="small primary">📚 Vorlagen</button>
       <button id="btn-export" class="small">Export</button>
       <button id="btn-import" class="small">Import</button>
       <input type="file" id="file-input" accept="application/json">
@@ -194,7 +203,7 @@ aside{background:var(--panel);border-color:var(--border);flex-shrink:0;overflow-
         </div>
         <div class="obj-list" id="opp-list"></div>
       </div>
-      <div class="panel-box">
+      <div class="panel-box collapsed">
         <h3>Ball</h3>
         <div class="row between">
           <label class="chk-row"><input type="checkbox" id="ball-visible"> sichtbar</label>
@@ -202,7 +211,7 @@ aside{background:var(--panel);border-color:var(--border);flex-shrink:0;overflow-
         <div class="row"><label class="grow">Ballbesitz</label></div>
         <select id="ball-owner"></select>
       </div>
-      <div class="panel-box">
+      <div class="panel-box collapsed">
         <h3>Darstellung</h3>
         <label class="chk-row"><input type="checkbox" id="chk-show-labels" checked> Name/Rolle anzeigen</label>
         <label class="chk-row"><input type="checkbox" id="chk-show-paths" checked> Laufwege anzeigen</label>
@@ -460,6 +469,303 @@ function buildDemoSituation(){
   sit.steps = [s1,s2,s3];
   sit.activeStepId = s1.id;
   return sit;
+}
+
+/* =========================================================
+   4b. VORLAGEN-BIBLIOTHEK
+   ========================================================= */
+function buildCornerOff2(){
+  var sit = makeSituation("Ecke offensiv – langer Pfosten", "corner-off", "penalty");
+  function P(id,num,role,x,y){ return makeObj(id,num,"",role,x,y); }
+  var s1 = makeStep("1 – Ausgangsposition");
+  s1.note = "Ecke von der unteren Grundlinie. Ziel: langer Pfosten und Rückraum.";
+  s1.players = [
+    P(uid("p"),7,"",99,97), P(uid("p"),9,"",92,70), P(uid("p"),5,"",90,50),
+    P(uid("p"),4,"",91,32), P(uid("p"),8,"",78,50), P(uid("p"),10,"",74,65)
+  ];
+  s1.opponents = [
+    P(uid("o"),1,"",97,50), P(uid("o"),2,"",93,68), P(uid("o"),5,"",91,50),
+    P(uid("o"),4,"",92,33), P(uid("o"),6,"",81,50), P(uid("o"),8,"",76,62)
+  ];
+  s1.ball = {x:99,y:97,ownerId:s1.players[0].id,visible:true};
+  s1.players[0].task = "Ecke ausführen – Flugball Richtung langer Pfosten.";
+  s1.players[3].task = "Lauf an den langen Pfosten, Timing beachten.";
+
+  var s2 = makeStep("2 – Läufe zum langen Pfosten und Rückraum");
+  s2.note = "Laufwege zum langen Pfosten und in den Rückraum starten gleichzeitig.";
+  s2.players = deepClone(s1.players); s2.opponents = deepClone(s1.opponents); s2.ball = deepClone(s1.ball);
+  s2.players[1].x=93; s2.players[1].y=66;
+  s2.players[3].x=93; s2.players[3].y=35;
+  s2.players[4].x=82; s2.players[4].y=52;
+  s2.players[5].x=76; s2.players[5].y=60;
+  s2.opponents[1].x=94; s2.opponents[1].y=65;
+  s2.opponents[3].x=93; s2.opponents[3].y=36;
+  s2.opponents[4].x=83; s2.opponents[4].y=52;
+  s2.opponents[5].x=77; s2.opponents[5].y=59;
+
+  var s3 = makeStep("3 – Rückraum-Abschluss");
+  s3.note = "Ball wird verlängert in den Rückraum, Abschluss aus zweiter Reihe.";
+  s3.players = deepClone(s2.players); s3.opponents = deepClone(s2.opponents);
+  s3.players[5].x=76; s3.players[5].y=58;
+  s3.ball = {x:76,y:58,ownerId:s3.players[5].id,visible:true};
+  s3.players[5].task = "Direkter Abschluss aus dem Rückraum.";
+
+  sit.steps=[s1,s2,s3]; sit.activeStepId=s1.id;
+  return sit;
+}
+
+function buildCornerDef1(){
+  var sit = makeSituation("Ecke defensiv – Raumdeckung", "corner-def", "penalty");
+  function P(id,num,role,x,y){ return makeObj(id,num,"",role,x,y); }
+  var s1 = makeStep("1 – Zonale Grundstellung");
+  s1.note = "Eigene Mannschaft verteidigt zonal, Gegner tritt an.";
+  s1.players = [
+    P(uid("p"),1,"TW",97,50), P(uid("p"),2,"",93,33), P(uid("p"),4,"",91,50),
+    P(uid("p"),5,"",92,67), P(uid("p"),6,"",82,50), P(uid("p"),3,"",78,38)
+  ];
+  s1.opponents = [
+    P(uid("o"),7,"",99,3), P(uid("o"),9,"",91,30), P(uid("o"),5,"",90,50),
+    P(uid("o"),4,"",91,68), P(uid("o"),8,"",80,50), P(uid("o"),6,"",75,36)
+  ];
+  s1.ball = {x:99,y:3,ownerId:s1.opponents[0].id,visible:true};
+  s1.players[1].task = "Zone kurzer Pfosten absichern, Läufer früh annehmen.";
+
+  var s2 = makeStep("2 – Läufer werden aufgenommen");
+  s2.note = "Angreifer starten ihre Läufe, Zonenspieler nehmen Gegenspieler auf.";
+  s2.players = deepClone(s1.players); s2.opponents = deepClone(s1.opponents); s2.ball = deepClone(s1.ball);
+  s2.opponents[1].x=93; s2.opponents[1].y=40;
+  s2.opponents[2].x=92; s2.opponents[2].y=52;
+  s2.opponents[3].x=93; s2.opponents[3].y=60;
+  s2.players[1].x=93; s2.players[1].y=41;
+  s2.players[2].x=91; s2.players[2].y=51;
+  s2.players[3].x=93; s2.players[3].y=59;
+
+  var s3 = makeStep("3 – Klärung");
+  s3.note = "Eigener Spieler klärt den Ball per Kopf aus der Gefahrenzone.";
+  s3.players = deepClone(s2.players); s3.opponents = deepClone(s2.opponents);
+  s3.players[1].x=90; s3.players[1].y=44;
+  s3.ball = {x:88,y:44,ownerId:s3.players[1].id,visible:true};
+  s3.players[1].task = "Ball entschlossen aus der Gefahrenzone klären.";
+
+  sit.steps=[s1,s2,s3]; sit.activeStepId=s1.id;
+  return sit;
+}
+
+function buildFreekickOff1(){
+  var sit = makeSituation("Freistoß offensiv – direkt vor dem Strafraum", "freekick-off", "penalty");
+  function P(id,num,role,x,y){ return makeObj(id,num,"",role,x,y); }
+  var s1 = makeStep("1 – Aufstellung");
+  s1.note = "Zentraler Freistoß ca. 20m vor dem Tor.";
+  s1.players = [
+    P(uid("p"),11,"",80,50), P(uid("p"),9,"",92,42), P(uid("p"),7,"",92,60),
+    P(uid("p"),8,"",84,58), P(uid("p"),10,"",83,46), P(uid("p"),6,"",68,50)
+  ];
+  s1.opponents = [
+    P(uid("o"),1,"",97,50), P(uid("o"),4,"",86,46), P(uid("o"),5,"",86,50),
+    P(uid("o"),3,"",86,54), P(uid("o"),2,"",86,58), P(uid("o"),6,"",91,42)
+  ];
+  s1.ball = {x:80,y:50,ownerId:s1.players[0].id,visible:true};
+  s1.players[0].task = "Freistoß über oder um die Mauer aufs Tor oder in den Laufweg.";
+
+  var s2 = makeStep("2 – Ballflug und Anlaufbewegungen");
+  s2.note = "Ball fliegt in den Strafraum, Läufer starten mit dem Schuss.";
+  s2.players = deepClone(s1.players); s2.opponents = deepClone(s1.opponents);
+  s2.players[1].x=91; s2.players[1].y=43;
+  s2.players[2].x=91; s2.players[2].y=59;
+  s2.ball = {x:88,y:50,ownerId:null,visible:true};
+
+  var s3 = makeStep("3 – Kopfballchance am ersten Pfosten");
+  s3.note = "Spieler 9 kommt am ersten Pfosten zum Abschluss.";
+  s3.players = deepClone(s2.players); s3.opponents = deepClone(s2.opponents);
+  s3.players[1].x=91; s3.players[1].y=44;
+  s3.opponents[5].x=91; s3.opponents[5].y=44;
+  s3.ball = {x:91,y:44,ownerId:s3.players[1].id,visible:true};
+  s3.players[1].task = "Abschluss am ersten Pfosten per Kopf.";
+
+  sit.steps=[s1,s2,s3]; sit.activeStepId=s1.id;
+  return sit;
+}
+
+function buildFreekickDef1(){
+  var sit = makeSituation("Freistoß defensiv – Mauer stellen", "freekick-def", "penalty");
+  function P(id,num,role,x,y){ return makeObj(id,num,"",role,x,y); }
+  var s1 = makeStep("1 – Mauer und Zuordnung");
+  s1.note = "Gegner tritt zentral vor dem Strafraum an, eigene Mauer steht.";
+  s1.players = [
+    P(uid("p"),1,"TW",97,50), P(uid("p"),4,"",86,46), P(uid("p"),5,"",86,50),
+    P(uid("p"),3,"",86,54), P(uid("p"),2,"",86,58), P(uid("p"),6,"",91,42)
+  ];
+  s1.opponents = [
+    P(uid("o"),11,"",80,50), P(uid("o"),9,"",92,42), P(uid("o"),7,"",92,60),
+    P(uid("o"),8,"",84,58), P(uid("o"),10,"",83,46), P(uid("o"),6,"",68,50)
+  ];
+  s1.ball = {x:80,y:50,ownerId:s1.opponents[0].id,visible:true};
+  s1.players[5].task = "Läufer am ersten Pfosten eng begleiten.";
+
+  var s2 = makeStep("2 – Ballflug, Mauer springt");
+  s2.note = "Mauer springt geschlossen ab, Torwart sichert die kurze Ecke ab.";
+  s2.players = deepClone(s1.players); s2.opponents = deepClone(s1.opponents);
+  s2.players[1].x=86.5; s2.players[1].y=46;
+  s2.players[2].x=86.5; s2.players[2].y=50;
+  s2.players[3].x=86.5; s2.players[3].y=54;
+  s2.players[4].x=86.5; s2.players[4].y=58;
+  s2.opponents[1].x=91; s2.opponents[1].y=43;
+  s2.opponents[2].x=91; s2.opponents[2].y=59;
+  s2.ball = {x:88,y:50,ownerId:null,visible:true};
+
+  var s3 = makeStep("3 – Torwart klärt");
+  s3.note = "Torwart fängt den Ball sicher ab.";
+  s3.players = deepClone(s2.players); s3.opponents = deepClone(s2.opponents);
+  s3.ball = {x:93,y:50,ownerId:s3.players[0].id,visible:true};
+  s3.players[0].task = "Ball sicher unter Kontrolle bringen.";
+
+  sit.steps=[s1,s2,s3]; sit.activeStepId=s1.id;
+  return sit;
+}
+
+/* Formationsbasierte Vorlagen (Aufbau/Pressing/Umschalten/Organisation) */
+function formRows(key, mirror){
+  return FORMATIONS[key].map(function(row,i){
+    var x = mirror ? (100 - row[1]) : row[1];
+    return [i+1, row[0], x, row[2]];
+  });
+}
+function tweakRows(rows, overrides){
+  var copy = rows.map(function(r){ return r.slice(); });
+  Object.keys(overrides).forEach(function(k){
+    var i = +k; copy[i][2] = overrides[k][0]; copy[i][3] = overrides[k][1];
+  });
+  return copy;
+}
+function rowsToObjs(rows, ids){
+  return rows.map(function(row,i){
+    return makeObj(ids[i], row[0], "", row[1], row[2], row[3]);
+  });
+}
+function buildFullPitchTemplate(name, category, stepsDef){
+  var sit = makeSituation(name, category, "full");
+  var ownIds = stepsDef[0].own.map(function(){ return uid("p"); });
+  var oppIds = stepsDef[0].opp.map(function(){ return uid("o"); });
+  sit.steps = stepsDef.map(function(sd){
+    var step = makeStep(sd.name);
+    step.note = sd.note || "";
+    step.players = rowsToObjs(sd.own, ownIds);
+    step.opponents = rowsToObjs(sd.opp, oppIds);
+    if (sd.taskOwn){
+      Object.keys(sd.taskOwn).forEach(function(k){ step.players[+k].task = sd.taskOwn[k]; });
+    }
+    if (sd.ball){
+      var ownerId = null;
+      if (sd.ball[2]==="own") ownerId = ownIds[sd.ball[3]];
+      else if (sd.ball[2]==="opp") ownerId = oppIds[sd.ball[3]];
+      step.ball = {x:sd.ball[0], y:sd.ball[1], ownerId:ownerId, visible:true};
+    } else {
+      step.ball = makeBall(50,50); step.ball.visible = false;
+    }
+    return step;
+  });
+  sit.activeStepId = sit.steps[0].id;
+  return sit;
+}
+
+function buildBuildup1(){
+  var base_own = formRows("4-4-2", false);
+  var base_opp = formRows("3-5-2", true);
+  var step2own = tweakRows(base_own, {1:[20,25],2:[20,75],3:[35,10],4:[35,90],6:[30,50]});
+  var step2opp = tweakRows(base_opp, {9:[38,42],10:[38,58]});
+  var step3own = tweakRows(step2own, {5:[55,15],6:[45,45]});
+  var step3opp = tweakRows(step2opp, {6:[45,42],7:[45,58]});
+  return buildFullPitchTemplate("Spielaufbau 4-4-2 gegen 3-5-2", "buildup", [
+    {name:"1 – Ausgangsordnung", note:"Aufbau aus der Grundordnung, Gegner presst im 3-5-2.", own:base_own, opp:base_opp, ball:[5,50,"own",0]},
+    {name:"2 – Erste Linie überspielen", note:"Innenverteidiger fächern auf, ein Sechser kippt ab und wird anspielbar.", own:step2own, opp:step2opp, ball:[30,50,"own",6], taskOwn:{6:"Zwischen die Innenverteidiger abkippen und anspielbar werden."}},
+    {name:"3 – Durchbruch über die Seite", note:"Ball gelangt zum aufgerückten Mittelfeldspieler im Zwischenlinienraum.", own:step3own, opp:step3opp, ball:[55,15,"own",5]}
+  ]);
+}
+function buildPressing1(){
+  var base_own = formRows("4-3-3", false);
+  var base_opp = formRows("4-4-2", true);
+  var step2own = tweakRows(base_own, {8:[78,20],9:[85,50],10:[78,80],6:[62,35],7:[62,65]});
+  var step2opp = tweakRows(base_opp, {1:[82,38],2:[82,62],5:[65,18],8:[65,82]});
+  var step3own = tweakRows(step2own, {5:[45,50]});
+  var step3opp = tweakRows(step2opp, {1:[80,40]});
+  return buildFullPitchTemplate("Pressing – hohes Angriffspressing", "pressing", [
+    {name:"1 – Ausgangsordnung", note:"Eigenes Team presst hoch im 4-3-3, Gegner baut im 4-4-2 auf.", own:base_own, opp:base_opp, ball:[80,40,"opp",1]},
+    {name:"2 – Anlaufen und Passwege zustellen", note:"Stürmer laufen die Innenverteidiger an, Passwege ins Zentrum werden zugestellt.", own:step2own, opp:step2opp, ball:[78,20,"opp",1], taskOwn:{9:"Innenverteidiger anlaufen, Rückpass zum Torwart provozieren."}},
+    {name:"3 – Balleroberung", note:"Fehlpass wird abgefangen, eigenes Team erobert den Ball hoch.", own:step3own, opp:step3opp, ball:[45,50,"own",5]}
+  ]);
+}
+function buildTransitionOff1(){
+  var base_own = formRows("4-4-2", false);
+  var base_opp = formRows("4-3-3", true);
+  var step2own = tweakRows(base_own, {9:[85,42],10:[85,58],5:[55,15],8:[55,85]});
+  var step2opp = tweakRows(base_opp, {1:[24,38],2:[24,62]});
+  var step3own = tweakRows(step2own, {9:[93,44]});
+  var step3opp = tweakRows(step2opp, {1:[18,42]});
+  return buildFullPitchTemplate("Umschalten offensiv – Konter nach Balleroberung", "transition-off", [
+    {name:"1 – Ballgewinn tief im eigenen Drittel", note:"Eigener Spieler erobert den Ball, Gegner ist noch weit aufgerückt.", own:base_own, opp:base_opp, ball:[35,50,"own",6]},
+    {name:"2 – Schnelles Umschalten", note:"Stürmer starten sofort in die Tiefe, erster Pass in die Spitze.", own:step2own, opp:step2opp, ball:[70,40,"own",9], taskOwn:{9:"Sofort in die Tiefe starten, direkten Pass fordern."}},
+    {name:"3 – Abschluss im Konter", note:"Ball erreicht den durchgestarteten Stürmer vor dem Tor.", own:step3own, opp:step3opp, ball:[93,44,"own",9]}
+  ]);
+}
+function buildTransitionDef1(){
+  var base_own = formRows("4-3-3", false);
+  var base_opp = formRows("4-2-3-1", true);
+  var step2own = tweakRows(base_own, {5:[55,45],6:[62,32],7:[62,68]});
+  var step2opp = tweakRows(base_opp, {10:[78,50]});
+  var step3own = tweakRows(step2own, {6:[68,40],7:[68,60]});
+  var step3opp = tweakRows(step2opp, {10:[70,48]});
+  return buildFullPitchTemplate("Umschalten defensiv – Gegenpressing nach Ballverlust", "transition-def", [
+    {name:"1 – Ballverlust im letzten Drittel", note:"Eigenes Team verliert den Ball hoch im gegnerischen Drittel.", own:base_own, opp:base_opp, ball:[80,50,"opp",10]},
+    {name:"2 – Sofortiges Gegenpressing", note:"Ballnahe Spieler pressen sofort, um den Konter zu verhindern.", own:step2own, opp:step2opp, ball:[78,50,"opp",10], taskOwn:{6:"Sofort auf den Ballführenden pressen."}},
+    {name:"3 – Ball zurückerobert", note:"Ballgewinn im Gegenpressing, eigenes Team stabilisiert sich.", own:step3own, opp:step3opp, ball:[68,45,"own",6]}
+  ]);
+}
+function buildOrganization1(){
+  var base_own = tweakRows(formRows("4-4-2", false), {0:[8,50],1:[18,38],2:[18,62],3:[20,15],4:[20,85],5:[38,15],6:[35,40],7:[35,60],8:[38,85],9:[55,38],10:[55,62]});
+  var base_opp = formRows("3-5-2", true);
+  var step2own = tweakRows(base_own, {1:[16,22],2:[20,55],3:[18,8],5:[35,8],6:[30,28],7:[38,50],8:[36,70]});
+  var step2opp = tweakRows(base_opp, {4:[45,10]});
+  var step3own = tweakRows(base_own, {1:[20,55],2:[16,78],4:[20,92],7:[38,50],8:[36,30],5:[38,92],6:[30,72]});
+  var step3opp = tweakRows(base_opp, {5:[45,90]});
+  return buildFullPitchTemplate("Defensive Organisation – Verschieben im 4-4-2", "organization", [
+    {name:"1 – Kompakte Grundordnung", note:"Eigenes Team steht kompakt im Mittelblock, Gegner zirkuliert den Ball.", own:base_own, opp:base_opp, ball:[80,30,"opp",4]},
+    {name:"2 – Verschieben zur Ballseite (links)", note:"Ball auf der linken Seite – die gesamte Mannschaft schiebt geschlossen zur Ballseite.", own:step2own, opp:step2opp, ball:[45,10,"opp",4], taskOwn:{6:"Als Team geschlossen zur Ballseite verschieben."}},
+    {name:"3 – Verlagerung, Verschieben zur Gegenseite", note:"Gegner verlagert das Spiel, die Mannschaft schiebt komplett auf die andere Seite.", own:step3own, opp:step3opp, ball:[45,90,"opp",5]}
+  ]);
+}
+
+var TEMPLATES = [
+  {key:"corner-off-1", name:"Ecke offensiv – kurzer Pfosten", category:"corner-off",
+   desc:"Klassischer Kurzpfosten-Lauf mit Verlängerung Richtung Tormitte.",
+   build:function(){ var s=buildDemoSituation(); s.name=this.name; return s; }},
+  {key:"corner-off-2", name:"Ecke offensiv – langer Pfosten", category:"corner-off",
+   desc:"Ecke von der Gegenseite mit Fokus auf Rückraum-Abschluss.", build:buildCornerOff2},
+  {key:"corner-def-1", name:"Ecke defensiv – Raumdeckung", category:"corner-def",
+   desc:"Zonale Verteidigung einer gegnerischen Ecke inkl. Klärung.", build:buildCornerDef1},
+  {key:"freekick-off-1", name:"Freistoß offensiv – direkt vor dem Strafraum", category:"freekick-off",
+   desc:"Zentraler Freistoß mit Läufen an den ersten Pfosten.", build:buildFreekickOff1},
+  {key:"freekick-def-1", name:"Freistoß defensiv – Mauer stellen", category:"freekick-def",
+   desc:"Mauer aufbauen, Läufer zuordnen, Torwart sichert ab.", build:buildFreekickDef1},
+  {key:"buildup-1", name:"Spielaufbau 4-4-2 gegen 3-5-2", category:"buildup",
+   desc:"Aufbauspiel von hinten gegen pressenden Gegner, erste und zweite Linie überspielen.", build:buildBuildup1},
+  {key:"pressing-1", name:"Pressing – hohes Angriffspressing", category:"pressing",
+   desc:"4-3-3 presst hoch gegen aufbauendes 4-4-2, Balleroberung im gegnerischen Drittel.", build:buildPressing1},
+  {key:"transition-off-1", name:"Umschalten offensiv – Konter", category:"transition-off",
+   desc:"Ballgewinn und schnelles Umschalten in die Spitze.", build:buildTransitionOff1},
+  {key:"transition-def-1", name:"Umschalten defensiv – Gegenpressing", category:"transition-def",
+   desc:"Ballverlust im letzten Drittel und sofortiges Gegenpressing.", build:buildTransitionDef1},
+  {key:"organization-1", name:"Defensive Organisation – Verschieben", category:"organization",
+   desc:"Mannschaftliches Verschieben im 4-4-2 gegen zirkulierenden Gegner.", build:buildOrganization1}
+];
+
+function loadTemplate(tpl){
+  var sit = tpl.build();
+  state.situations.push(sit);
+  state.activeSituationId = sit.id;
+  loadWorkingFieldFromStep(getActiveStep());
+  persist();
+  render();
+  showToast("Vorlage „" + tpl.name + "“ geladen.", "ok");
 }
 
 /* =========================================================
@@ -830,6 +1136,33 @@ function showModal(opts){
   root.appendChild(backdrop);
 }
 function closeModal(){ document.getElementById("modal-root").innerHTML = ""; }
+function showTemplateLibrary(){
+  var root = document.getElementById("modal-root");
+  root.innerHTML = "";
+  var backdrop = el("div","modal-backdrop");
+  var box = el("div","modal-box template-gallery");
+  box.appendChild(el("h3", null, "Vorlagen-Bibliothek"));
+  box.appendChild(el("p", null, "Fertige taktische Situationen zum sofortigen Abspielen. Eine Vorlage wird als neue, eigenständige Situation hinzugefügt."));
+  var grid = el("div","template-grid");
+  TEMPLATES.forEach(function(tpl){
+    var card = el("div","template-card");
+    card.appendChild(el("div","template-cat", CATEGORIES[tpl.category] || tpl.category));
+    card.appendChild(el("div","template-name", tpl.name));
+    card.appendChild(el("div","template-desc", tpl.desc));
+    var btn = el("button","small primary","Laden");
+    btn.addEventListener("click", function(){ closeModal(); loadTemplate(tpl); });
+    card.appendChild(btn);
+    grid.appendChild(card);
+  });
+  box.appendChild(grid);
+  var closeRow = el("div","btns");
+  var closeBtn = el("button","ghost","Schließen");
+  closeBtn.addEventListener("click", closeModal);
+  closeRow.appendChild(closeBtn);
+  box.appendChild(closeRow);
+  backdrop.appendChild(box);
+  root.appendChild(backdrop);
+}
 function showConfirm(title, message, onYes){
   showModal({title:title, message:message, buttons:[
     {label:"Abbrechen", cls:"ghost", action:function(){}},
@@ -1485,16 +1818,7 @@ function initEvents(){
   document.getElementById("btn-add-step").addEventListener("click", addStepFromWorking);
   document.getElementById("btn-reset-field").addEventListener("click", resetActiveStepField);
 
-  document.getElementById("btn-demo").addEventListener("click", function(){
-    showConfirm("Demo laden", "Die mitgelieferte Demo-Situation wird zusätzlich geladen und aktiviert. Fortfahren?", function(){
-      var demo = buildDemoSituation();
-      demo.id = uid("sit");
-      state.situations.push(demo);
-      state.activeSituationId = demo.id;
-      loadWorkingFieldFromStep(getActiveStep());
-      persist(); render();
-    });
-  });
+  document.getElementById("btn-templates").addEventListener("click", showTemplateLibrary);
   document.getElementById("btn-export").addEventListener("click", exportJSON);
   document.getElementById("btn-import").addEventListener("click", function(){ document.getElementById("file-input").click(); });
   document.getElementById("file-input").addEventListener("change", function(e){
@@ -1541,6 +1865,21 @@ function initEvents(){
   document.getElementById("focus-player-select").addEventListener("change", function(e){ setFocusPlayer(e.target.value); });
 
   initDragHandling();
+  initCollapsiblePanels();
+}
+
+function initCollapsiblePanels(){
+  document.querySelectorAll("#sidebar-left .panel-box, #sidebar-right .panel-box").forEach(function(box){
+    var h3 = box.querySelector("h3"); if (!h3) return;
+    var btn = el("button","small ghost collapse-toggle", box.classList.contains("collapsed") ? "▸" : "▾");
+    btn.title = "Ein-/Ausklappen";
+    btn.addEventListener("click", function(e){
+      e.stopPropagation();
+      box.classList.toggle("collapsed");
+      btn.textContent = box.classList.contains("collapsed") ? "▸" : "▾";
+    });
+    h3.appendChild(btn);
+  });
 }
 
 /* =========================================================

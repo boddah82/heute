@@ -21,7 +21,7 @@ const SECTIONS: { title: string; body: string }[] = [
   },
   {
     title: "Tab \"Verlauf\" – Ampel-Feedback",
-    body: "Jeder Eintrag bekommt automatisch eine Ampel-Bewertung in drei Punkten: Intensität (wie hoch war der Schmerz), Anstieg (wie stark ist er durch die Aktivität gestiegen) und Erholung (wie schnell war er wieder auf dem Ausgangsniveau). Grün = Belastung kann gesteigert werden, Gelb = Belastung halten und beobachten, Rot = Belastung anpassen/reduzieren. Trage 24 und 48 Stunden später den Schmerz über \"Verlauf nachtragen\" nach – erst dann ist die Erholungs-Ampel vollständig. Ab zwei Einträgen zeigt Dir ein kleines Diagramm oben den Schmerzverlauf auf einen Blick, inkl. Tendenz (rückläufig/gleichbleibend/steigend).",
+    body: "Jeder Eintrag bekommt automatisch eine Ampel-Bewertung in drei Punkten: Intensität (wie hoch war der Schmerz), Anstieg (wie stark ist er durch die Aktivität gestiegen) und Erholung (wie schnell war er wieder auf dem Ausgangsniveau). Grün = Belastung kann gesteigert werden, Gelb = Belastung halten und beobachten, Rot = Belastung anpassen/reduzieren. Trage 24 und 48 Stunden später den Schmerz über \"Verlauf nachtragen\" nach – erst dann ist die Erholungs-Ampel vollständig. Ab zwei Einträgen zeigt Dir oben ein Diagramm alle drei Dimensionen einzeln über die Zeit (Intensität, Anstieg, Erholung) mit Y-Achsen-Werten, plus eine Tendenz (rückläufig/gleichbleibend/steigend) für die Intensität.",
   },
   {
     title: "Tab \"Bereiche\" – PDDM-Einschätzung",

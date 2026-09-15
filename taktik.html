@@ -94,6 +94,17 @@ aside{background:var(--panel);border-color:var(--border);flex-shrink:0;overflow-
 .marker.dragging{cursor:grabbing;z-index:50;}
 .marker.selected .dot{box-shadow:0 0 0 3px #fff;}
 #field.presentation .marker{cursor:default;}
+.marker .facing{position:absolute;left:50%;top:50%;width:0;height:0;transform:translate(-50%,-50%) rotate(calc(var(--facing-deg,0deg) + 90deg)) translateY(-16px);pointer-events:none;}
+.marker .facing::after{content:"";position:absolute;left:-4px;top:-6px;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:7px solid rgba(255,255,255,.85);}
+.sugg-ghost{position:absolute;transform:translate(-50%,-50%);width:24px;height:24px;border-radius:50%;border:2px dashed var(--hl);pointer-events:none;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--hl);background:rgba(250,204,21,.1);}
+#paths-layer .path-suggest{stroke:var(--hl);stroke-width:.5;stroke-dasharray:1.2 1;}
+#paths-layer .path-press{stroke:var(--danger);stroke-width:.35;stroke-dasharray:.5 .9;opacity:.65;}
+.compass{display:grid;grid-template-columns:repeat(3,26px);grid-template-rows:repeat(3,26px);gap:3px;}
+.compass button{padding:0;font-size:13px;line-height:1;}
+.compass button.active{background:var(--accent);border-color:var(--accent);color:#03202e;}
+.sugg-result{font-size:11.5px;color:var(--text-dim);display:flex;flex-direction:column;gap:6px;margin-top:6px;}
+.sugg-item{background:#0b1424;border:1px solid var(--border);border-radius:6px;padding:5px 7px;}
+.sugg-item b{color:var(--text);}
 #paths-layer path{fill:none;}
 #paths-layer .path-own{stroke:var(--own);stroke-width:.55;stroke-dasharray:1.4 1.2;}
 #paths-layer .path-opp{stroke:var(--opp);stroke-width:.55;stroke-dasharray:1.4 1.2;}
@@ -194,6 +205,12 @@ aside{background:var(--panel);border-color:var(--border);flex-shrink:0;overflow-
           <button id="btn-apply-own-formation" class="small">Formation anwenden</button>
         </div>
         <div class="obj-list" id="own-list"></div>
+      </div>
+      <div class="panel-box collapsed" id="suggestion-panel">
+        <h3>🧭 Anspiel-Vorschlag</h3>
+        <p class="hint">Grobe Heuristik (Distanz, Deckungsschatten, offene Passwinkel) für den aktuellen Ballführer — kein perfektes Taktik-Orakel, nur ein Vorschlag zum Anpassen.</p>
+        <button id="btn-suggest" class="small primary">Vorschlag berechnen</button>
+        <div id="suggestion-result"></div>
       </div>
       <div class="panel-box">
         <h3>Gegner <button id="btn-add-opponent" class="small">+ Gegner</button></h3>
@@ -315,7 +332,7 @@ var FORMATIONS = {
 var FIELD_VIEWS = {
   full:{label:"Komplettes Feld", vx:0, vy:0, vw:100, vh:100},
   half:{label:"Halbes Feld", vx:50, vy:0, vw:50, vh:100},
-  penalty:{label:"Strafraum/Standard", vx:76, vy:12, vw:24, vh:76}
+  penalty:{label:"Strafraum/Standard", vx:74, vy:0, vw:26, vh:100}
 };
 var SPEEDS = {slow:1700, normal:950, fast:480};
 var HOLD_MS = {slow:750, normal:450, fast:250};
@@ -357,7 +374,8 @@ var runtime = {
   selectedObjectId: null,
   drag: null,
   currentViewBox: FIELD_VIEWS.full,
-  presentation: {playing:false, raf:null, playTimeout:null, stopRequested:false}
+  presentation: {playing:false, raf:null, playTimeout:null, stopRequested:false},
+  suggestion: null
 };
 
 /* =========================================================
@@ -802,9 +820,10 @@ function loadWorkingFieldFromStep(step){
   }
   runtime.dirty = false;
   runtime.selectedObjectId = null;
+  runtime.suggestion = null;
 }
 
-function markDirty(){ runtime.dirty = true; }
+function markDirty(){ runtime.dirty = true; runtime.suggestion = null; }
 
 function snapshotFromWorking(){
   return {players:deepClone(runtime.workingField.players), opponents:deepClone(runtime.workingField.opponents), ball:deepClone(runtime.workingField.ball)};
@@ -1022,6 +1041,190 @@ function toggleHighlight(kind, id){
   var obj = findWorkingObject(kind, id); if (!obj) return;
   obj.highlighted = !obj.highlighted;
   markDirty(); render();
+}
+
+/* --- Blickrichtung --- */
+function roundTo45(deg){
+  deg = ((deg % 360) + 360) % 360;
+  return Math.round(deg / 45) * 45 % 360;
+}
+function angleToward(from, to){
+  var deg = Math.atan2(to.y - from.y, to.x - from.x) * 180 / Math.PI;
+  return roundTo45(deg);
+}
+var COMPASS_DIRS = [
+  {deg:225, icon:"↖", label:"NW"}, {deg:270, icon:"↑", label:"N"}, {deg:315, icon:"↗", label:"NE"},
+  {deg:180, icon:"←", label:"W"},  {deg:null, icon:"•", label:""}, {deg:0,   icon:"→", label:"O"},
+  {deg:135, icon:"↙", label:"SW"}, {deg:90,  icon:"↓", label:"S"}, {deg:45,  icon:"↘", label:"SO"}
+];
+function buildCompassPicker(kind, obj){
+  var grid = el("div","compass");
+  var current = roundTo45(obj.orientation || 0);
+  COMPASS_DIRS.forEach(function(d){
+    var btn = el("button","small ghost", d.icon);
+    if (d.deg===null){ btn.disabled = true; grid.appendChild(btn); return; }
+    btn.title = d.label;
+    if (current===d.deg) btn.classList.add("active");
+    btn.addEventListener("click", function(){ updateObjectField(kind, obj.id, "orientation", d.deg); });
+    grid.appendChild(btn);
+  });
+  return grid;
+}
+
+/* =========================================================
+   5b. ANSPIEL-VORSCHLAG (grobe Heuristik)
+   ========================================================= */
+var PRESS_RADIUS = 16;
+function ptDist(a, b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+function angleDiffRad(a, b){
+  var d = a - b;
+  while (d > Math.PI) d -= 2*Math.PI;
+  while (d < -Math.PI) d += 2*Math.PI;
+  return d;
+}
+function scoreCandidate(cx, cy, carrier, opponents, teammate, chosen){
+  var distCarrier = Math.hypot(cx-carrier.x, cy-carrier.y);
+  var idealScore = 1 - Math.min(1, Math.abs(distCarrier-18)/18);
+  var minOppDist = 40;
+  opponents.forEach(function(o){ minOppDist = Math.min(minOppDist, Math.hypot(cx-o.x, cy-o.y)); });
+  var openness = Math.min(1.4, minOppDist/18);
+  var angC = Math.atan2(cy-carrier.y, cx-carrier.x);
+  var shadowPenalty = 0;
+  opponents.forEach(function(o){
+    var toOpp = Math.hypot(o.x-carrier.x, o.y-carrier.y);
+    if (distCarrier > toOpp*0.55){
+      var angO = Math.atan2(o.y-carrier.y, o.x-carrier.x);
+      if (Math.abs(angleDiffRad(angO, angC)) < 0.4) shadowPenalty += 1;
+    }
+  });
+  var overlapPenalty = 0;
+  chosen.forEach(function(s){
+    var angS = Math.atan2(s.y-carrier.y, s.x-carrier.x);
+    if (Math.abs(angleDiffRad(angS, angC)) < 0.45) overlapPenalty += 1;
+  });
+  var movePenalty = Math.hypot(cx-teammate.x, cy-teammate.y) / 45;
+  return idealScore*2 + openness*1.4 - shadowPenalty*2.2 - overlapPenalty*1.6 - movePenalty;
+}
+function computeSupportSuggestion(){
+  var wf = runtime.workingField;
+  var carrierId = wf.ball.ownerId;
+  var carrier = wf.players.find(function(p){ return p.id===carrierId && p.visible!==false; });
+  if (!carrier){ return {error:"Kein eigener Ballführer erkannt. Bitte im Ball-Panel einen Ballbesitzer aus den eigenen Spielern wählen."}; }
+  var opponents = wf.opponents.filter(function(o){ return o.visible!==false; });
+  var pressers = opponents.filter(function(o){ return ptDist(o, carrier) <= PRESS_RADIUS; })
+    .sort(function(a,b){ return ptDist(a,carrier)-ptDist(b,carrier); });
+  var teammates = wf.players.filter(function(p){ return p.id!==carrier.id && p.visible!==false; })
+    .sort(function(a,b){ return ptDist(a,carrier)-ptDist(b,carrier); })
+    .slice(0, 4);
+  if (!teammates.length){ return {error:"Keine weiteren eigenen Spieler auf dem Feld, für die ein Vorschlag berechnet werden könnte."}; }
+
+  var chosen = [];
+  var items = teammates.map(function(tm){
+    var best = null;
+    [14, 22].forEach(function(radius){
+      for (var a=0; a<360; a+=45){
+        var rad = a*Math.PI/180;
+        var cx = clamp(carrier.x + Math.cos(rad)*radius, 2, 98);
+        var cy = clamp(carrier.y + Math.sin(rad)*radius, 2, 98);
+        var score = scoreCandidate(cx, cy, carrier, opponents, tm, chosen);
+        if (!best || score > best.score) best = {x:cx, y:cy, score:score};
+      }
+    });
+    chosen.push(best);
+    return {
+      playerId: tm.id, number: tm.number, name: tm.name,
+      fromX: tm.x, fromY: tm.y, x: best.x, y: best.y,
+      orientation: 0,
+      moved: Math.hypot(best.x-tm.x, best.y-tm.y)
+    };
+  });
+  items.forEach(function(it){ it.orientation = angleToward({x:it.x,y:it.y}, carrier); });
+
+  var carrierOrientation = null;
+  if (pressers.length){
+    var avgX=0, avgY=0;
+    pressers.forEach(function(p){ avgX+=p.x; avgY+=p.y; });
+    avgX/=pressers.length; avgY/=pressers.length;
+    carrierOrientation = angleToward({x:avgX,y:avgY}, carrier);
+  }
+
+  return {carrierId:carrier.id, carrierOrientation:carrierOrientation, pressers:pressers.map(function(p){return {x:p.x,y:p.y};}), items:items};
+}
+function requestSuggestion(){
+  var res = computeSupportSuggestion();
+  if (res.error){ runtime.suggestion = null; showToast(res.error, "err"); render(); return; }
+  runtime.suggestion = res;
+  render();
+}
+function applySuggestion(){
+  var s = runtime.suggestion; if (!s) return;
+  s.items.forEach(function(it){
+    var p = findWorkingObject("player", it.playerId);
+    if (p){ p.x = it.x; p.y = it.y; p.orientation = it.orientation; }
+  });
+  if (s.carrierOrientation!==null){
+    var carrier = findWorkingObject("player", s.carrierId);
+    if (carrier) carrier.orientation = s.carrierOrientation;
+  }
+  runtime.suggestion = null;
+  markDirty();
+  render();
+  showToast("Vorschlag übernommen.", "ok");
+}
+function discardSuggestion(){ runtime.suggestion = null; render(); }
+
+function renderSuggestionPanel(){
+  var box = document.getElementById("suggestion-result");
+  box.innerHTML = "";
+  var s = runtime.suggestion;
+  if (!s) return;
+  var wrap = el("div","sugg-result");
+  var carrier = findWorkingObject("player", s.carrierId);
+  var head = el("div", null, "Ballführer #"+(carrier?carrier.number:"?") +
+    (s.pressers.length ? " – unter Druck von " + s.pressers.length + " Gegenspieler" + (s.pressers.length>1?"n":"") : " – aktuell nicht gepresst") + ".");
+  wrap.appendChild(head);
+  s.items.forEach(function(it){
+    var desc = it.moved < 2 ? "Position beibehalten" : "anpassen (" + Math.round(it.moved) + " Einheiten)";
+    var row = el("div","sugg-item","<b>#"+(it.number||"?")+"</b>: "+desc);
+    wrap.appendChild(row);
+  });
+  var btns = el("div","row");
+  var applyBtn = el("button","small primary","Übernehmen");
+  applyBtn.addEventListener("click", applySuggestion);
+  var discardBtn = el("button","small ghost","Verwerfen");
+  discardBtn.addEventListener("click", discardSuggestion);
+  btns.appendChild(applyBtn); btns.appendChild(discardBtn);
+  wrap.appendChild(btns);
+  box.appendChild(wrap);
+}
+function renderSuggestionOverlay(){
+  if (!runtime.suggestion || state.ui.mode!=="editor") return;
+  var s = runtime.suggestion;
+  var layer = document.getElementById("markers-layer");
+  s.items.forEach(function(it){
+    var ghost = el("div","sugg-ghost", it.number!=null ? it.number : "");
+    ghost.style.left = xToPercent(it.x) + "%";
+    ghost.style.top = yToPercent(it.y) + "%";
+    layer.appendChild(ghost);
+  });
+  var pathsLayer = document.getElementById("paths-layer");
+  var carrier = findWorkingObject("player", s.carrierId);
+  if (carrier){
+    s.pressers.forEach(function(p){
+      var line = document.createElementNS("http://www.w3.org/2000/svg","line");
+      line.setAttribute("class","path-press");
+      line.setAttribute("x1", carrier.x); line.setAttribute("y1", carrier.y);
+      line.setAttribute("x2", p.x); line.setAttribute("y2", p.y);
+      pathsLayer.appendChild(line);
+    });
+    s.items.forEach(function(it){
+      var line = document.createElementNS("http://www.w3.org/2000/svg","line");
+      line.setAttribute("class","path-suggest");
+      line.setAttribute("x1", it.fromX); line.setAttribute("y1", it.fromY);
+      line.setAttribute("x2", it.x); line.setAttribute("y2", it.y);
+      pathsLayer.appendChild(line);
+    });
+  }
 }
 function setBallOwner(ownerId){
   runtime.workingField.ball.ownerId = ownerId || null;
@@ -1257,6 +1460,7 @@ function render(){
   renderTimeline(sit);
   renderContextPanel(sit);
   renderPresentationBar(sit);
+  renderSuggestionPanel();
   renderFieldIdle();
 }
 
@@ -1454,6 +1658,17 @@ function renderContextPanel(sit){
     var obj = findWorkingObject(kind, runtime.selectedObjectId);
     if (obj){
       selBlock.appendChild(el("h3", null, "Ausgewählt: #"+(obj.number||"?")));
+
+      var faceLbl = el("label", null, "Blickrichtung"); selBlock.appendChild(faceLbl);
+      selBlock.appendChild(buildCompassPicker(kind, obj));
+
+      var toBallBtn = el("button","small ghost","→ zum Ball drehen");
+      toBallBtn.style.marginTop = "4px";
+      toBallBtn.addEventListener("click", function(){
+        updateObjectField(kind, obj.id, "orientation", angleToward(obj, runtime.workingField.ball));
+      });
+      selBlock.appendChild(toBallBtn);
+
       if (kind==="player"){
         var taskLbl = el("label", null, "Aufgabe in diesem Schritt"); selBlock.appendChild(taskLbl);
         var task = el("textarea"); task.value = obj.task || "";
@@ -1538,6 +1753,8 @@ function renderFieldIdle(){
   } else {
     clearPaths();
   }
+
+  renderSuggestionOverlay();
 }
 
 function buildMarkerEl(kind, o, mode){
@@ -1559,6 +1776,11 @@ function buildMarkerEl(kind, o, mode){
 
   var dot = el("div","dot", kind==="ball" ? "" : (o.number!=null?o.number:""));
   m.appendChild(dot);
+  if (kind!=="ball"){
+    var facing = el("div","facing");
+    facing.style.setProperty("--facing-deg", (o.orientation||0) + "deg");
+    m.appendChild(facing);
+  }
   if (kind!=="ball" && state.ui.showLabels && (o.name || o.role)){
     m.appendChild(el("div","tag", [o.name,o.role].filter(Boolean).join(" · ")));
   }
@@ -1863,6 +2085,8 @@ function initEvents(){
     b.addEventListener("click", function(){ setPerspective(b.dataset.persp); });
   });
   document.getElementById("focus-player-select").addEventListener("change", function(e){ setFocusPlayer(e.target.value); });
+
+  document.getElementById("btn-suggest").addEventListener("click", requestSuggestion);
 
   initDragHandling();
   initCollapsiblePanels();

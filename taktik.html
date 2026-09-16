@@ -715,7 +715,9 @@ function buildPressing1(){
   var step3opp = tweakRows(step2opp, {1:[80,40]});
   return buildFullPitchTemplate("Pressing – hohes Angriffspressing", "pressing", [
     {name:"1 – Ausgangsordnung", note:"Eigenes Team presst hoch im 4-3-3, Gegner baut im 4-4-2 auf.", own:base_own, opp:base_opp, ball:[80,40,"opp",1]},
-    {name:"2 – Anlaufen und Passwege zustellen", note:"Stürmer laufen die Innenverteidiger an, Passwege ins Zentrum werden zugestellt.", own:step2own, opp:step2opp, ball:[78,20,"opp",1], taskOwn:{9:"Innenverteidiger anlaufen, Rückpass zum Torwart provozieren."}},
+    {name:"2 – Anlaufen und Passwege zustellen", note:"AS-Prinzip beim Anlaufen: den Pass im höchsten Tempo attackieren, nicht auf Pässe in die Breite spekulieren – Halbraum geschlossen halten. Die Sechser verteidigen ball- und raumorientiert, aber mit Gegnerbezug.",
+     own:step2own, opp:step2opp, ball:[78,20,"opp",1],
+     taskOwn:{9:"Innenverteidiger anlaufen, Rückpass zum Torwart provozieren.", 8:"Über den Gegenspieler anlaufen – Passweg in den Halbraum im Deckungsschatten halten.", 10:"Über den Gegenspieler anlaufen – Passweg in den Halbraum im Deckungsschatten halten.", 6:"Ball- und raumorientiert verteidigen, aber mit Gegnerbezug – Zugriff auf den gegnerischen Sechser behalten."}},
     {name:"3 – Balleroberung", note:"Fehlpass wird abgefangen, eigenes Team erobert den Ball hoch.", own:step3own, opp:step3opp, ball:[45,50,"own",5]}
   ]);
 }
@@ -727,7 +729,9 @@ function buildTransitionOff1(){
   var step3own = tweakRows(step2own, {9:[93,44]});
   var step3opp = tweakRows(step2opp, {1:[18,42]});
   return buildFullPitchTemplate("Umschalten offensiv – Konter nach Balleroberung", "transition-off", [
-    {name:"1 – Ballgewinn tief im eigenen Drittel", note:"Eigener Spieler erobert den Ball, Gegner ist noch weit aufgerückt.", own:base_own, opp:base_opp, ball:[35,50,"own",6]},
+    {name:"1 – Ballgewinn tief im eigenen Drittel", note:"Eigener Spieler erobert den Ball, Gegner ist noch weit aufgerückt. Der ballferne Flügelspieler „zockt“ bereits: Antizipieren der Balleroberung und Vorschieben in eine günstige Ausgangslage für den Konter, da die Schnittstelle IV-AV beim Gegner anfällig ist.",
+     own:base_own, opp:base_opp, ball:[35,50,"own",6],
+     taskOwn:{8:"„Zocken“: Balleroberung antizipieren und bereits vorschieben für den Konter."}},
     {name:"2 – Schnelles Umschalten", note:"Stürmer starten sofort in die Tiefe, erster Pass in die Spitze.", own:step2own, opp:step2opp, ball:[70,40,"own",9], taskOwn:{9:"Sofort in die Tiefe starten, direkten Pass fordern."}},
     {name:"3 – Abschluss im Konter", note:"Ball erreicht den durchgestarteten Stürmer vor dem Tor.", own:step3own, opp:step3opp, ball:[93,44,"own",9]}
   ]);
@@ -740,8 +744,10 @@ function buildTransitionDef1(){
   var step3own = tweakRows(step2own, {6:[68,40],7:[68,60]});
   var step3opp = tweakRows(step2opp, {10:[70,48]});
   return buildFullPitchTemplate("Umschalten defensiv – Gegenpressing nach Ballverlust", "transition-def", [
-    {name:"1 – Ballverlust im letzten Drittel", note:"Eigenes Team verliert den Ball hoch im gegnerischen Drittel.", own:base_own, opp:base_opp, ball:[80,50,"opp",10]},
-    {name:"2 – Sofortiges Gegenpressing", note:"Ballnahe Spieler pressen sofort, um den Konter zu verhindern.", own:step2own, opp:step2opp, ball:[78,50,"opp",10], taskOwn:{6:"Sofort auf den Ballführenden pressen."}},
+    {name:"1 – Ballverlust im letzten Drittel", note:"Eigenes Team verliert den Ball hoch im gegnerischen Drittel. Ein frontales Druckaufbauen im Gegenpressing vergrößert den Deckungsschatten in die Tiefe.", own:base_own, opp:base_opp, ball:[80,50,"opp",10]},
+    {name:"2 – Sofortiges Gegenpressing", note:"Ballnahe Spieler pressen sofort, um den Konter zu verhindern. Abstand entscheidet über die Intensität: kleiner Abstand → Gegner eng stellen und in den Zweikampf kommen; großer Abstand → Gegner nur stellen und in ungünstige Räume lenken.",
+     own:step2own, opp:step2opp, ball:[78,50,"opp",10],
+     taskOwn:{6:"Kleiner Abstand zum Ballführer: eng stellen und in den Zweikampf kommen.", 7:"Großer Abstand zum Ballführer: nur stellen, in Dribblings und günstige Räume lenken."}},
     {name:"3 – Ball zurückerobert", note:"Ballgewinn im Gegenpressing, eigenes Team stabilisiert sich.", own:step3own, opp:step3opp, ball:[68,45,"own",6]}
   ]);
 }

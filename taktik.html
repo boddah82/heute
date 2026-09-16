@@ -537,7 +537,7 @@ function buildCornerDef1(){
   var sit = makeSituation("Ecke defensiv – Raumdeckung", "corner-def", "penalty");
   function P(id,num,role,x,y){ return makeObj(id,num,"",role,x,y); }
   var s1 = makeStep("1 – Zonale Grundstellung");
-  s1.note = "Eigene Mannschaft verteidigt zonal, Gegner tritt an.";
+  s1.note = "Prinzip „Tief verteidigen, hoch pressen“ (IV-Coaching): in Tornähe hat der Torschutz Vorrang vor dem Druck auf den Ball. Keine doppelte Tiefenstaffelung – die Kette agiert auf einer Höhe, der ballnahe IV gibt die Höhe vor.";
   s1.players = [
     P(uid("p"),1,"TW",97,50), P(uid("p"),2,"",93,33), P(uid("p"),4,"",91,50),
     P(uid("p"),5,"",92,67), P(uid("p"),6,"",82,50), P(uid("p"),3,"",78,38)
@@ -547,10 +547,10 @@ function buildCornerDef1(){
     P(uid("o"),4,"",91,68), P(uid("o"),8,"",80,50), P(uid("o"),6,"",75,36)
   ];
   s1.ball = {x:99,y:3,ownerId:s1.opponents[0].id,visible:true};
-  s1.players[1].task = "Zone kurzer Pfosten absichern, Läufer früh annehmen.";
+  s1.players[1].task = "In seitlicher Stellung verteidigen (nicht Rücken zum Tor) – Gegenspieler per Schulterblick und Körperkontakt wahrnehmen.";
 
   var s2 = makeStep("2 – Läufer werden aufgenommen");
-  s2.note = "Angreifer starten ihre Läufe, Zonenspieler nehmen Gegenspieler auf.";
+  s2.note = "Fehlerbild „Kein Körperkontakt“ vermeiden: früh Kontakt zum Gegenspieler herstellen und halten (ohne zu klammern), sonst kann sich der Angreifer unbemerkt lösen.";
   s2.players = deepClone(s1.players); s2.opponents = deepClone(s1.opponents); s2.ball = deepClone(s1.ball);
   s2.opponents[1].x=93; s2.opponents[1].y=40;
   s2.opponents[2].x=92; s2.opponents[2].y=52;
@@ -558,9 +558,10 @@ function buildCornerDef1(){
   s2.players[1].x=93; s2.players[1].y=41;
   s2.players[2].x=91; s2.players[2].y=51;
   s2.players[3].x=93; s2.players[3].y=59;
+  s2.players[1].task = "Früh Körperkontakt aufbauen: Blick lösen, Kontakt halten – Ball und Gegenspieler gleichzeitig wahrnehmen.";
 
   var s3 = makeStep("3 – Klärung");
-  s3.note = "Eigener Spieler klärt den Ball per Kopf aus der Gefahrenzone.";
+  s3.note = "Der ballnahe Innenverteidiger klärt entschlossen; die Kette bleibt auf einer Höhe (keine doppelte Tiefenstaffelung), damit keine neue Schnittstelle entsteht.";
   s3.players = deepClone(s2.players); s3.opponents = deepClone(s2.opponents);
   s3.players[1].x=90; s3.players[1].y=44;
   s3.ball = {x:88,y:44,ownerId:s3.players[1].id,visible:true};
@@ -695,9 +696,14 @@ function buildBuildup1(){
   var step3own = tweakRows(step2own, {5:[55,15],6:[45,45]});
   var step3opp = tweakRows(step2opp, {6:[45,42],7:[45,58]});
   return buildFullPitchTemplate("Spielaufbau 4-4-2 gegen 3-5-2", "buildup", [
-    {name:"1 – Ausgangsordnung", note:"Aufbau aus der Grundordnung, Gegner presst im 3-5-2.", own:base_own, opp:base_opp, ball:[5,50,"own",0]},
-    {name:"2 – Erste Linie überspielen", note:"Innenverteidiger fächern auf, ein Sechser kippt ab und wird anspielbar.", own:step2own, opp:step2opp, ball:[30,50,"own",6], taskOwn:{6:"Zwischen die Innenverteidiger abkippen und anspielbar werden."}},
-    {name:"3 – Durchbruch über die Seite", note:"Ball gelangt zum aufgerückten Mittelfeldspieler im Zwischenlinienraum.", own:step3own, opp:step3opp, ball:[55,15,"own",5]}
+    {name:"1 – Ausgangsordnung", note:"Aufbau aus der Grundordnung, Gegner presst im 3-5-2.", own:base_own, opp:base_opp, ball:[5,50,"own",0],
+     taskOwn:{3:"Kein Druck auf den Innenverteidiger → so hoch wie möglich, so tief wie nötig.", 4:"Kein Druck auf den Innenverteidiger → so hoch wie möglich, so tief wie nötig."}},
+    {name:"2 – Erste Linie überspielen", note:"Sechser-Prinzip: „Finde einen Raum, in dem du anspielbar bist und nach vorne spielen kannst – falle dafür so weit wie nötig.“ Die Innenverteidiger öffnen den Körper zum Sechser (Prinzip: so offen wie möglich, so geschlossen wie nötig), um den Ball direkt in die Bewegung mitnehmen zu können.",
+     own:step2own, opp:step2opp, ball:[30,50,"own",6],
+     taskOwn:{1:"So offen wie möglich, so geschlossen wie nötig – Körper zum Sechser öffnen, Ballmitnahme mit dem 1. Kontakt vorbereiten.", 6:"Finde einen Raum, in dem du anspielbar bist und nach vorne spielen kannst – falle so weit wie nötig."}},
+    {name:"3 – Durchbruch über die Seite", note:"Die tiefstmögliche Anspielstation finden statt den Ball unnötig zu zirkulieren; Intention so spät wie möglich verraten, damit der Pass nicht ausrechenbar wird.",
+     own:step3own, opp:step3opp, ball:[55,15,"own",5],
+     taskOwn:{5:"Ball direkt in die Bewegung mitnehmen, alle Optionen offen halten – nicht unnötig nach außen mitnehmen."}}
   ]);
 }
 function buildPressing1(){
@@ -747,9 +753,13 @@ function buildOrganization1(){
   var step3own = tweakRows(base_own, {1:[20,55],2:[16,78],4:[20,92],7:[38,50],8:[36,30],5:[38,92],6:[30,72]});
   var step3opp = tweakRows(base_opp, {5:[45,90]});
   return buildFullPitchTemplate("Defensive Organisation – Verschieben im 4-4-2", "organization", [
-    {name:"1 – Kompakte Grundordnung", note:"Eigenes Team steht kompakt im Mittelblock, Gegner zirkuliert den Ball.", own:base_own, opp:base_opp, ball:[80,30,"opp",4]},
-    {name:"2 – Verschieben zur Ballseite (links)", note:"Ball auf der linken Seite – die gesamte Mannschaft schiebt geschlossen zur Ballseite.", own:step2own, opp:step2opp, ball:[45,10,"opp",4], taskOwn:{6:"Als Team geschlossen zur Ballseite verschieben."}},
-    {name:"3 – Verlagerung, Verschieben zur Gegenseite", note:"Gegner verlagert das Spiel, die Mannschaft schiebt komplett auf die andere Seite.", own:step3own, opp:step3opp, ball:[45,90,"opp",5]}
+    {name:"1 – Kompakte Grundordnung", note:"Prinzip „Tief verteidigen, hoch pressen“: in eigener Tornähe hat der Torschutz Vorrang. Eigenes Team steht kompakt im Mittelblock, Gegner zirkuliert den Ball.", own:base_own, opp:base_opp, ball:[80,30,"opp",4]},
+    {name:"2 – Verschieben zur Ballseite (links)", note:"Team schiebt geschlossen zur Ballseite. Der ballferne Außenverteidiger wird in der Kette von niemandem zusätzlich abgesichert – er muss selbst regelmäßig zur ballfernen Seite schulterblicken, um Tiefenläufe rechtzeitig zu erkennen.",
+     own:step2own, opp:step2opp, ball:[45,10,"opp",4],
+     taskOwn:{6:"Als Team geschlossen zur Ballseite verschieben.", 8:"Ballferner Außenverteidiger: regelmäßiger Schulterblick zur ballfernen Seite – du wirst als letzter Mann in der Kette nicht zusätzlich abgesichert."}},
+    {name:"3 – Verlagerung, Verschieben zur Gegenseite", note:"Nach der Spielverlagerung schiebt die komplette Kette auf die andere Seite. Bei der Doppelsechs gilt die V-Bewegung: der ballnahe Sechser attackiert, der ballferne sichert den Zentralraum vor der Abwehr.",
+     own:step3own, opp:step3opp, ball:[45,90,"opp",5],
+     taskOwn:{7:"V-Bewegung Doppelsechs: als ballferner Sechser den Zentralraum vor der Abwehr sichern."}}
   ]);
 }
 
@@ -807,12 +817,6 @@ function getStepIndex(sit, id){
   if (!sit) return -1;
   return sit.steps.findIndex(function(s){ return s.id===id; });
 }
-function getNextStep(sit, id){
-  var i = getStepIndex(sit,id);
-  if (i<0 || i>=sit.steps.length-1) return null;
-  return sit.steps[i+1];
-}
-
 function loadWorkingFieldFromStep(step){
   if (step){
     runtime.workingField = {players:deepClone(step.players), opponents:deepClone(step.opponents), ball:deepClone(step.ball)};
@@ -1748,12 +1752,9 @@ function renderFieldIdle(){
     layer.appendChild(buildMarkerEl("ball", snap.ball, mode));
   }
 
-  if (state.ui.showPaths && sit && step){
-    var next = getNextStep(sit, step.id);
-    if (next) renderPathsBetween(step, next); else clearPaths();
-  } else {
-    clearPaths();
-  }
+  /* Laufwege sind ein Bewegungshinweis für die Animation, kein Dauerzustand:
+     im Ruhezustand (Editor oder angekommener Schritt) bleibt die Fläche leer. */
+  clearPaths();
 
   renderSuggestionOverlay();
 }
@@ -1936,7 +1937,7 @@ function animateTransition(fromStep, toStep, duration, onDone){
     return {tr:tr, elm:elm};
   });
 
-  renderPathsBetween(fromStep, toStep);
+  if (state.ui.showPaths) renderPathsBetween(fromStep, toStep); else clearPaths();
 
   var start = null;
   function frame(now){

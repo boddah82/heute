@@ -3,7 +3,6 @@ export type TrafficLight = "GREEN" | "YELLOW" | "RED" | "PENDING";
 export interface BodyRegion {
   id: string;
   label: string;
-  icon: string;
   exampleReize: string[];
 }
 
@@ -62,7 +61,6 @@ export interface PDDMAssessment {
 export interface PlanExercise {
   id: string;
   label: string;
-  icon: string;
   notes?: string; // z. B. "3x12, Pause 60s"
 }
 

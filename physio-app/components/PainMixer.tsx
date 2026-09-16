@@ -31,7 +31,7 @@ export default function PainMixer() {
   );
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-5">
+    <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-5">
       <div>
         <h3 className="font-semibold text-slate-900">Schmerz-Mischpult</h3>
         <p className="text-sm text-slate-600 mt-1">
@@ -54,7 +54,7 @@ export default function PainMixer() {
               max={10}
               value={values[f.id]}
               onChange={(e) => setValues((v) => ({ ...v, [f.id]: Number(e.target.value) }))}
-              className="w-full h-2 rounded-lg cursor-pointer accent-teal-700"
+              className="w-full h-2 rounded-lg cursor-pointer accent-brand-700"
             />
             <p className="text-xs text-slate-400 mt-0.5">{f.hint}</p>
           </div>
@@ -66,7 +66,7 @@ export default function PainMixer() {
           <span className="text-sm font-semibold text-slate-900">Gesamtpegel (Master Volume)</span>
           <span className="text-sm font-bold text-slate-900 tabular-nums">{total.toFixed(1)}/10</span>
         </div>
-        <div className="w-full h-4 rounded-full bg-slate-100 overflow-hidden">
+        <div className="w-full h-4 rounded-md bg-slate-100 overflow-hidden">
           <div
             className={`h-full transition-all ${volumeColor(total)}`}
             style={{ width: `${(total / 10) * 100}%` }}

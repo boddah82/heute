@@ -24,7 +24,7 @@ export default function MriEducation() {
   const band = AGE_BANDS[index];
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+    <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
       <div>
         <h3 className="font-semibold text-slate-900">Was zeigt ein MRT wirklich?</h3>
         <p className="text-sm text-slate-600 mt-1">
@@ -42,7 +42,7 @@ export default function MriEducation() {
           max={AGE_BANDS.length - 1}
           value={index}
           onChange={(e) => setIndex(Number(e.target.value))}
-          className="w-full h-2 rounded-lg cursor-pointer accent-teal-700"
+          className="w-full h-2 rounded-lg cursor-pointer accent-brand-700"
         />
         <div className="flex justify-between text-xs text-slate-400 mt-1">
           {AGE_BANDS.map((b) => (
@@ -51,9 +51,9 @@ export default function MriEducation() {
         </div>
       </div>
 
-      <div className="bg-teal-50 rounded-xl p-4 text-center">
-        <p className="text-3xl font-bold text-teal-800">ca. {band.value}%</p>
-        <p className="text-sm text-teal-900 mt-1">
+      <div className="bg-brand-50 rounded-lg p-4 text-center">
+        <p className="text-3xl font-bold text-brand-800">ca. {band.value}%</p>
+        <p className="text-sm text-brand-900 mt-1">
           der schmerzfreien Personen in ihren {band.label} Lebensjahren zeigen im MRT eine
           Bandscheibenvorwölbung – ganz ohne Beschwerden.
         </p>

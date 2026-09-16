@@ -21,9 +21,8 @@ export default function ActivityPicker({ planExercises, onPick }: Props) {
                 type="button"
                 onClick={() => onPick(ex.label)}
                 title={ex.notes}
-                className="flex items-center gap-1.5 rounded-full bg-teal-50 border border-teal-200 px-3 py-1.5 text-sm text-teal-900"
+                className="rounded-md bg-brand-50 border border-brand-200 px-3 py-1.5 text-sm text-brand-900"
               >
-                <span>{ex.icon}</span>
                 {ex.label}
               </button>
             ))}
@@ -41,9 +40,8 @@ export default function ActivityPicker({ planExercises, onPick }: Props) {
               key={a.id}
               type="button"
               onClick={() => onPick(a.label)}
-              className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-200"
+              className="rounded-md bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-200 border border-slate-200"
             >
-              <span>{a.icon}</span>
               {a.label}
             </button>
           ))}

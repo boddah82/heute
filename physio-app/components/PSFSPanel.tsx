@@ -28,7 +28,7 @@ function GoalCard({
   const latest = sorted[0];
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
+    <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm space-y-3">
       <div className="flex items-start justify-between gap-2">
         <p className="font-medium text-slate-900">{goal.label}</p>
         <button onClick={onDelete} className="text-xs text-slate-400 shrink-0">
@@ -38,7 +38,7 @@ function GoalCard({
 
       {latest && (
         <p className="text-sm text-slate-500">
-          Letzte Bewertung: <span className="font-semibold text-teal-800">{latest.value}/10</span>{" "}
+          Letzte Bewertung: <span className="font-semibold text-brand-800">{latest.value}/10</span>{" "}
           ({formatDate(latest.date)})
         </p>
       )}
@@ -54,7 +54,7 @@ function GoalCard({
           max={10}
           value={value}
           onChange={(e) => setValue(Number(e.target.value))}
-          className="w-full h-2 rounded-lg cursor-pointer accent-teal-700"
+          className="w-full h-2 rounded-lg cursor-pointer accent-brand-700"
         />
         <div className="flex justify-between text-xs text-slate-400 mt-1">
           <span>0 = nicht möglich</span>
@@ -64,7 +64,7 @@ function GoalCard({
 
       <button
         onClick={() => onRate(value)}
-        className="w-full rounded-xl bg-teal-700 text-white font-semibold py-2 text-sm hover:bg-teal-800 transition"
+        className="w-full rounded-lg bg-brand-700 text-white font-semibold py-2 text-sm hover:bg-brand-800 transition"
       >
         Bewertung speichern
       </button>
@@ -73,7 +73,7 @@ function GoalCard({
         <div className="pt-2 border-t border-slate-100">
           <button
             onClick={() => setShowHistory((v) => !v)}
-            className="text-xs font-medium text-teal-700 underline underline-offset-2"
+            className="text-xs font-medium text-brand-700 underline underline-offset-2"
           >
             {showHistory ? "Verlauf ausblenden" : `Verlauf anzeigen (${sorted.length})`}
           </button>
@@ -118,7 +118,7 @@ export default function PSFSPanel({
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+      <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
         <h3 className="font-semibold text-slate-900">Deine Ziele</h3>
         <p className="text-sm text-slate-600">
           Nenne 2-5 konkrete Alltags- oder Sportaktivitäten, die Dir wirklich wichtig sind – nicht was
@@ -138,7 +138,7 @@ export default function PSFSPanel({
             />
             <button
               type="submit"
-              className="rounded-lg bg-teal-700 text-white px-3 py-2 text-sm font-medium"
+              className="rounded-lg bg-brand-700 text-white px-3 py-2 text-sm font-medium"
             >
               Hinzufügen
             </button>

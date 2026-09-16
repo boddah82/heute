@@ -63,13 +63,13 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <header className="bg-teal-800 text-white px-4 pt-6 pb-4 flex items-start justify-between gap-3">
+      <header className="bg-brand-800 text-white px-4 pt-6 pb-4 flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold">Reiz-Reaktions-Tracker</h1>
             <HelpPanel />
           </div>
-          <p className="text-sm text-teal-100">Belastbarkeit verstehen statt raten.</p>
+          <p className="text-sm text-brand-100">Belastbarkeit verstehen statt raten.</p>
         </div>
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           <ExportPanel />
@@ -101,7 +101,7 @@ export default function Home() {
             onClick={() => setTab(t.id)}
             className={`px-4 py-2 rounded-t-lg text-sm font-medium shrink-0 ${
               tab === t.id
-                ? "bg-white text-teal-800 border-b-2 border-teal-700"
+                ? "bg-white text-brand-800 border-b-2 border-brand-700"
                 : "text-slate-500"
             }`}
           >
@@ -142,7 +142,7 @@ export default function Home() {
             <div className="space-y-4">
               <button
                 onClick={() => setShowPDDMForm(true)}
-                className="w-full rounded-xl bg-teal-700 text-white font-semibold py-2.5 text-sm hover:bg-teal-800 transition"
+                className="w-full rounded-lg bg-brand-700 text-white font-semibold py-2.5 text-sm hover:bg-brand-800 transition"
               >
                 Neue Einschätzung starten
               </button>

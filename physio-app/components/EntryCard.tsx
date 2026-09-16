@@ -33,7 +33,7 @@ export default function EntryCard({
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
+    <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm space-y-3">
       <div className="flex items-start justify-between">
         <div>
           <p className="font-semibold text-slate-900">{entry.activity}</p>
@@ -72,7 +72,7 @@ export default function EntryCard({
           {entry.pain48h !== undefined && ` · 48h ${entry.pain48h}`}
         </div>
         <div className="flex gap-3">
-          <button onClick={() => setEditingFollowUp((v) => !v)} className="text-teal-700 font-medium">
+          <button onClick={() => setEditingFollowUp((v) => !v)} className="text-brand-700 font-medium">
             Verlauf nachtragen
           </button>
           <button onClick={() => onDelete(entry.id)} className="text-slate-400">
@@ -107,7 +107,7 @@ export default function EntryCard({
           </div>
           <button
             onClick={saveFollowUp}
-            className="w-full rounded-lg bg-teal-700 text-white text-sm font-medium py-2"
+            className="w-full rounded-lg bg-brand-700 text-white text-sm font-medium py-2"
           >
             Speichern
           </button>

@@ -10,6 +10,15 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Gedämpfte, klinische Blau-Grau-Palette als Primärfarbe (ersetzt das
+     zuvor genutzte, sehr helle Teal – wirkt zurückhaltender/professioneller). */
+  --color-brand-50: #eef2f6;
+  --color-brand-100: #dbe4ec;
+  --color-brand-200: #b7c8d6;
+  --color-brand-700: #2c4a63;
+  --color-brand-800: #1f3a50;
+  --color-brand-900: #16293a;
 }
 
 @media (prefers-color-scheme: dark) {

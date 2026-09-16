@@ -65,14 +65,14 @@ export default function HelpPanel() {
       <button
         onClick={() => setOpen(true)}
         aria-label="Hilfe anzeigen"
-        className="w-6 h-6 rounded-full border border-teal-100 text-teal-100 text-xs font-semibold flex items-center justify-center shrink-0"
+        className="w-6 h-6 rounded-full border border-brand-100 text-brand-100 text-xs font-semibold flex items-center justify-center shrink-0"
       >
         ?
       </button>
 
       {open && (
         <div className="fixed inset-0 bg-black/40 z-20 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col">
             <div className="p-4 border-b border-slate-200 flex items-center justify-between">
               <h2 className="font-semibold text-slate-900">Hilfe</h2>
               <button onClick={() => setOpen(false)} className="text-slate-400 text-sm">

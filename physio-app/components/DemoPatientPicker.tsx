@@ -25,13 +25,13 @@ export default function DemoPatientPicker({ onLoaded }: Props) {
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="text-xs font-medium text-teal-100 underline underline-offset-2"
+        className="text-xs font-medium text-brand-100 underline underline-offset-2"
       >
         Demo-Patient laden
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-72 rounded-xl bg-white shadow-lg border border-slate-200 p-2 z-10 text-slate-800">
+        <div className="absolute right-0 mt-2 w-72 rounded-lg bg-white shadow-lg border border-slate-200 p-2 z-10 text-slate-800">
           {pending ? (
             <div className="p-2 space-y-2">
               <p className="text-sm">
@@ -41,7 +41,7 @@ export default function DemoPatientPicker({ onLoaded }: Props) {
               <div className="flex gap-2">
                 <button
                   onClick={confirmLoad}
-                  className="flex-1 rounded-lg bg-teal-700 text-white text-sm font-medium py-1.5"
+                  className="flex-1 rounded-lg bg-brand-700 text-white text-sm font-medium py-1.5"
                 >
                   Ja, laden
                 </button>

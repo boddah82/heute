@@ -48,7 +48,7 @@ export default function CheckInForm({ regionId, planExercises, onSubmit }: Props
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
+    <form onSubmit={handleSubmit} className="space-y-5 bg-white rounded-lg p-5 shadow-sm border border-slate-200">
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="text-sm font-medium text-slate-700 block mb-1">Datum</label>
@@ -113,7 +113,7 @@ export default function CheckInForm({ regionId, planExercises, onSubmit }: Props
 
       <button
         type="submit"
-        className="w-full rounded-xl bg-teal-700 text-white font-semibold py-2.5 text-sm hover:bg-teal-800 transition"
+        className="w-full rounded-lg bg-brand-700 text-white font-semibold py-2.5 text-sm hover:bg-brand-800 transition"
       >
         Check-in speichern
       </button>

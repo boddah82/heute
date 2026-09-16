@@ -8,7 +8,7 @@ const PADDING_TOP = 14;
 const PADDING_BOTTOM = 26;
 
 const BEFORE_COLOR = "#94a3b8"; // slate-400
-const AFTER_COLOR = "#0f766e"; // teal-700
+const AFTER_COLOR = "#1f3a50"; // brand-800
 
 interface Point {
   date: string;
@@ -77,7 +77,7 @@ export default function BeforeAfterChart({ points }: { points: Point[] }) {
         <text x={xFor(points.length - 1)} y={yFor(last.before) + 12} textAnchor="end" className="fill-slate-400" fontSize={10}>
           {last.before}
         </text>
-        <text x={xFor(points.length - 1)} y={yFor(last.after) - 8} textAnchor="end" className="fill-teal-800" fontSize={11} fontWeight={600}>
+        <text x={xFor(points.length - 1)} y={yFor(last.after) - 8} textAnchor="end" className="fill-brand-800" fontSize={11} fontWeight={600}>
           {last.after}
         </text>
 

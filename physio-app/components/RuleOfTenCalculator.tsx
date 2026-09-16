@@ -12,7 +12,7 @@ export default function RuleOfTenCalculator() {
   const isCaution = !isRed && guidance.leavesGoalRange;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-5">
+    <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-5">
       <div>
         <h3 className="font-semibold text-slate-900">Trainingsanpassung (&quot;Rule of 10&quot;)</h3>
         <p className="text-sm text-slate-600 mt-1">
@@ -28,8 +28,8 @@ export default function RuleOfTenCalculator() {
             <button
               key={g.id}
               onClick={() => setGoal(g.id)}
-              className={`px-3 py-2 rounded-xl text-sm font-medium transition ${
-                goal === g.id ? "bg-teal-700 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                goal === g.id ? "bg-brand-700 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
               }`}
             >
               {g.label}
@@ -50,36 +50,36 @@ export default function RuleOfTenCalculator() {
           max={10}
           value={pain}
           onChange={(e) => setPain(Number(e.target.value))}
-          className="w-full h-2 rounded-lg cursor-pointer accent-teal-700"
+          className="w-full h-2 rounded-lg cursor-pointer accent-brand-700"
         />
       </div>
 
       <div
-        className={`rounded-xl border p-4 space-y-3 ${
+        className={`rounded-lg border p-4 space-y-3 ${
           isRed
             ? "bg-red-50 border-red-200"
             : isCaution
             ? "bg-amber-50 border-amber-200"
-            : "bg-teal-50 border-teal-100"
+            : "bg-brand-50 border-brand-100"
         }`}
       >
         {guidance.ruleOfTen && !isRed && (
           <div className="grid grid-cols-2 gap-4 text-center">
             <div>
-              <p className="text-2xl font-bold text-teal-800">{guidance.ruleOfTen.maxAllowedRPE}</p>
-              <p className="text-xs text-teal-900">Max. RPE (0–10)</p>
+              <p className="text-2xl font-bold text-brand-800">{guidance.ruleOfTen.maxAllowedRPE}</p>
+              <p className="text-xs text-brand-900">Max. RPE (0–10)</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-teal-800">{guidance.ruleOfTen.targetRIR}</p>
-              <p className="text-xs text-teal-900">RIR (Wiederholungen im Tank)</p>
+              <p className="text-2xl font-bold text-brand-800">{guidance.ruleOfTen.targetRIR}</p>
+              <p className="text-xs text-brand-900">RIR (Wiederholungen im Tank)</p>
             </div>
           </div>
         )}
 
-        <p className={`text-sm font-semibold ${isRed ? "text-red-800" : isCaution ? "text-amber-800" : "text-teal-900"}`}>
+        <p className={`text-sm font-semibold ${isRed ? "text-red-800" : isCaution ? "text-amber-800" : "text-brand-900"}`}>
           {guidance.primaryLever}
         </p>
-        <p className={`text-sm ${isRed ? "text-red-700" : isCaution ? "text-amber-700" : "text-teal-900"}`}>
+        <p className={`text-sm ${isRed ? "text-red-700" : isCaution ? "text-amber-700" : "text-brand-900"}`}>
           {guidance.explanation}
         </p>
 

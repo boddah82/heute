@@ -12,8 +12,8 @@ interface Props {
   onSave: (plan: TrainingPlan) => void;
 }
 
-function newExercise(label: string, icon: string): PlanExercise {
-  return { id: crypto.randomUUID(), label, icon };
+function newExercise(label: string): PlanExercise {
+  return { id: crypto.randomUUID(), label };
 }
 
 export default function PlanBuilder({ regionId, plan, onSave }: Props) {
@@ -23,16 +23,16 @@ export default function PlanBuilder({ regionId, plan, onSave }: Props) {
   const [link, setLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  function addFromIcon(label: string, icon: string) {
+  function addFromIcon(label: string) {
     if (exercises.some((e) => e.label === label)) return;
-    setExercises((prev) => [...prev, newExercise(label, icon)]);
+    setExercises((prev) => [...prev, newExercise(label)]);
     setLink(null);
   }
 
   function addCustom() {
     const label = customLabel.trim();
     if (!label) return;
-    setExercises((prev) => [...prev, newExercise(label, "✨")]);
+    setExercises((prev) => [...prev, newExercise(label)]);
     setCustomLabel("");
     setLink(null);
   }
@@ -70,7 +70,7 @@ export default function PlanBuilder({ regionId, plan, onSave }: Props) {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-5">
+    <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-5">
       <div>
         <h3 className="font-semibold text-slate-900">Trainingsplan für {region.label}</h3>
         <p className="text-sm text-slate-600 mt-1">
@@ -83,8 +83,7 @@ export default function PlanBuilder({ regionId, plan, onSave }: Props) {
       {exercises.length > 0 && (
         <div className="space-y-2">
           {exercises.map((ex) => (
-            <div key={ex.id} className="flex items-start gap-2 bg-slate-50 rounded-xl p-3">
-              <span className="text-lg">{ex.icon}</span>
+            <div key={ex.id} className="flex items-start gap-2 bg-slate-50 rounded-lg p-3">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-slate-800">{ex.label}</p>
                 <input
@@ -114,10 +113,9 @@ export default function PlanBuilder({ regionId, plan, onSave }: Props) {
             <button
               key={a.id}
               type="button"
-              onClick={() => addFromIcon(a.label, a.icon)}
-              className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-200"
+              onClick={() => addFromIcon(a.label)}
+              className="rounded-md bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-200 border border-slate-200"
             >
-              <span>{a.icon}</span>
               {a.label}
             </button>
           ))}
@@ -144,7 +142,7 @@ export default function PlanBuilder({ regionId, plan, onSave }: Props) {
         type="button"
         onClick={generateLink}
         disabled={exercises.length === 0}
-        className="w-full rounded-xl bg-teal-700 text-white font-semibold py-2.5 text-sm hover:bg-teal-800 transition disabled:opacity-40"
+        className="w-full rounded-lg bg-brand-700 text-white font-semibold py-2.5 text-sm hover:bg-brand-800 transition disabled:opacity-40"
       >
         Plan speichern &amp; Link erstellen
       </button>
@@ -162,7 +160,7 @@ export default function PlanBuilder({ regionId, plan, onSave }: Props) {
           <button
             type="button"
             onClick={copyLink}
-            className="w-full rounded-xl bg-slate-100 text-slate-700 font-medium py-2 text-sm"
+            className="w-full rounded-lg bg-slate-100 text-slate-700 font-medium py-2 text-sm"
           >
             {copied ? "Kopiert ✓" : "Link kopieren"}
           </button>

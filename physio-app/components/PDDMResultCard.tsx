@@ -34,7 +34,7 @@ export default function PDDMResultCard({
   const relevantDomains = PDDM_DOMAINS.filter((d) => assessment.results[d].status !== "NONE");
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
+    <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm space-y-3">
       <div className="flex items-start justify-between">
         <p className="text-xs text-slate-500">{formatDate(assessment.date)}</p>
         {onDelete && (
@@ -54,7 +54,7 @@ export default function PDDMResultCard({
                 <p className="font-medium text-slate-800">{PDDM_DOMAIN_LABELS[domain]}</p>
                 {sub && <p className="text-xs text-slate-500">{sub}</p>}
               </div>
-              <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLE[result.status]}`}>
+              <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${STATUS_STYLE[result.status]}`}>
                 {statusLabel(result.status)}
               </span>
             </div>

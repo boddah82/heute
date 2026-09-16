@@ -6,7 +6,7 @@ export default function StabilizationParadox() {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+    <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
       <h3 className="font-semibold text-slate-900">Das Stabilisations-Paradoxon</h3>
       <p className="text-sm text-slate-600">
         Bei anhaltenden Schmerzen greifen viele Menschen zu starker, bewusster Anspannung (z. B.
@@ -16,7 +16,7 @@ export default function StabilizationParadox() {
 
       <button
         onClick={() => setOpen((v) => !v)}
-        className="text-sm font-medium text-teal-700 underline underline-offset-2"
+        className="text-sm font-medium text-brand-700 underline underline-offset-2"
       >
         {open ? "Weniger anzeigen" : "Warum das paradox sein kann"}
       </button>

@@ -29,7 +29,7 @@ export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
+    <form onSubmit={handleSubmit} className="space-y-5 bg-white rounded-lg p-5 shadow-sm border border-slate-200">
       <div>
         <h2 className="font-semibold text-slate-900">Bereichs-Einschätzung (PDDM)</h2>
         <p className="text-sm text-slate-500 mt-1">
@@ -44,7 +44,7 @@ export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
             type="checkbox"
             checked={Boolean(answers[q.id])}
             onChange={() => toggle(q.id)}
-            className="mt-1 h-4 w-4 accent-teal-700"
+            className="mt-1 h-4 w-4 accent-brand-700"
           />
           <span>{q.text}</span>
         </label>
@@ -52,7 +52,7 @@ export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
 
       <button
         type="submit"
-        className="w-full rounded-xl bg-teal-700 text-white font-semibold py-2.5 text-sm hover:bg-teal-800 transition"
+        className="w-full rounded-lg bg-brand-700 text-white font-semibold py-2.5 text-sm hover:bg-brand-800 transition"
       >
         Auswertung anzeigen
       </button>

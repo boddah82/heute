@@ -30,7 +30,7 @@ function formatShortDate(iso: string): string {
   return `${d}.${m}.`;
 }
 
-export default function MiniLineChart({ points, yMax, yMin = 0, fillColor = "#0f766e", height = 120 }: Props) {
+export default function MiniLineChart({ points, yMax, yMin = 0, fillColor = "#1f3a50", height = 120 }: Props) {
   const gradientId = useId();
 
   const plotWidth = WIDTH - PADDING_LEFT - PADDING_RIGHT;

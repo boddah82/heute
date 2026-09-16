@@ -55,7 +55,7 @@ export default function PainTrendChart({ entries }: { entries: CheckIn[] }) {
 
   if (sorted.length < 2) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+      <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm">
         <h3 className="font-semibold text-slate-900 mb-1">Schmerzverlauf</h3>
         <p className="text-sm text-slate-500">
           Ab zwei Check-ins zeigt Dir hier ein Diagramm auf einen Blick, ob sich Dein Schmerz eher
@@ -66,7 +66,7 @@ export default function PainTrendChart({ entries }: { entries: CheckIn[] }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-5">
+    <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-5">
       <div className="flex items-baseline justify-between">
         <h3 className="font-semibold text-slate-900">Schmerzverlauf</h3>
         <p className={`text-sm font-medium ${TREND_COLOR[trend]}`}>{TREND_LABEL[trend]}</p>

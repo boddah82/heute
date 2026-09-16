@@ -4,7 +4,6 @@ export const REGIONS: BodyRegion[] = [
   {
     id: "knie",
     label: "Knie",
-    icon: "🦵",
     exampleReize: [
       "Treppen steigen",
       "Kniebeuge / Squat",
@@ -16,7 +15,6 @@ export const REGIONS: BodyRegion[] = [
   {
     id: "ruecken",
     label: "Rücken",
-    icon: "🧍",
     exampleReize: [
       "Langes Sitzen",
       "Heben / Tragen",
@@ -28,7 +26,6 @@ export const REGIONS: BodyRegion[] = [
   {
     id: "schulter",
     label: "Schulter",
-    icon: "💪",
     exampleReize: [
       "Überkopfarbeit",
       "Schlafposition auf der Seite",
@@ -39,7 +36,6 @@ export const REGIONS: BodyRegion[] = [
   {
     id: "nacken",
     label: "Nacken",
-    icon: "🧑",
     exampleReize: [
       "Bildschirmzeit",
       "Autofahren",
@@ -50,7 +46,6 @@ export const REGIONS: BodyRegion[] = [
   {
     id: "sehne",
     label: "Sehne (Achilles / Patella)",
-    icon: "🦶",
     exampleReize: [
       "Laufen",
       "Springen",
@@ -61,7 +56,6 @@ export const REGIONS: BodyRegion[] = [
   {
     id: "huefte",
     label: "Hüfte",
-    icon: "🚶",
     exampleReize: [
       "Gehen / Wandern",
       "Langes Sitzen",
@@ -72,7 +66,6 @@ export const REGIONS: BodyRegion[] = [
   {
     id: "individuell",
     label: "Individuell",
-    icon: "✨",
     exampleReize: [],
   },
 ];

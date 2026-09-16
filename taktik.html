@@ -75,17 +75,18 @@ aside{background:var(--panel);border-color:var(--border);flex-shrink:0;overflow-
 #field-main{flex:1;display:flex;flex-direction:column;min-width:0;padding:10px;gap:8px;}
 #field-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;}
 #field{position:relative;width:100%;max-width:100%;max-height:100%;background:
-  repeating-linear-gradient(90deg,#2e7d4f 0,#2e7d4f 40px,#357f52 40px,#357f52 80px);
-  border-radius:6px;box-shadow:0 0 0 1px var(--border),0 10px 30px rgba(0,0,0,.4);overflow:hidden;}
+  radial-gradient(ellipse at 50% 15%, rgba(255,255,255,.06), rgba(255,255,255,0) 55%),
+  repeating-linear-gradient(90deg,#2c7a49 0,#2c7a49 40px,#33864f 40px,#33864f 80px);
+  border-radius:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06),0 0 0 1px var(--border),0 16px 40px rgba(0,0,0,.5);overflow:hidden;}
 #field-svg{position:absolute;inset:0;width:100%;height:100%;}
-#field-svg .line{stroke:var(--pitch-line);stroke-width:.35;fill:none;}
+#field-svg .line{stroke:var(--pitch-line);stroke-width:.45;fill:none;}
 #field-svg .spot{fill:var(--pitch-line);}
 #markers-layer{position:absolute;inset:0;}
 .marker{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;cursor:grab;user-select:none;touch-action:none;transition:opacity .15s;}
-.marker .dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;border:2px solid rgba(255,255,255,.85);box-shadow:0 2px 6px rgba(0,0,0,.5);}
-.marker.player .dot{background:var(--own);}
-.marker.opponent .dot{background:var(--opp);}
-.marker.ball .dot{width:15px;height:15px;background:var(--ball);border-color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.6);}
+.marker .dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12.5px;letter-spacing:-.02em;color:#fff;border:2px solid rgba(255,255,255,.92);box-shadow:0 1px 2px rgba(0,0,0,.35),0 3px 8px rgba(0,0,0,.45);}
+.marker.player .dot{background:radial-gradient(circle at 32% 28%, var(--own-dark) 0%, var(--own) 55%, var(--own-dark) 100%);}
+.marker.opponent .dot{background:radial-gradient(circle at 32% 28%, var(--opp-dark) 0%, var(--opp) 55%, var(--opp-dark) 100%);}
+.marker.ball .dot{width:16px;height:16px;background:radial-gradient(circle at 32% 28%, #ffd47a 0%, var(--ball) 60%, #92600a 100%);border-color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4),0 3px 7px rgba(0,0,0,.5);}
 .marker .tag{margin-top:2px;font-size:9.5px;background:rgba(2,10,20,.72);padding:1px 4px;border-radius:4px;white-space:nowrap;color:#fff;}
 .marker.ghost .dot{opacity:.35;border-style:dashed;}
 .marker.highlighted .dot{box-shadow:0 0 0 3px var(--hl),0 2px 6px rgba(0,0,0,.5);}
@@ -106,9 +107,9 @@ aside{background:var(--panel);border-color:var(--border);flex-shrink:0;overflow-
 .sugg-item{background:#0b1424;border:1px solid var(--border);border-radius:6px;padding:5px 7px;}
 .sugg-item b{color:var(--text);}
 #paths-layer path{fill:none;}
-#paths-layer .path-own{stroke:var(--own);stroke-width:.55;stroke-dasharray:1.4 1.2;}
-#paths-layer .path-opp{stroke:var(--opp);stroke-width:.55;stroke-dasharray:1.4 1.2;}
-#paths-layer .path-ball{stroke:var(--ball);stroke-width:.45;stroke-dasharray:.6 1;}
+#paths-layer .path-own{stroke:var(--own);stroke-width:.8;stroke-linecap:round;}
+#paths-layer .path-opp{stroke:var(--opp);stroke-width:.8;stroke-linecap:round;}
+#paths-layer .path-ball{stroke:var(--ball);stroke-width:.65;stroke-linecap:round;stroke-dasharray:1.6 1.3;}
 
 /* timeline */
 #timeline-list{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto;}
@@ -1795,23 +1796,27 @@ function renderPathsBetween(fromStep, toStep){
   var tracks = buildTracks(fromStep, toStep);
   tracks.forEach(function(tr){
     var dist = Math.hypot(tr.x1-tr.x0, tr.y1-tr.y0);
-    if (dist < 0.8) return;
+    if (dist < 2.5) return;
     if (tr.op0<0.05 || tr.op1<0.05) return;
     var cls = tr.kind==="ball" ? "path-ball" : (tr.kind==="opponent" ? "path-opp" : "path-own");
     var marker = tr.kind==="ball" ? "arrow-ball" : (tr.kind==="opponent" ? "arrow-opp" : "arrow-own");
+    var ux = (tr.x1-tr.x0)/dist, uy = (tr.y1-tr.y0)/dist;
+    var inset = Math.min(2.2, dist*0.25);
+    var sx = tr.x0 + ux*inset, sy = tr.y0 + uy*inset;
+    var ex = tr.x1 - ux*inset, ey = tr.y1 - uy*inset;
     var path = document.createElementNS("http://www.w3.org/2000/svg","path");
     path.setAttribute("class", cls);
     path.setAttribute("marker-end", "url(#"+marker+")");
-    path.setAttribute("d", "M "+tr.x0+" "+tr.y0+" L "+tr.x1+" "+tr.y1);
+    path.setAttribute("d", "M "+sx+" "+sy+" L "+ex+" "+ey);
     layer.appendChild(path);
   });
 }
 
 function markerDefsSVG(){
   return '<defs>' +
-    '<marker id="arrow-own" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="'+ 'var(--own)' +'"/></marker>' +
-    '<marker id="arrow-opp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="'+ 'var(--opp)' +'"/></marker>' +
-    '<marker id="arrow-ball" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="'+ 'var(--ball)' +'"/></marker>' +
+    '<marker id="arrow-own" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="'+ 'var(--own)' +'"/></marker>' +
+    '<marker id="arrow-opp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="'+ 'var(--opp)' +'"/></marker>' +
+    '<marker id="arrow-ball" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="'+ 'var(--ball)' +'"/></marker>' +
     '</defs>';
 }
 

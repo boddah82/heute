@@ -11,6 +11,13 @@ if [ -d "_next" ]; then
   mv _next next-static
 fi
 
+# Ungenutzte RSC-/404-Artefakte entfernen: die App hat nur eine Route ("/"),
+# diese Dateien sind für den SPA-Betrieb nicht nötig und ihre Namen
+# verletzen Artifacts führendes-"_"-Verbot.
+rm -rf _not-found _not-found.html _not-found.txt \
+  __next._tree.txt __next.__PAGE__.txt __next._full.txt \
+  index.txt 404.html
+
 grep -rlZ '' --include='*.html' --include='*.js' --include='*.css' --include='*.webmanifest' . | xargs -0 sed -i \
   -e 's#"/_next/#"next-static/#g' \
   -e "s#'/_next/#'next-static/#g" \

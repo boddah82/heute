@@ -16,6 +16,16 @@ export const PDDM_DOMAIN_LABELS: Record<PDDMDomainId, string> = {
   contextual: "Umfeld / Kontext",
 };
 
+// Kurze, laienverständliche Erklärung je Domäne – hilft beim Ausfüllen und
+// beim Lesen der Auswertung zu verstehen, worum es in dem Bereich überhaupt geht.
+export const PDDM_DOMAIN_HINTS: Record<PDDMDomainId, string> = {
+  nociceptive: "Wie stark hängt der Schmerz direkt von Bewegung oder Position ab?",
+  nervousSystem: "Ist das Nervensystem selbst mitbeteiligt – Ausstrahlung, veränderte Empfindlichkeit?",
+  comorbidities: "Andere körperliche oder psychische Belastungen, die nebenbei mitspielen.",
+  cognitiveEmotional: "Gedanken, Sorgen und Verhalten rund um den Schmerz.",
+  contextual: "Einflüsse aus Arbeit, Familie oder sozialem Umfeld.",
+};
+
 export const PDDM_QUESTIONS: PDDMQuestion[] = [
   {
     id: "nociceptive.a",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PDDM_QUESTIONS, evaluatePDDM } from "@/lib/pddm";
+import { PDDM_QUESTIONS, PDDM_DOMAINS, PDDM_DOMAIN_LABELS, PDDM_DOMAIN_HINTS, evaluatePDDM } from "@/lib/pddm";
 import { PDDMAssessment } from "@/lib/types";
 
 interface Props {
@@ -38,16 +38,24 @@ export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
         </p>
       </div>
 
-      {PDDM_QUESTIONS.map((q) => (
-        <label key={q.id} className="flex items-start gap-3 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={Boolean(answers[q.id])}
-            onChange={() => toggle(q.id)}
-            className="mt-1 h-4 w-4 accent-brand-700"
-          />
-          <span>{q.text}</span>
-        </label>
+      {PDDM_DOMAINS.map((domain) => (
+        <div key={domain} className="space-y-2.5 pt-3 border-t border-slate-100 first:pt-0 first:border-t-0">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">{PDDM_DOMAIN_LABELS[domain]}</p>
+            <p className="text-xs text-slate-500">{PDDM_DOMAIN_HINTS[domain]}</p>
+          </div>
+          {PDDM_QUESTIONS.filter((q) => q.domain === domain).map((q) => (
+            <label key={q.id} className="flex items-start gap-3 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={Boolean(answers[q.id])}
+                onChange={() => toggle(q.id)}
+                className="mt-1 h-4 w-4 accent-brand-700"
+              />
+              <span>{q.text}</span>
+            </label>
+          ))}
+        </div>
       ))}
 
       <button

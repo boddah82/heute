@@ -1,7 +1,7 @@
 "use client";
 
 import { PDDMAssessment, PDDMDomainId, PDDMStatus } from "@/lib/types";
-import { PDDM_DOMAINS, PDDM_DOMAIN_LABELS, domainRecommendation, statusLabel } from "@/lib/pddm";
+import { PDDM_DOMAINS, PDDM_DOMAIN_LABELS, PDDM_DOMAIN_HINTS, domainRecommendation, statusLabel } from "@/lib/pddm";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("de-DE", {
@@ -52,6 +52,7 @@ export default function PDDMResultCard({
             <div key={domain} className="flex items-start justify-between gap-3 text-sm">
               <div>
                 <p className="font-medium text-slate-800">{PDDM_DOMAIN_LABELS[domain]}</p>
+                <p className="text-xs text-slate-400">{PDDM_DOMAIN_HINTS[domain]}</p>
                 {sub && <p className="text-xs text-slate-500">{sub}</p>}
               </div>
               <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${STATUS_STYLE[result.status]}`}>

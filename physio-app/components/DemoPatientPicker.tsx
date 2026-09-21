@@ -6,9 +6,10 @@ import { seedDemoData } from "@/lib/storage";
 
 interface Props {
   onLoaded: (regionId: string) => void;
+  variant?: "onDark" | "onLight";
 }
 
-export default function DemoPatientPicker({ onLoaded }: Props) {
+export default function DemoPatientPicker({ onLoaded, variant = "onDark" }: Props) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<DemoPatientDefinition | null>(null);
 
@@ -25,7 +26,9 @@ export default function DemoPatientPicker({ onLoaded }: Props) {
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="text-xs font-medium text-brand-100 underline underline-offset-2"
+        className={`text-xs font-medium underline underline-offset-2 ${
+          variant === "onDark" ? "text-brand-100" : "text-brand-700"
+        }`}
       >
         Demo-Patient laden
       </button>

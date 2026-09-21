@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import { CheckIn, PDDMAssessment, TrainingPlan, PSFSGoal, PSFSRating } from "./types";
+import { CheckIn, PDDMAssessment, TrainingPlan, PSFSGoal, PSFSRating, Patient, PatientRecord, HistoryBundle } from "./types";
 
 const STORAGE_KEY = "rrt.checkins.v1";
 const REGION_KEY = "rrt.activeRegion.v1";
@@ -9,6 +9,8 @@ const PDDM_KEY = "rrt.pddm.v1";
 const PLAN_KEY = "rrt.plans.v1";
 const PSFS_GOALS_KEY = "rrt.psfsGoals.v1";
 const PSFS_RATINGS_KEY = "rrt.psfsRatings.v1";
+const PATIENTS_KEY = "rrt.patients.v1";
+const PATIENT_RECORDS_KEY = "rrt.patientRecords.v1";
 
 // Minimal external-store wrapper around localStorage so reads happen during
 // render (via useSyncExternalStore) instead of in an effect, and writes from
@@ -57,6 +59,8 @@ const pddmStore = createLocalStorageStore<PDDMAssessment[]>(PDDM_KEY, []);
 const planStore = createLocalStorageStore<TrainingPlan[]>(PLAN_KEY, []);
 const psfsGoalsStore = createLocalStorageStore<PSFSGoal[]>(PSFS_GOALS_KEY, []);
 const psfsRatingsStore = createLocalStorageStore<PSFSRating[]>(PSFS_RATINGS_KEY, []);
+const patientsStore = createLocalStorageStore<Patient[]>(PATIENTS_KEY, []);
+const patientRecordsStore = createLocalStorageStore<PatientRecord[]>(PATIENT_RECORDS_KEY, []);
 
 export function useCheckIns(regionId: string) {
   const all = useSyncExternalStore(
@@ -142,6 +146,18 @@ export function getAllData(): { checkIns: CheckIn[]; pddm: PDDMAssessment[] } {
   return { checkIns: checkInsStore.getSnapshot(), pddm: pddmStore.getSnapshot() };
 }
 
+// Kompletter Trackingstand dieses Geräts (alle Regionen), für den
+// Verlauf-Link an den Therapeuten (siehe lib/historyLink.ts).
+export function buildHistoryBundle(): HistoryBundle {
+  return {
+    checkIns: checkInsStore.getSnapshot(),
+    pddm: pddmStore.getSnapshot(),
+    psfsGoals: psfsGoalsStore.getSnapshot(),
+    psfsRatings: psfsRatingsStore.getSnapshot(),
+    exportedAt: new Date().toISOString(),
+  };
+}
+
 export function usePlan(regionId: string) {
   const all = useSyncExternalStore(planStore.subscribe, planStore.getSnapshot, planStore.getServerSnapshot);
 
@@ -220,6 +236,58 @@ export function usePSFSRatings(regionId: string) {
   }, []);
 
   return { ratings, addRating, deleteRating };
+}
+
+// Mandantenverwaltung (Therapeuten-Bereich). Ein Patient hat selbst keine
+// Trackingdaten in diesem Store – die kommen per importPatientRecord aus
+// einem Verlauf-Link (siehe lib/historyLink.ts).
+export function usePatients() {
+  const patients = useSyncExternalStore(
+    patientsStore.subscribe,
+    patientsStore.getSnapshot,
+    patientsStore.getServerSnapshot
+  );
+
+  const addPatient = useCallback((name: string) => {
+    const patient: Patient = { id: crypto.randomUUID(), name, createdAt: new Date().toISOString() };
+    patientsStore.set([patient, ...patientsStore.getSnapshot()]);
+    return patient;
+  }, []);
+
+  const deletePatient = useCallback((id: string) => {
+    patientsStore.set(patientsStore.getSnapshot().filter((p) => p.id !== id));
+    patientRecordsStore.set(patientRecordsStore.getSnapshot().filter((r) => r.patientId !== id));
+  }, []);
+
+  return { patients, addPatient, deletePatient };
+}
+
+export function usePatientRecord(patientId: string | null) {
+  const all = useSyncExternalStore(
+    patientRecordsStore.subscribe,
+    patientRecordsStore.getSnapshot,
+    patientRecordsStore.getServerSnapshot
+  );
+
+  const record = useMemo(() => all.find((r) => r.patientId === patientId), [all, patientId]);
+
+  return { record };
+}
+
+// Importiert einen per Verlauf-Link erhaltenen Datenstand für einen Patienten
+// (außerhalb eines Hooks, analog zu importPlan). Ersetzt den bisherigen
+// Stand für diesen Patienten komplett.
+export function importPatientRecord(patientId: string, bundle: HistoryBundle) {
+  const record: PatientRecord = {
+    patientId,
+    checkIns: bundle.checkIns,
+    pddm: bundle.pddm,
+    psfsGoals: bundle.psfsGoals,
+    psfsRatings: bundle.psfsRatings,
+    importedAt: new Date().toISOString(),
+  };
+  const others = patientRecordsStore.getSnapshot().filter((r) => r.patientId !== patientId);
+  patientRecordsStore.set([record, ...others]);
 }
 
 export function useActiveRegion(defaultRegion: string) {

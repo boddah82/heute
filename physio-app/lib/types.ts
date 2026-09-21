@@ -92,3 +92,34 @@ export interface PSFSRating {
   value: number; // 0-10
   createdAt: string; // ISO timestamp
 }
+
+// Mandant/Patient im Therapeuten-Bereich. Enthält selbst keine Trackingdaten –
+// die kommen ausschließlich per Verlauf-Link vom Patientengerät (siehe
+// PatientRecord). Getrennt vom eigenen Tracker-Gebrauch des Therapeuten.
+export interface Patient {
+  id: string;
+  name: string;
+  createdAt: string; // ISO timestamp
+}
+
+// Ein per Verlauf-Link importierter Datenstand eines Patienten. Ein neuer
+// Import ersetzt den bisherigen Stand für diesen Patienten komplett (kein
+// Merge über mehrere Links hinweg).
+export interface PatientRecord {
+  patientId: string;
+  checkIns: CheckIn[];
+  pddm: PDDMAssessment[];
+  psfsGoals: PSFSGoal[];
+  psfsRatings: PSFSRating[];
+  importedAt: string; // ISO timestamp
+}
+
+// Bündel aller Trackingdaten eines Patientengeräts, wie es per Verlauf-Link
+// exportiert wird (siehe lib/historyLink.ts).
+export interface HistoryBundle {
+  checkIns: CheckIn[];
+  pddm: PDDMAssessment[];
+  psfsGoals: PSFSGoal[];
+  psfsRatings: PSFSRating[];
+  exportedAt: string; // ISO timestamp
+}

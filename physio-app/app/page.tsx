@@ -16,6 +16,7 @@ import PlanImportModal from "@/components/PlanImportModal";
 import HistoryImportModal from "@/components/HistoryImportModal";
 import TherapistArea from "@/components/TherapistArea";
 import PSFSPanel from "@/components/PSFSPanel";
+import GoalActionSummary from "@/components/GoalActionSummary";
 import PainTrendChart from "@/components/PainTrendChart";
 import PDDMPainTrendChart from "@/components/PDDMPainTrendChart";
 import QuestionnairePanel from "@/components/QuestionnairePanel";
@@ -277,6 +278,7 @@ export default function Home() {
                     Schritt 2 von 3 – Deine Ziele festlegen
                   </p>
                 )}
+                <GoalActionSummary latestAssessment={assessments[0]} goals={goals} />
                 <PSFSPanel
                   goals={goals}
                   ratings={ratings}

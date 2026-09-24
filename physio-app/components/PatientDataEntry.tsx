@@ -14,6 +14,7 @@ import EntryCard from "./EntryCard";
 import PDDMForm from "./PDDMForm";
 import PDDMResultCard from "./PDDMResultCard";
 import PSFSPanel from "./PSFSPanel";
+import GoalActionSummary from "./GoalActionSummary";
 import QuestionnairePanel from "./QuestionnairePanel";
 
 type DataTab = "heute" | "verlauf" | "pddm" | "ziele" | "fragebogen";
@@ -122,6 +123,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
               Schritt 2 von 3 – Ziele festlegen
             </p>
           )}
+          <GoalActionSummary latestAssessment={assessments[0]} goals={goals} />
           <PSFSPanel goals={goals} ratings={ratings} onAddGoal={addGoal} onDeleteGoal={deleteGoal} onRate={addRating} />
         </div>
       )}

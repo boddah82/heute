@@ -6,9 +6,11 @@ import { usePlan, usePatientRecord, buildHistoryBundle, importPatientRecord } fr
 import RegionSelector from "./RegionSelector";
 import PlanBuilder from "./PlanBuilder";
 import PatientRecordView from "./PatientRecordView";
+import PatientDataEntry from "./PatientDataEntry";
 import DemoPatientPicker from "./DemoPatientPicker";
 
 type SubTab = "mandanten" | "plan" | "vorschau";
+type MandantView = "eingabe" | "uebersicht";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -44,6 +46,7 @@ export default function TherapistArea({
   const [newName, setNewName] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [imported, setImported] = useState(false);
+  const [mandantView, setMandantView] = useState<MandantView>("eingabe");
 
   function importOwnDeviceData(patientId: string) {
     importPatientRecord(patientId, buildHistoryBundle());
@@ -150,27 +153,53 @@ export default function TherapistArea({
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => importOwnDeviceData(activePatient.id)}
-                  className="text-xs font-medium text-brand-700 underline underline-offset-2"
-                >
-                  Eigene Testdaten dieses Geräts übernehmen
-                </button>
-                {imported && <span className="text-xs text-emerald-700">Importiert ✓</span>}
+              <div className="flex gap-2">
+                {[
+                  { id: "eingabe" as MandantView, label: "Daten eingeben" },
+                  { id: "uebersicht" as MandantView, label: "Übersicht" },
+                ].map((v) => (
+                  <button
+                    key={v.id}
+                    onClick={() => setMandantView(v.id)}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium border ${
+                      mandantView === v.id
+                        ? "bg-brand-700 text-white border-brand-700"
+                        : "bg-white text-slate-600 border-slate-200"
+                    }`}
+                  >
+                    {v.label}
+                  </button>
+                ))}
               </div>
-              <p className="text-[11px] text-slate-400">
-                Nur zum Testen: übernimmt Deinen eigenen Tracking-Stand (Heute/Bereiche/Ziele/Fragebögen auf diesem
-                Gerät) direkt in diesen Mandanten, ohne Link – ersetzt einen evtl. vorhandenen echten Verlauf.
-              </p>
 
-              {activeRecord ? (
-                <PatientRecordView record={activeRecord} />
+              {mandantView === "eingabe" ? (
+                <PatientDataEntry patientId={activePatient.id} />
               ) : (
-                <p className="text-sm text-slate-500">
-                  Noch kein Verlauf importiert. Der Patient muss auf seinem Gerät &quot;Verlauf an Therapeut senden&quot;
-                  nutzen und Dir den Link schicken – öffne ihn dann hier auf diesem Gerät.
-                </p>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => importOwnDeviceData(activePatient.id)}
+                      className="text-xs font-medium text-brand-700 underline underline-offset-2"
+                    >
+                      Eigene Testdaten dieses Geräts übernehmen
+                    </button>
+                    {imported && <span className="text-xs text-emerald-700">Importiert ✓</span>}
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Nur zum Testen: übernimmt Deinen eigenen Tracking-Stand (Heute/Bereiche/Ziele/Fragebögen auf
+                    diesem Gerät) direkt in diesen Mandanten, ohne Link – ersetzt einen evtl. vorhandenen echten
+                    Verlauf.
+                  </p>
+
+                  {activeRecord ? (
+                    <PatientRecordView record={activeRecord} />
+                  ) : (
+                    <p className="text-sm text-slate-500">
+                      Noch keine Daten. Trage sie unter &quot;Daten eingeben&quot; direkt ein, oder der Patient
+                      schickt Dir per &quot;Verlauf an Therapeut senden&quot; einen Link zum Importieren.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}

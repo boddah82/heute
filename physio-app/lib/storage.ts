@@ -322,6 +322,203 @@ export function importPatientRecord(patientId: string, bundle: HistoryBundle) {
   patientRecordsStore.set([record, ...others]);
 }
 
+function emptyPatientRecord(patientId: string): PatientRecord {
+  return {
+    patientId,
+    checkIns: [],
+    pddm: [],
+    psfsGoals: [],
+    psfsRatings: [],
+    questionnaireResults: [],
+    importedAt: new Date().toISOString(),
+  };
+}
+
+function getOrCreatePatientRecord(patientId: string): PatientRecord {
+  const existing = patientRecordsStore.getSnapshot().find((r) => r.patientId === patientId);
+  if (existing) return existing;
+  const created = emptyPatientRecord(patientId);
+  patientRecordsStore.set([created, ...patientRecordsStore.getSnapshot()]);
+  return created;
+}
+
+function updatePatientRecord(patientId: string, patch: Partial<PatientRecord>) {
+  const record = getOrCreatePatientRecord(patientId);
+  const updated = { ...record, ...patch };
+  patientRecordsStore.set(patientRecordsStore.getSnapshot().map((r) => (r.patientId === patientId ? updated : r)));
+}
+
+// Direkte Dateneingabe für einen Mandanten durch die Therapeutin/den
+// Therapeuten selbst (z. B. Erstanamnese im Termin), unabhängig vom eigenen
+// Tracking-Stand dieses Geräts. Analog zu den persönlichen Hooks oben, aber
+// auf patientRecordsStore statt der eigenen Stores.
+export function usePatientCheckIns(patientId: string, regionId: string) {
+  const all = useSyncExternalStore(
+    patientRecordsStore.subscribe,
+    patientRecordsStore.getSnapshot,
+    patientRecordsStore.getServerSnapshot
+  );
+  const record = useMemo(() => all.find((r) => r.patientId === patientId), [all, patientId]);
+  const entries = useMemo(
+    () => (record?.checkIns ?? []).filter((c) => c.regionId === regionId),
+    [record, regionId]
+  );
+
+  const addEntry = useCallback(
+    (entry: Omit<CheckIn, "id" | "createdAt">) => {
+      const rec = getOrCreatePatientRecord(patientId);
+      const newEntry: CheckIn = { ...entry, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+      updatePatientRecord(patientId, { checkIns: [newEntry, ...rec.checkIns] });
+    },
+    [patientId]
+  );
+
+  const updateEntry = useCallback(
+    (id: string, patch: Partial<CheckIn>) => {
+      const rec = getOrCreatePatientRecord(patientId);
+      updatePatientRecord(patientId, { checkIns: rec.checkIns.map((c) => (c.id === id ? { ...c, ...patch } : c)) });
+    },
+    [patientId]
+  );
+
+  const deleteEntry = useCallback(
+    (id: string) => {
+      const rec = getOrCreatePatientRecord(patientId);
+      updatePatientRecord(patientId, { checkIns: rec.checkIns.filter((c) => c.id !== id) });
+    },
+    [patientId]
+  );
+
+  return { entries, addEntry, updateEntry, deleteEntry };
+}
+
+export function usePatientPDDMAssessments(patientId: string, regionId: string) {
+  const all = useSyncExternalStore(
+    patientRecordsStore.subscribe,
+    patientRecordsStore.getSnapshot,
+    patientRecordsStore.getServerSnapshot
+  );
+  const record = useMemo(() => all.find((r) => r.patientId === patientId), [all, patientId]);
+  const assessments = useMemo(
+    () => (record?.pddm ?? []).filter((a) => a.regionId === regionId),
+    [record, regionId]
+  );
+
+  const addAssessment = useCallback(
+    (assessment: Omit<PDDMAssessment, "id" | "createdAt">) => {
+      const rec = getOrCreatePatientRecord(patientId);
+      const newAssessment: PDDMAssessment = { ...assessment, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+      updatePatientRecord(patientId, { pddm: [newAssessment, ...rec.pddm] });
+    },
+    [patientId]
+  );
+
+  const deleteAssessment = useCallback(
+    (id: string) => {
+      const rec = getOrCreatePatientRecord(patientId);
+      updatePatientRecord(patientId, { pddm: rec.pddm.filter((a) => a.id !== id) });
+    },
+    [patientId]
+  );
+
+  return { assessments, addAssessment, deleteAssessment };
+}
+
+export function usePatientPSFSGoals(patientId: string, regionId: string) {
+  const all = useSyncExternalStore(
+    patientRecordsStore.subscribe,
+    patientRecordsStore.getSnapshot,
+    patientRecordsStore.getServerSnapshot
+  );
+  const record = useMemo(() => all.find((r) => r.patientId === patientId), [all, patientId]);
+  const goals = useMemo(() => (record?.psfsGoals ?? []).filter((g) => g.regionId === regionId), [record, regionId]);
+
+  const addGoal = useCallback(
+    (label: string) => {
+      const rec = getOrCreatePatientRecord(patientId);
+      const goal: PSFSGoal = { id: crypto.randomUUID(), regionId, label, createdAt: new Date().toISOString() };
+      updatePatientRecord(patientId, { psfsGoals: [goal, ...rec.psfsGoals] });
+    },
+    [patientId, regionId]
+  );
+
+  const deleteGoal = useCallback(
+    (id: string) => {
+      const rec = getOrCreatePatientRecord(patientId);
+      updatePatientRecord(patientId, {
+        psfsGoals: rec.psfsGoals.filter((g) => g.id !== id),
+        psfsRatings: rec.psfsRatings.filter((r) => r.goalId !== id),
+      });
+    },
+    [patientId]
+  );
+
+  return { goals, addGoal, deleteGoal };
+}
+
+export function usePatientPSFSRatings(patientId: string, regionId: string) {
+  const all = useSyncExternalStore(
+    patientRecordsStore.subscribe,
+    patientRecordsStore.getSnapshot,
+    patientRecordsStore.getServerSnapshot
+  );
+  const record = useMemo(() => all.find((r) => r.patientId === patientId), [all, patientId]);
+  const ratings = useMemo(
+    () => (record?.psfsRatings ?? []).filter((r) => r.regionId === regionId),
+    [record, regionId]
+  );
+
+  const addRating = useCallback(
+    (goalId: string, value: number) => {
+      const rec = getOrCreatePatientRecord(patientId);
+      const rating: PSFSRating = {
+        id: crypto.randomUUID(),
+        regionId,
+        goalId,
+        date: new Date().toISOString().slice(0, 10),
+        value,
+        createdAt: new Date().toISOString(),
+      };
+      updatePatientRecord(patientId, { psfsRatings: [rating, ...rec.psfsRatings] });
+    },
+    [patientId, regionId]
+  );
+
+  return { ratings, addRating };
+}
+
+export function usePatientQuestionnaireResults(patientId: string, regionId: string) {
+  const all = useSyncExternalStore(
+    patientRecordsStore.subscribe,
+    patientRecordsStore.getSnapshot,
+    patientRecordsStore.getServerSnapshot
+  );
+  const record = useMemo(() => all.find((r) => r.patientId === patientId), [all, patientId]);
+  const results = useMemo(
+    () => (record?.questionnaireResults ?? []).filter((r) => r.regionId === regionId),
+    [record, regionId]
+  );
+
+  const addResult = useCallback(
+    (result: Omit<QuestionnaireResult, "id" | "createdAt">) => {
+      const rec = getOrCreatePatientRecord(patientId);
+      const newResult: QuestionnaireResult = { ...result, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+      updatePatientRecord(patientId, { questionnaireResults: [newResult, ...rec.questionnaireResults] });
+    },
+    [patientId]
+  );
+
+  const deleteResult = useCallback(
+    (id: string) => {
+      const rec = getOrCreatePatientRecord(patientId);
+      updatePatientRecord(patientId, { questionnaireResults: rec.questionnaireResults.filter((r) => r.id !== id) });
+    },
+    [patientId]
+  );
+
+  return { results, addResult, deleteResult };
+}
+
 export function useActiveRegion(defaultRegion: string) {
   const stored = useSyncExternalStore(
     regionStore.subscribe,

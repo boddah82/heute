@@ -44,6 +44,23 @@ export default function PDDMResultCard({
         )}
       </div>
 
+      {assessment.painBaseline && (
+        <div className="grid grid-cols-3 gap-2 text-center pb-2 border-b border-slate-100">
+          <div>
+            <p className="text-lg font-semibold text-slate-900">{assessment.painBaseline.current}</p>
+            <p className="text-[11px] text-slate-500">Aktuell</p>
+          </div>
+          <div>
+            <p className="text-lg font-semibold text-slate-900">{assessment.painBaseline.avg4Weeks}</p>
+            <p className="text-[11px] text-slate-500">Ø 4 Wochen</p>
+          </div>
+          <div>
+            <p className="text-lg font-semibold text-slate-900">{assessment.painBaseline.maxLoad}</p>
+            <p className="text-[11px] text-slate-500">Max. Belastung</p>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2">
         {PDDM_DOMAINS.map((domain) => {
           const result = assessment.results[domain];

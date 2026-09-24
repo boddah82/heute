@@ -49,12 +49,22 @@ export interface PDDMDomainResult {
   subtype?: "peripheral" | "central_sensitization";
 }
 
+// Periodische Schmerz-Baseline (unabhängig vom aktivitätsgebundenen
+// Check-in): aktueller Schmerz, Durchschnitt der letzten 4 Wochen, Schmerz
+// bei maximaler Belastung. Teil der PDDM-Anamnese, da im selben Bogen erhoben.
+export interface PDDMPainBaseline {
+  current: number; // 0-10
+  avg4Weeks: number; // 0-10
+  maxLoad: number; // 0-10
+}
+
 export interface PDDMAssessment {
   id: string;
   regionId: string;
   date: string; // ISO date (yyyy-mm-dd)
-  answers: Record<string, boolean>;
+  answers: Record<string, string>;
   results: Record<PDDMDomainId, PDDMDomainResult>;
+  painBaseline?: PDDMPainBaseline;
   createdAt: string; // ISO timestamp
 }
 

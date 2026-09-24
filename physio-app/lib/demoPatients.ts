@@ -1,4 +1,4 @@
-import { CheckIn, PDDMAssessment, PDDMDomainResult } from "./types";
+import { CheckIn, PDDMAssessment, PDDMPainBaseline } from "./types";
 import { evaluatePDDM } from "./pddm";
 
 // Simulierte Test-Patienten für den Bereich "Sehne" (patellare Tendinopathie),
@@ -101,24 +101,31 @@ function generateCheckIns(regionId: string, days: number, seed: number): Omit<Ch
   return entries;
 }
 
-function pddmResultsFor(patientId: DemoPatientDefinition["id"]): Record<string, boolean> {
+function pddmAnswersFor(patientId: DemoPatientDefinition["id"]): Record<string, string> {
   // Nozizeptiv + Kontext sind bei Tendinopathie typischerweise durchgehend
   // relevant (belastungsabhängiger Schmerz, sportliche Belastung als Trigger).
-  const base: Record<string, boolean> = {
-    "nociceptive.a": true,
-    "contextual.a": true,
+  const base: Record<string, string> = {
+    "nociceptive.aggravating": "Ja",
+    "nociceptive.relief": "Ja",
+    "contextual.work": "Mäßig",
   };
 
   if (patientId === "patientA") {
     // Früh in der Reha: Sorge, dass etwas beschädigt sein könnte.
-    return { ...base, "cognitiveEmotional.a": true };
+    return { ...base, "cognitiveEmotional.catastrophizing": "Teils-teils" };
   }
   if (patientId === "patientB") {
     // Sorgen durch Aufklärung schon reduziert, Fokus bleibt auf Belastungssteuerung.
     return base;
   }
   // patientC: gut etabliert, keine zusätzlichen Treiber mehr auffällig.
-  return base;
+  return { ...base, "contextual.work": "Nein" };
+}
+
+function painBaselineFor(patientId: DemoPatientDefinition["id"]): PDDMPainBaseline {
+  if (patientId === "patientA") return { current: 6, avg4Weeks: 7, maxLoad: 9 };
+  if (patientId === "patientB") return { current: 3, avg4Weeks: 4, maxLoad: 6 };
+  return { current: 1, avg4Weeks: 2, maxLoad: 3 };
 }
 
 export function buildDemoPatientData(
@@ -127,8 +134,8 @@ export function buildDemoPatientData(
 ): { checkIns: Omit<CheckIn, "id" | "createdAt">[]; pddm: Omit<PDDMAssessment, "id" | "createdAt"> } {
   const seed = patient.id === "patientA" ? 1 : patient.id === "patientB" ? 2 : 3;
   const checkIns = generateCheckIns(regionId, patient.days, seed);
-  const answers = pddmResultsFor(patient.id);
-  const results = evaluatePDDM(answers) as Record<string, PDDMDomainResult>;
+  const answers = pddmAnswersFor(patient.id);
+  const results = evaluatePDDM(answers);
 
   return {
     checkIns,
@@ -136,7 +143,8 @@ export function buildDemoPatientData(
       regionId,
       date: isoDaysAgo(0),
       answers,
-      results: results as PDDMAssessment["results"],
+      results,
+      painBaseline: painBaselineFor(patient.id),
     },
   };
 }

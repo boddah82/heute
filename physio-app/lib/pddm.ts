@@ -1,13 +1,5 @@
 import { PDDMDomainId, PDDMDomainResult, PDDMStatus } from "./types";
 
-export interface PDDMQuestion {
-  id: string; // eindeutig, z.B. "nociceptive.a"
-  domain: PDDMDomainId;
-  level: "A" | "B";
-  text: string;
-  subtype?: "peripheral" | "central_sensitization";
-}
-
 export const PDDM_DOMAIN_LABELS: Record<PDDMDomainId, string> = {
   nociceptive: "Nozizeptiv (mechanisch)",
   nervousSystem: "Nervensystem",
@@ -26,68 +18,165 @@ export const PDDM_DOMAIN_HINTS: Record<PDDMDomainId, string> = {
   contextual: "Einflüsse aus Arbeit, Familie oder sozialem Umfeld.",
 };
 
+export type PDDMQuestionType = "boolean" | "scale3" | "text";
+
+export interface PDDMQuestion {
+  id: string;
+  domain: PDDMDomainId;
+  type: PDDMQuestionType;
+  text: string;
+  scaleLabels?: [string, string, string]; // aufsteigend nach Auffälligkeit, außer bei "activity" (siehe Auswertung)
+  placeholder?: string; // für type "text"
+  optional?: boolean; // nicht Pflicht zum Absenden (Freitextfelder)
+}
+
+// Fragen nach dem vom Nutzer bereitgestellten PDDM-Patienten-Anamnesebogen,
+// wortgleich übernommen. Ersetzt die bisherigen 10 Ja/Nein-Fragen (2 pro
+// Domäne) durch feinere, mehrstufige Fragen.
 export const PDDM_QUESTIONS: PDDMQuestion[] = [
   {
-    id: "nociceptive.a",
+    id: "nociceptive.aggravating",
     domain: "nociceptive",
-    level: "A",
-    text: "Verändert sich Dein Schmerz klar, wenn Du bestimmte Bewegungen oder Positionen einnimmst – z. B. wird er durch eine Bewegung deutlich besser und durch eine andere deutlich schlechter?",
+    type: "boolean",
+    text: "Gibt es bestimmte Bewegungen oder Haltungen, die Ihren Schmerz sofort provozieren?",
   },
   {
-    id: "nociceptive.b",
+    id: "nociceptive.relief",
     domain: "nociceptive",
-    level: "B",
-    text: "Bleibt Dein Schmerz unabhängig von Bewegung oder Position meist ähnlich, ohne dass Du eine klare Erleichterung findest?",
+    type: "boolean",
+    text: "Können Sie eine Position finden, die den Schmerz spürbar lindert?",
   },
   {
-    id: "nervousSystem.a",
+    id: "nociceptive.stiffness",
+    domain: "nociceptive",
+    type: "boolean",
+    text: "Fühlt sich die betroffene Region steif an (z. B. Morgensteifigkeit > 30 Minuten)?",
+  },
+  {
+    id: "nociceptive.delayed",
+    domain: "nociceptive",
+    type: "boolean",
+    text: "Reagiert der Schmerz zeitversetzt erst am Tag nach einer Belastung intensiver?",
+  },
+  {
+    id: "nervousSystem.quality",
     domain: "nervousSystem",
-    level: "A",
-    subtype: "peripheral",
-    text: "Strahlt der Schmerz in einem klaren Streifen in Arm oder Bein aus, evtl. zusammen mit Kribbeln oder Taubheit entlang einer Linie?",
+    type: "scale3",
+    text: "Fühlen sich die Schmerzen brennend, elektrisierend, stechend oder wie Stromschläge an?",
+    scaleLabels: ["Nie", "Manchmal", "Oft"],
   },
   {
-    id: "nervousSystem.b",
+    id: "nervousSystem.paresthesia",
     domain: "nervousSystem",
-    level: "B",
-    subtype: "central_sensitization",
-    text: "Reagierst Du mittlerweile auch auf Reize, die früher keine Rolle gespielt haben (z. B. leichte Berührung, Wetter, Stress), oder ist der Schmerz schwer vorhersehbar und breitet sich aus?",
+    type: "scale3",
+    text: "Spüren Sie ein Kribbeln, Taubheitsgefühl oder Ameisenlaufen?",
+    scaleLabels: ["Nie", "Manchmal", "Oft"],
   },
   {
-    id: "comorbidities.a",
+    id: "nervousSystem.allodynia",
+    domain: "nervousSystem",
+    type: "scale3",
+    text: "Sind bereits leichte Berührungen (z. B. durch Kleidung) unangenehm?",
+    scaleLabels: ["Nie", "Manchmal", "Oft"],
+  },
+  {
+    id: "nervousSystem.spreading",
+    domain: "nervousSystem",
+    type: "scale3",
+    text: "Breitet sich der Schmerz auf andere, unbeteiligte Körperregionen aus?",
+    scaleLabels: ["Nie", "Manchmal", "Oft"],
+  },
+  {
+    id: "nervousSystem.hypersensitivity",
+    domain: "nervousSystem",
+    type: "scale3",
+    text: "Reagieren Sie empfindlicher als früher auf Licht, Lärm, Kälte oder Stress?",
+    scaleLabels: ["Nie", "Manchmal", "Oft"],
+  },
+  {
+    id: "comorbidities.sleep",
     domain: "comorbidities",
-    level: "A",
-    text: "Hast Du noch andere schmerzhafte körperliche Beschwerden (z. B. an anderen Gelenken), die Dich zusätzlich einschränken?",
+    type: "scale3",
+    text: "Wachen Sie nachts wegen Schmerzen auf oder fühlen sich morgens unerholt?",
+    scaleLabels: ["Selten", "Manchmal", "Fast immer"],
   },
   {
-    id: "comorbidities.b",
+    id: "comorbidities.stress",
     domain: "comorbidities",
-    level: "B",
-    text: "Fühlst Du Dich in letzter Zeit häufiger niedergeschlagen, ängstlich oder antriebslos?",
+    type: "scale3",
+    text: "Fühlen Sie sich im Alltag aktuell stark überfordert oder dauerhaft unter Strom?",
+    scaleLabels: ["Gering", "Mäßig", "Hoch"],
   },
   {
-    id: "cognitiveEmotional.a",
+    id: "comorbidities.activity",
+    domain: "comorbidities",
+    type: "scale3",
+    text: "Wie viele Tage pro Woche bewegen Sie sich mindestens 30 Minuten?",
+    scaleLabels: ["0–1 Tag", "2–3 Tage", "4+ Tage"],
+  },
+  {
+    id: "comorbidities.conditions",
+    domain: "comorbidities",
+    type: "text",
+    text: "Liegen weitere Diagnosen vor (z. B. Diabetes, Rheuma, Bluthochdruck, Magen-Darm)?",
+    placeholder: "Details (optional)",
+    optional: true,
+  },
+  {
+    id: "cognitiveEmotional.kinesiophobia",
     domain: "cognitiveEmotional",
-    level: "A",
-    text: "Denkst Du oft, dass mit Deinem Körper etwas Ernstes nicht stimmt, oder macht Dir der Schmerz selbst starke Sorgen?",
+    type: "scale3",
+    text: "Ich habe Angst, dass körperliche Aktivität oder Bewegung meine Verletzung/Schmerzen schlimmer macht.",
+    scaleLabels: ["Stimmt nicht", "Teils-teils", "Stimmt völlig"],
   },
   {
-    id: "cognitiveEmotional.b",
+    id: "cognitiveEmotional.catastrophizing",
     domain: "cognitiveEmotional",
-    level: "B",
-    text: "Vermeidest Du deswegen bestimmte Bewegungen komplett – oder machst Du im Gegenteil oft mehr, als guttut, ohne auf Warnsignale zu achten?",
+    type: "scale3",
+    text: "Wenn die Schmerzen stark sind, befürchte ich oft, dass sie niemals wieder besser werden.",
+    scaleLabels: ["Stimmt nicht", "Teils-teils", "Stimmt völlig"],
   },
   {
-    id: "contextual.a",
-    domain: "contextual",
-    level: "A",
-    text: "Beeinflusst Deine Arbeit oder Ausbildung Deine Beschwerden (z. B. durch Belastung, langes Sitzen/Stehen, Stress)?",
+    id: "cognitiveEmotional.helplessness",
+    domain: "cognitiveEmotional",
+    type: "scale3",
+    text: "Ich habe das Gefühl, dass ich selbst wenig Einfluss darauf habe, meine Schmerzen zu lindern.",
+    scaleLabels: ["Stimmt nicht", "Teils-teils", "Stimmt völlig"],
   },
   {
-    id: "contextual.b",
+    id: "cognitiveEmotional.hypervigilance",
+    domain: "cognitiveEmotional",
+    type: "scale3",
+    text: "Ich ertappe mich dabei, wie ich meinen Körper ständig auf Schmerzsignale überprüfe (Scannen).",
+    scaleLabels: ["Stimmt nicht", "Teils-teils", "Stimmt völlig"],
+  },
+  {
+    id: "contextual.work",
     domain: "contextual",
-    level: "B",
-    text: "Gibt es andere Einflüsse aus Deinem Umfeld (Familie, soziale Situation, laufendes Verfahren), die die Situation zusätzlich erschweren?",
+    type: "scale3",
+    text: "Fühlen Sie sich an Ihrem Arbeitsplatz körperlich oder mental stark belastet?",
+    scaleLabels: ["Nein", "Mäßig", "Sehr stark"],
+  },
+  {
+    id: "contextual.social",
+    domain: "contextual",
+    type: "scale3",
+    text: "Macht sich Ihr Umfeld (Familie/Partner) große Sorgen oder rät Ihnen von Belastung ab?",
+    scaleLabels: ["Nein", "Mäßig", "Sehr stark"],
+  },
+  {
+    id: "contextual.nocebo",
+    domain: "contextual",
+    type: "boolean",
+    text: 'Wurden Ihnen von Fachpersonal Aussagen gemacht, die Ihnen Angst gemacht haben (z. B. "Bandscheibe kaputt", "Knochen auf Knochen")?',
+  },
+  {
+    id: "contextual.noceboDetails",
+    domain: "contextual",
+    type: "text",
+    text: "Details zur Nocebo-Erfahrung",
+    placeholder: "Details (optional)",
+    optional: true,
   },
 ];
 
@@ -99,29 +188,113 @@ export const PDDM_DOMAINS: PDDMDomainId[] = [
   "contextual",
 ];
 
-export function evaluatePDDM(answers: Record<string, boolean>): Record<PDDMDomainId, PDDMDomainResult> {
-  const results = {} as Record<PDDMDomainId, PDDMDomainResult>;
+function isYes(v: string | undefined): boolean {
+  return v === "Ja";
+}
 
-  for (const domain of PDDM_DOMAINS) {
-    const questions = PDDM_QUESTIONS.filter((q) => q.domain === domain);
-    const bHit = questions.find((q) => q.level === "B" && answers[q.id]);
-    const aHit = questions.find((q) => q.level === "A" && answers[q.id]);
+// Bildet die unterschiedlich benannten 3-Stufen-Skalen (Nie/Manchmal/Oft,
+// Stimmt nicht/Teils-teils/Stimmt völlig, Gering/Mäßig/Hoch, ...) auf eine
+// gemeinsame Auffälligkeits-Stufe ab: 0 = unauffällig, 1 = mäßig, 2 = stark.
+function level(v: string | undefined): 0 | 1 | 2 {
+  if (v === "Oft" || v === "Stimmt völlig" || v === "Sehr stark" || v === "Fast immer" || v === "Hoch") return 2;
+  if (v === "Manchmal" || v === "Teils-teils" || v === "Mäßig") return 1;
+  return 0;
+}
 
-    let status: PDDMStatus = "NONE";
-    let subtype: PDDMDomainResult["subtype"];
+// "Wie viele Tage pro Woche bewegen Sie sich..." läuft umgekehrt: wenig
+// Aktivität ist die auffällige Seite.
+function activityLevel(v: string | undefined): 0 | 1 | 2 {
+  if (v === "0–1 Tag") return 2;
+  if (v === "2–3 Tage") return 1;
+  return 0;
+}
 
-    if (bHit) {
-      status = "B";
-      subtype = bHit.subtype;
-    } else if (aHit) {
-      status = "A";
-      subtype = aHit.subtype;
-    }
+// Schwellenwerte unterhalb sind eine eigene, transparente Vereinfachung
+// (nicht aus einer validierten Quelle abgeleitet) – Grundidee: "stärkstes
+// Einzelsignal je Domäne entscheidet", analog zur bestehenden Ampel-Logik
+// in lib/trafficLight.ts. Domänenspezifisch angepasst an die inhaltliche
+// Bedeutung von A/B in PDDM (siehe domainRecommendation).
+function evalNociceptive(a: Record<string, string>): PDDMDomainResult {
+  const ids = ["nociceptive.aggravating", "nociceptive.relief", "nociceptive.stiffness", "nociceptive.delayed"];
+  if (ids.every((id) => a[id] === undefined)) return { status: "NONE" };
+  const aggravating = isYes(a["nociceptive.aggravating"]);
+  const relief = isYes(a["nociceptive.relief"]);
+  // Kein klarer Bezug zu Bewegung/Position -> schwerer allein über
+  // Belastungssteuerung zu adressieren (entspricht der früheren nociceptive.b).
+  if (!aggravating && !relief) return { status: "B" };
+  return { status: "A" };
+}
 
-    results[domain] = { status, subtype };
+function evalNervousSystem(a: Record<string, string>): PDDMDomainResult {
+  const ids = [
+    "nervousSystem.quality",
+    "nervousSystem.paresthesia",
+    "nervousSystem.allodynia",
+    "nervousSystem.spreading",
+    "nervousSystem.hypersensitivity",
+  ];
+  if (ids.every((id) => a[id] === undefined)) return { status: "NONE" };
+  const centralMax = Math.max(
+    level(a["nervousSystem.allodynia"]),
+    level(a["nervousSystem.spreading"]),
+    level(a["nervousSystem.hypersensitivity"])
+  );
+  const peripheralMax = Math.max(level(a["nervousSystem.quality"]), level(a["nervousSystem.paresthesia"]));
+  if (centralMax === 2) return { status: "B", subtype: "central_sensitization" };
+  if (peripheralMax === 2) return { status: "A", subtype: "peripheral" };
+  if (centralMax === 1) return { status: "A", subtype: "central_sensitization" };
+  if (peripheralMax === 1) return { status: "A", subtype: "peripheral" };
+  return { status: "NONE" };
+}
+
+function evalComorbidities(a: Record<string, string>): PDDMDomainResult {
+  const scaleIds = ["comorbidities.sleep", "comorbidities.stress", "comorbidities.activity"];
+  const conditionsText = a["comorbidities.conditions"]?.trim();
+  if (scaleIds.every((id) => a[id] === undefined) && !conditionsText) return { status: "NONE" };
+  const maxLevel = Math.max(
+    level(a["comorbidities.sleep"]),
+    level(a["comorbidities.stress"]),
+    activityLevel(a["comorbidities.activity"])
+  );
+  if (maxLevel === 2) return { status: "B" };
+  if (maxLevel === 1 || Boolean(conditionsText)) return { status: "A" };
+  return { status: "NONE" };
+}
+
+function evalCognitiveEmotional(a: Record<string, string>): PDDMDomainResult {
+  const ids = [
+    "cognitiveEmotional.kinesiophobia",
+    "cognitiveEmotional.catastrophizing",
+    "cognitiveEmotional.helplessness",
+    "cognitiveEmotional.hypervigilance",
+  ];
+  if (ids.every((id) => a[id] === undefined)) return { status: "NONE" };
+  const maxLevel = Math.max(...ids.map((id) => level(a[id])));
+  if (maxLevel === 2) return { status: "B" };
+  if (maxLevel === 1) return { status: "A" };
+  return { status: "NONE" };
+}
+
+function evalContextual(a: Record<string, string>): PDDMDomainResult {
+  if (a["contextual.work"] === undefined && a["contextual.social"] === undefined && a["contextual.nocebo"] === undefined) {
+    return { status: "NONE" };
   }
+  const nocebo = isYes(a["contextual.nocebo"]);
+  const work = level(a["contextual.work"]);
+  const social = level(a["contextual.social"]);
+  if (social === 2 || nocebo) return { status: "B" };
+  if (work >= 1 || social >= 1) return { status: "A" };
+  return { status: "NONE" };
+}
 
-  return results;
+export function evaluatePDDM(answers: Record<string, string>): Record<PDDMDomainId, PDDMDomainResult> {
+  return {
+    nociceptive: evalNociceptive(answers),
+    nervousSystem: evalNervousSystem(answers),
+    comorbidities: evalComorbidities(answers),
+    cognitiveEmotional: evalCognitiveEmotional(answers),
+    contextual: evalContextual(answers),
+  };
 }
 
 const STATUS_LABEL: Record<PDDMStatus, string> = {

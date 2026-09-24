@@ -24,7 +24,6 @@ type DataTab = "heute" | "verlauf" | "pddm" | "ziele" | "fragebogen";
 // unabhängig vom eigenen Tracking-Stand dieses Geräts.
 export default function PatientDataEntry({ patientId }: { patientId: string }) {
   const [regionId, setRegionId] = useState("knie");
-  const [tab, setTab] = useState<DataTab>("heute");
   const [showPDDMForm, setShowPDDMForm] = useState(false);
 
   const { entries, updateEntry, deleteEntry, addEntry } = usePatientCheckIns(patientId, regionId);
@@ -33,16 +32,24 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
   const { ratings, addRating } = usePatientPSFSRatings(patientId, regionId);
   const { results, addResult, deleteResult } = usePatientQuestionnaireResults(patientId, regionId);
 
+  // Sanfte Führung: erst Bestandsaufnahme (Bereiche), dann Ziele, erst
+  // danach das laufende Tracking – frei änderbar, sobald einmal geladen.
+  const [tab, setTab] = useState<DataTab>(() => {
+    if (assessments.length === 0) return "pddm";
+    if (goals.length === 0) return "ziele";
+    return "heute";
+  });
+
   return (
     <div className="space-y-3">
       <RegionSelector value={regionId} onChange={setRegionId} />
 
       <nav className="flex gap-2 overflow-x-auto">
         {[
-          { id: "heute" as DataTab, label: "Heute" },
-          { id: "verlauf" as DataTab, label: `Verlauf (${entries.length})` },
           { id: "pddm" as DataTab, label: "Bereiche" },
           { id: "ziele" as DataTab, label: "Ziele" },
+          { id: "heute" as DataTab, label: "Heute" },
+          { id: "verlauf" as DataTab, label: `Verlauf (${entries.length})` },
           { id: "fragebogen" as DataTab, label: "Fragebögen" },
         ].map((t) => (
           <button
@@ -57,7 +64,16 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
         ))}
       </nav>
 
-      {tab === "heute" && <CheckInForm regionId={regionId} onSubmit={addEntry} />}
+      {tab === "heute" && (
+        <div className="space-y-2">
+          {entries.length === 0 && assessments.length > 0 && goals.length > 0 && (
+            <p className="text-xs font-medium text-brand-700 uppercase tracking-wide">
+              Schritt 3 von 3 – Laufendes Tracking
+            </p>
+          )}
+          <CheckInForm regionId={regionId} onSubmit={addEntry} />
+        </div>
+      )}
 
       {tab === "verlauf" &&
         (entries.length === 0 ? (
@@ -82,6 +98,11 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
           />
         ) : (
           <div className="space-y-3">
+            {assessments.length === 0 && (
+              <p className="text-xs font-medium text-brand-700 uppercase tracking-wide">
+                Schritt 1 von 3 – Bestandsaufnahme
+              </p>
+            )}
             <button
               onClick={() => setShowPDDMForm(true)}
               className="w-full rounded-lg bg-brand-700 text-white font-semibold py-2.5 text-sm hover:bg-brand-800 transition"
@@ -95,7 +116,14 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
         ))}
 
       {tab === "ziele" && (
-        <PSFSPanel goals={goals} ratings={ratings} onAddGoal={addGoal} onDeleteGoal={deleteGoal} onRate={addRating} />
+        <div className="space-y-2">
+          {goals.length === 0 && (
+            <p className="text-xs font-medium text-brand-700 uppercase tracking-wide">
+              Schritt 2 von 3 – Ziele festlegen
+            </p>
+          )}
+          <PSFSPanel goals={goals} ratings={ratings} onAddGoal={addGoal} onDeleteGoal={deleteGoal} onRate={addRating} />
+        </div>
       )}
 
       {tab === "fragebogen" && (

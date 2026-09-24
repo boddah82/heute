@@ -66,7 +66,14 @@ export default function Home() {
   const { ratings, addRating } = usePSFSRatings(regionId);
   const { results: questionnaireResults, addResult: addQuestionnaireResult, deleteResult: deleteQuestionnaireResult } = useQuestionnaireResults(regionId);
   const { patients, addPatient, deletePatient } = usePatients();
-  const [tab, setTab] = useState<Tab>("heute");
+  // Sanfte Führung beim Einstieg: erst Bestandsaufnahme (Bereiche), dann
+  // Ziele, erst danach das laufende Tracking – aber frei änderbar, sobald
+  // die App einmal geladen ist.
+  const [tab, setTab] = useState<Tab>(() => {
+    if (assessments.length === 0) return "pddm";
+    if (goals.length === 0) return "ziele";
+    return "heute";
+  });
   const [mode, setMode] = useState<Mode>("patient");
   const [activePatientId, setActivePatientId] = useState<string | null>(null);
   const [showPDDMForm, setShowPDDMForm] = useState(false);
@@ -149,13 +156,13 @@ export default function Home() {
       {mode === "patient" && (
         <nav className="px-4 mt-2 flex gap-2 overflow-x-auto">
           {[
-            { id: "heute" as Tab, label: "Heute" },
-            { id: "rechner" as Tab, label: "Rechner" },
-            { id: "verlauf" as Tab, label: `Verlauf (${entries.length})` },
             { id: "pddm" as Tab, label: "Bereiche" },
-            { id: "wissen" as Tab, label: "Wissen" },
             { id: "ziele" as Tab, label: "Ziele" },
+            { id: "heute" as Tab, label: "Heute" },
+            { id: "verlauf" as Tab, label: `Verlauf (${entries.length})` },
+            { id: "rechner" as Tab, label: "Rechner" },
             { id: "fragebogen" as Tab, label: "Fragebögen" },
+            { id: "wissen" as Tab, label: "Wissen" },
           ].map((t) => (
             <button
               key={t.id}
@@ -194,7 +201,14 @@ export default function Home() {
         ) : (
           <>
             {tab === "heute" && (
-              <CheckInForm regionId={regionId} planExercises={plan?.exercises} onSubmit={addEntry} />
+              <div className="space-y-2">
+                {entries.length === 0 && assessments.length > 0 && goals.length > 0 && (
+                  <p className="text-xs font-medium text-brand-700 uppercase tracking-wide">
+                    Schritt 3 von 3 – Laufendes Tracking
+                  </p>
+                )}
+                <CheckInForm regionId={regionId} planExercises={plan?.exercises} onSubmit={addEntry} />
+              </div>
             )}
 
             {tab === "rechner" && <RuleOfTenCalculator />}
@@ -222,6 +236,11 @@ export default function Home() {
                 />
               ) : (
                 <div className="space-y-4">
+                  {assessments.length === 0 && (
+                    <p className="text-xs font-medium text-brand-700 uppercase tracking-wide">
+                      Schritt 1 von 3 – Bestandsaufnahme
+                    </p>
+                  )}
                   <button
                     onClick={() => setShowPDDMForm(true)}
                     className="w-full rounded-lg bg-brand-700 text-white font-semibold py-2.5 text-sm hover:bg-brand-800 transition"
@@ -252,13 +271,20 @@ export default function Home() {
             )}
 
             {tab === "ziele" && (
-              <PSFSPanel
-                goals={goals}
-                ratings={ratings}
-                onAddGoal={addGoal}
-                onDeleteGoal={deleteGoal}
-                onRate={addRating}
-              />
+              <div className="space-y-2">
+                {goals.length === 0 && (
+                  <p className="text-xs font-medium text-brand-700 uppercase tracking-wide">
+                    Schritt 2 von 3 – Deine Ziele festlegen
+                  </p>
+                )}
+                <PSFSPanel
+                  goals={goals}
+                  ratings={ratings}
+                  onAddGoal={addGoal}
+                  onDeleteGoal={deleteGoal}
+                  onRate={addRating}
+                />
+              </div>
             )}
 
             {tab === "fragebogen" && (

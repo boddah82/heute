@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import { CheckIn, PDDMAssessment, TrainingPlan, PSFSGoal, PSFSRating, Patient, PatientRecord, HistoryBundle } from "./types";
+import { CheckIn, PDDMAssessment, TrainingPlan, PSFSGoal, PSFSRating, Patient, PatientRecord, HistoryBundle, QuestionnaireResult } from "./types";
 
 const STORAGE_KEY = "rrt.checkins.v1";
 const REGION_KEY = "rrt.activeRegion.v1";
@@ -11,6 +11,7 @@ const PSFS_GOALS_KEY = "rrt.psfsGoals.v1";
 const PSFS_RATINGS_KEY = "rrt.psfsRatings.v1";
 const PATIENTS_KEY = "rrt.patients.v1";
 const PATIENT_RECORDS_KEY = "rrt.patientRecords.v1";
+const QUESTIONNAIRE_RESULTS_KEY = "rrt.questionnaireResults.v1";
 
 // Minimal external-store wrapper around localStorage so reads happen during
 // render (via useSyncExternalStore) instead of in an effect, and writes from
@@ -61,6 +62,7 @@ const psfsGoalsStore = createLocalStorageStore<PSFSGoal[]>(PSFS_GOALS_KEY, []);
 const psfsRatingsStore = createLocalStorageStore<PSFSRating[]>(PSFS_RATINGS_KEY, []);
 const patientsStore = createLocalStorageStore<Patient[]>(PATIENTS_KEY, []);
 const patientRecordsStore = createLocalStorageStore<PatientRecord[]>(PATIENT_RECORDS_KEY, []);
+const questionnaireResultsStore = createLocalStorageStore<QuestionnaireResult[]>(QUESTIONNAIRE_RESULTS_KEY, []);
 
 export function useCheckIns(regionId: string) {
   const all = useSyncExternalStore(
@@ -154,8 +156,37 @@ export function buildHistoryBundle(): HistoryBundle {
     pddm: pddmStore.getSnapshot(),
     psfsGoals: psfsGoalsStore.getSnapshot(),
     psfsRatings: psfsRatingsStore.getSnapshot(),
+    questionnaireResults: questionnaireResultsStore.getSnapshot(),
     exportedAt: new Date().toISOString(),
   };
+}
+
+export function useQuestionnaireResults(regionId: string) {
+  const all = useSyncExternalStore(
+    questionnaireResultsStore.subscribe,
+    questionnaireResultsStore.getSnapshot,
+    questionnaireResultsStore.getServerSnapshot
+  );
+
+  const results = useMemo(() => all.filter((r) => r.regionId === regionId), [all, regionId]);
+
+  const addResult = useCallback(
+    (result: Omit<QuestionnaireResult, "id" | "createdAt">) => {
+      const newResult: QuestionnaireResult = {
+        ...result,
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+      };
+      questionnaireResultsStore.set([newResult, ...questionnaireResultsStore.getSnapshot()]);
+    },
+    []
+  );
+
+  const deleteResult = useCallback((id: string) => {
+    questionnaireResultsStore.set(questionnaireResultsStore.getSnapshot().filter((r) => r.id !== id));
+  }, []);
+
+  return { results, addResult, deleteResult };
 }
 
 export function usePlan(regionId: string) {
@@ -284,6 +315,7 @@ export function importPatientRecord(patientId: string, bundle: HistoryBundle) {
     pddm: bundle.pddm,
     psfsGoals: bundle.psfsGoals,
     psfsRatings: bundle.psfsRatings,
+    questionnaireResults: bundle.questionnaireResults,
     importedAt: new Date().toISOString(),
   };
   const others = patientRecordsStore.getSnapshot().filter((r) => r.patientId !== patientId);

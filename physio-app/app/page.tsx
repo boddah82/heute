@@ -17,6 +17,7 @@ import HistoryImportModal from "@/components/HistoryImportModal";
 import TherapistArea from "@/components/TherapistArea";
 import PSFSPanel from "@/components/PSFSPanel";
 import PainTrendChart from "@/components/PainTrendChart";
+import QuestionnairePanel from "@/components/QuestionnairePanel";
 import {
   useActiveRegion,
   useCheckIns,
@@ -25,6 +26,7 @@ import {
   importPlan,
   usePSFSGoals,
   usePSFSRatings,
+  useQuestionnaireResults,
   usePatients,
   importPatientRecord,
 } from "@/lib/storage";
@@ -32,7 +34,7 @@ import { readPlanFromLocation, clearPlanFromUrl } from "@/lib/planLink";
 import { readHistoryFromLocation, clearHistoryFromUrl } from "@/lib/historyLink";
 import { TrainingPlan, HistoryBundle } from "@/lib/types";
 
-type Tab = "heute" | "rechner" | "verlauf" | "pddm" | "wissen" | "ziele";
+type Tab = "heute" | "rechner" | "verlauf" | "pddm" | "wissen" | "ziele" | "fragebogen";
 type Mode = "patient" | "therapist";
 
 // Liest einen evtl. im Link enthaltenen Plan/Verlauf synchron beim ersten
@@ -61,6 +63,7 @@ export default function Home() {
   const { plan } = usePlan(regionId);
   const { goals, addGoal, deleteGoal } = usePSFSGoals(regionId);
   const { ratings, addRating } = usePSFSRatings(regionId);
+  const { results: questionnaireResults, addResult: addQuestionnaireResult, deleteResult: deleteQuestionnaireResult } = useQuestionnaireResults(regionId);
   const { patients, addPatient, deletePatient } = usePatients();
   const [tab, setTab] = useState<Tab>("heute");
   const [mode, setMode] = useState<Mode>("patient");
@@ -151,6 +154,7 @@ export default function Home() {
             { id: "pddm" as Tab, label: "Bereiche" },
             { id: "wissen" as Tab, label: "Wissen" },
             { id: "ziele" as Tab, label: "Ziele" },
+            { id: "fragebogen" as Tab, label: "Fragebögen" },
           ].map((t) => (
             <button
               key={t.id}
@@ -250,6 +254,15 @@ export default function Home() {
                 onAddGoal={addGoal}
                 onDeleteGoal={deleteGoal}
                 onRate={addRating}
+              />
+            )}
+
+            {tab === "fragebogen" && (
+              <QuestionnairePanel
+                regionId={regionId}
+                results={questionnaireResults}
+                onSubmit={addQuestionnaireResult}
+                onDelete={deleteQuestionnaireResult}
               />
             )}
           </>

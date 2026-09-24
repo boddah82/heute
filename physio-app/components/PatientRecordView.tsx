@@ -4,6 +4,7 @@ import { PatientRecord } from "@/lib/types";
 import { getRegion } from "@/lib/regions";
 import { assess } from "@/lib/trafficLight";
 import { PDDM_DOMAINS, PDDM_DOMAIN_LABELS, statusLabel } from "@/lib/pddm";
+import { QUESTIONNAIRES } from "@/lib/questionnaires";
 import TrafficLightBadge from "./TrafficLightBadge";
 
 function formatDate(iso: string) {
@@ -30,6 +31,7 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
       ...record.checkIns.map((c) => c.regionId),
       ...record.pddm.map((a) => a.regionId),
       ...record.psfsGoals.map((g) => g.regionId),
+      ...record.questionnaireResults.map((q) => q.regionId),
     ])
   );
 
@@ -48,6 +50,9 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
           .sort((a, b) => (a.date < b.date ? 1 : -1));
         const pddm = record.pddm.filter((a) => a.regionId === regionId);
         const goals = record.psfsGoals.filter((g) => g.regionId === regionId);
+        const questionnaireResults = record.questionnaireResults
+          .filter((q) => q.regionId === regionId)
+          .sort((a, b) => (a.date < b.date ? 1 : -1));
 
         return (
           <div key={regionId} className="space-y-3">
@@ -65,6 +70,21 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
                 </div>
               </div>
             ))}
+
+            {questionnaireResults.map((r) => {
+              const def = QUESTIONNAIRES[r.questionnaireId];
+              return (
+                <div key={r.id} className="bg-white rounded-lg border border-slate-200 p-4 space-y-1">
+                  <p className="text-xs text-slate-500">
+                    {def.title} vom {formatDate(r.date)}
+                  </p>
+                  <p className="text-sm text-slate-800">
+                    <span className="font-semibold">{r.totalScore}</span> / {def.scoreRange[1]}
+                    {def.interpret && <span className="text-slate-600"> · {def.interpret(r.totalScore)}</span>}
+                  </p>
+                </div>
+              );
+            })}
 
             {goals.map((goal) => {
               const ratings = record.psfsRatings

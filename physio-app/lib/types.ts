@@ -93,6 +93,23 @@ export interface PSFSRating {
   createdAt: string; // ISO timestamp
 }
 
+// Validierte Screening-Fragebögen (siehe lib/questionnaires.ts für Items,
+// Skala und Quellenangabe). Bewusst getrennt von PDDM: PDDM ist eine
+// kategoriale Grobeinschätzung durch die Therapeutin/den Therapeuten, diese
+// Fragebögen sind standardisierte Selbstauskunfts-Instrumente mit eigener
+// Auswertungslogik.
+export type QuestionnaireId = "tsk" | "fess";
+
+export interface QuestionnaireResult {
+  id: string;
+  regionId: string;
+  questionnaireId: QuestionnaireId;
+  date: string; // ISO date (yyyy-mm-dd)
+  answers: Record<string, number>; // Item-ID -> gewählter Skalenwert
+  totalScore: number;
+  createdAt: string; // ISO timestamp
+}
+
 // Mandant/Patient im Therapeuten-Bereich. Enthält selbst keine Trackingdaten –
 // die kommen ausschließlich per Verlauf-Link vom Patientengerät (siehe
 // PatientRecord). Getrennt vom eigenen Tracker-Gebrauch des Therapeuten.
@@ -111,6 +128,7 @@ export interface PatientRecord {
   pddm: PDDMAssessment[];
   psfsGoals: PSFSGoal[];
   psfsRatings: PSFSRating[];
+  questionnaireResults: QuestionnaireResult[];
   importedAt: string; // ISO timestamp
 }
 
@@ -121,5 +139,6 @@ export interface HistoryBundle {
   pddm: PDDMAssessment[];
   psfsGoals: PSFSGoal[];
   psfsRatings: PSFSRating[];
+  questionnaireResults: QuestionnaireResult[];
   exportedAt: string; // ISO timestamp
 }

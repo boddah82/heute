@@ -33,3 +33,22 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Druckansicht für Fragebögen (siehe components/QuestionnairePrintable.tsx):
+   im Bildschirm normal eingebettet in ein Modal, beim Drucken wird der Rest
+   der App ausgeblendet und nur der Fragebogen selbst gedruckt. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-questionnaire,
+  #printable-questionnaire * {
+    visibility: visible;
+  }
+  #printable-questionnaire {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+}

@@ -5,6 +5,7 @@ import { getRegion } from "@/lib/regions";
 import { assess } from "@/lib/trafficLight";
 import { PDDM_DOMAINS, PDDM_DOMAIN_LABELS, statusLabel } from "@/lib/pddm";
 import { QUESTIONNAIRES } from "@/lib/questionnaires";
+import { OEREBRO_SCORE_RANGE, OEREBRO_CUTOFF } from "@/lib/oerebro";
 import TrafficLightBadge from "./TrafficLightBadge";
 
 function formatDate(iso: string) {
@@ -72,6 +73,20 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
             ))}
 
             {questionnaireResults.map((r) => {
+              if (r.questionnaireId === "oerebro") {
+                return (
+                  <div key={r.id} className="bg-white rounded-lg border border-slate-200 p-4 space-y-1">
+                    <p className="text-xs text-slate-500">Örebro-Fragebogen vom {formatDate(r.date)}</p>
+                    <p className="text-sm text-slate-800">
+                      <span className="font-semibold">{r.totalScore}</span> / {OEREBRO_SCORE_RANGE[1]}
+                      <span className="text-slate-600">
+                        {" "}
+                        · {r.totalScore > OEREBRO_CUTOFF ? `über Cut-off ${OEREBRO_CUTOFF}` : `unter Cut-off ${OEREBRO_CUTOFF}`}
+                      </span>
+                    </p>
+                  </div>
+                );
+              }
               const def = QUESTIONNAIRES[r.questionnaireId];
               return (
                 <div key={r.id} className="bg-white rounded-lg border border-slate-200 p-4 space-y-1">

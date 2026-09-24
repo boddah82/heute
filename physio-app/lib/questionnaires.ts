@@ -104,8 +104,10 @@ const FESS: QuestionnaireDef = {
     "Mangels, M., Schwarz, S., Sohr, G., Holme, M., & Rief, W. (2009). Der Fragebogen zur Erfassung der schmerzspezifischen Selbstwirksamkeit (FESS) – Eine Adaptation des Pain Self Efficacy Questionnaire für den deutschen Sprachraum. Diagnostica, 55(2), 84–93.",
 };
 
-export const QUESTIONNAIRES: Record<QuestionnaireId, QuestionnaireDef> = { tsk: TSK, fess: FESS };
-export const QUESTIONNAIRE_IDS: QuestionnaireId[] = ["tsk", "fess"];
+// Örebro passt wegen Mehrfachauswahl (Schmerzstellen) und Kategorie-Items
+// nicht in dieses generische Einzelskalen-Schema – siehe lib/oerebro.ts.
+export const QUESTIONNAIRES: Record<Exclude<QuestionnaireId, "oerebro">, QuestionnaireDef> = { tsk: TSK, fess: FESS };
+export const QUESTIONNAIRE_IDS: Exclude<QuestionnaireId, "oerebro">[] = ["tsk", "fess"];
 
 export function scoreQuestionnaire(def: QuestionnaireDef, answers: Record<string, number>): number {
   return def.items.reduce((sum, item) => sum + (answers[item.id] ?? 0), 0);

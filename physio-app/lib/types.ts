@@ -98,14 +98,16 @@ export interface PSFSRating {
 // kategoriale Grobeinschätzung durch die Therapeutin/den Therapeuten, diese
 // Fragebögen sind standardisierte Selbstauskunfts-Instrumente mit eigener
 // Auswertungslogik.
-export type QuestionnaireId = "tsk" | "fess";
+export type QuestionnaireId = "tsk" | "fess" | "oerebro";
 
 export interface QuestionnaireResult {
   id: string;
   regionId: string;
   questionnaireId: QuestionnaireId;
   date: string; // ISO date (yyyy-mm-dd)
-  answers: Record<string, number>; // Item-ID -> gewählter Skalenwert
+  // Item-ID -> gewählter Rohwert. null nur bei Örebro-Items mit
+  // "nicht berufstätig"-Option (zählt nicht in die Gesamtpunktzahl).
+  answers: Record<string, number | null>;
   totalScore: number;
   createdAt: string; // ISO timestamp
 }

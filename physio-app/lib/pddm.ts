@@ -316,14 +316,17 @@ export function domainRecommendation(domain: PDDMDomainId, result: PDDMDomainRes
       : "Schmerz lässt sich nicht eindeutig über Bewegung steuern – ärztliche Abklärung in Betracht ziehen, falls noch nicht erfolgt.";
   }
   if (domain === "nervousSystem") {
-    return result.status === "A"
-      ? "Hinweise auf eine periphere Nervenbeteiligung – Verlauf der Ausstrahlung/Sensibilität im Blick behalten."
-      : "Hinweise auf ein sensibilisiertes Nervensystem (zentrale Sensibilisierung / nozizeptiv-plastischer Schmerz) – Schmerzedukation und behutsame, graduelle Belastungssteigerung sind hier oft hilfreicher als reine Struktur-Übungen.";
+    if (result.status === "B") {
+      return "Hinweise auf ein sensibilisiertes Nervensystem (zentrale Sensibilisierung / nozizeptiv-plastischer Schmerz) – Schmerzedukation und behutsame, graduelle Belastungssteigerung sind hier oft hilfreicher als reine Struktur-Übungen.";
+    }
+    return result.subtype === "central_sensitization"
+      ? "Erste, noch milde Hinweise auf eine Sensibilisierung des Nervensystems – im Verlauf beobachten, Schmerzedukation kann schon jetzt hilfreich sein."
+      : "Hinweise auf eine periphere Nervenbeteiligung – Verlauf der Ausstrahlung/Sensibilität im Blick behalten.";
   }
   if (domain === "comorbidities") {
     return result.status === "A"
-      ? "Andere körperliche Beschwerden bei der Trainingsplanung mitdenken."
-      : "Psychische Belastung erkennbar – ein Gespräch mit Arzt oder Psychotherapeut kann den Reha-Verlauf unterstützen.";
+      ? "Andere körperliche Beschwerden oder ein belastender Alltag bei der Trainingsplanung mitdenken."
+      : "Schlaf, Stress oder Aktivitätsniveau belasten die Erholung deutlich – ansprechen, ob ärztliche oder psychologische Unterstützung sinnvoll ist.";
   }
   if (domain === "cognitiveEmotional") {
     return result.status === "A"

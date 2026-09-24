@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Patient } from "@/lib/types";
-import { usePlan, usePatientRecord } from "@/lib/storage";
+import { usePlan, usePatientRecord, buildHistoryBundle, importPatientRecord } from "@/lib/storage";
 import RegionSelector from "./RegionSelector";
 import PlanBuilder from "./PlanBuilder";
 import PatientRecordView from "./PatientRecordView";
@@ -43,6 +43,13 @@ export default function TherapistArea({
   const [subTab, setSubTab] = useState<SubTab>("mandanten");
   const [newName, setNewName] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [imported, setImported] = useState(false);
+
+  function importOwnDeviceData(patientId: string) {
+    importPatientRecord(patientId, buildHistoryBundle());
+    setImported(true);
+    setTimeout(() => setImported(false), 2000);
+  }
 
   function addPatient(e: React.FormEvent) {
     e.preventDefault();
@@ -142,6 +149,20 @@ export default function TherapistArea({
                   </button>
                 )}
               </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => importOwnDeviceData(activePatient.id)}
+                  className="text-xs font-medium text-brand-700 underline underline-offset-2"
+                >
+                  Eigene Testdaten dieses Geräts übernehmen
+                </button>
+                {imported && <span className="text-xs text-emerald-700">Importiert ✓</span>}
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Nur zum Testen: übernimmt Deinen eigenen Tracking-Stand (Heute/Bereiche/Ziele/Fragebögen auf diesem
+                Gerät) direkt in diesen Mandanten, ohne Link – ersetzt einen evtl. vorhandenen echten Verlauf.
+              </p>
 
               {activeRecord ? (
                 <PatientRecordView record={activeRecord} />

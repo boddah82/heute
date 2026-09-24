@@ -25,7 +25,8 @@ export interface PDDMQuestion {
   domain: PDDMDomainId;
   type: PDDMQuestionType;
   text: string;
-  scaleLabels?: [string, string, string]; // aufsteigend nach Auffälligkeit, außer bei "activity" (siehe Auswertung)
+  scaleLabels?: [string, string, string]; // aufsteigend nach Auffälligkeit, außer bei reversed
+  reversed?: boolean; // erste Stufe ist die auffällige (z. B. wenig Aktivität)
   placeholder?: string; // für type "text"
   optional?: boolean; // nicht Pflicht zum Absenden (Freitextfelder)
 }
@@ -113,6 +114,7 @@ export const PDDM_QUESTIONS: PDDMQuestion[] = [
     type: "scale3",
     text: "Wie viele Tage pro Woche bewegen Sie sich mindestens 30 Minuten?",
     scaleLabels: ["0–1 Tag", "2–3 Tage", "4+ Tage"],
+    reversed: true,
   },
   {
     id: "comorbidities.conditions",
@@ -217,12 +219,12 @@ function activityLevel(v: string | undefined): 0 | 1 | 2 {
 function evalNociceptive(a: Record<string, string>): PDDMDomainResult {
   const ids = ["nociceptive.aggravating", "nociceptive.relief", "nociceptive.stiffness", "nociceptive.delayed"];
   if (ids.every((id) => a[id] === undefined)) return { status: "NONE" };
-  const aggravating = isYes(a["nociceptive.aggravating"]);
-  const relief = isYes(a["nociceptive.relief"]);
-  // Kein klarer Bezug zu Bewegung/Position -> schwerer allein über
-  // Belastungssteuerung zu adressieren (entspricht der früheren nociceptive.b).
-  if (!aggravating && !relief) return { status: "B" };
-  return { status: "A" };
+  // Irgendein mechanisch erklärbares Signal (verstärkende Bewegung, lindernde
+  // Position, Steifigkeit, verzögerte Reaktion) -> A. Erst wenn alle vier
+  // verneint werden, gibt es keinen erkennbaren Bezug zu Bewegung/Position
+  // -> B (entspricht der früheren nociceptive.b).
+  const anySignal = ids.some((id) => isYes(a[id]));
+  return anySignal ? { status: "A" } : { status: "B" };
 }
 
 function evalNervousSystem(a: Record<string, string>): PDDMDomainResult {
@@ -287,6 +289,37 @@ function evalContextual(a: Record<string, string>): PDDMDomainResult {
   return { status: "NONE" };
 }
 
+// Ist diese konkrete Antwort die auffällige Seite ihrer Frage? Bei
+// boolean-Fragen ist "Ja" auffällig (bei Nozizeptiv umgekehrt interpretiert,
+// siehe evalNociceptive: dort ist "Ja" gerade das gute/erklärbare Signal –
+// hier geht es nur um Transparenz, welche Antwort überhaupt vom neutralen
+// Standardfall abweicht, nicht um Wertung).
+function isFlaggedAnswer(question: PDDMQuestion, value: string): boolean {
+  if (question.type === "boolean") return value === "Ja";
+  if (question.type === "scale3" && question.scaleLabels) {
+    const benign = question.reversed ? question.scaleLabels[2] : question.scaleLabels[0];
+    return value !== benign;
+  }
+  return false;
+}
+
+// Liefert die konkreten Antworten, die den Domänen-Befund ausgelöst haben –
+// für die Anzeige "weil: ..." in der Auswertung, damit nachvollziehbar ist,
+// worauf sich A/B stützt, statt nur das Label zu zeigen.
+export function explainDomain(domain: PDDMDomainId, answers: Record<string, string>): { text: string; value: string }[] {
+  const reasons = PDDM_QUESTIONS.filter((q) => q.domain === domain && q.type !== "text")
+    .filter((q) => answers[q.id] !== undefined && isFlaggedAnswer(q, answers[q.id]))
+    .map((q) => ({ text: q.text, value: answers[q.id] }));
+
+  // Nozizeptiv-B entsteht gerade dadurch, dass keine der vier Fragen mit
+  // "Ja" beantwortet wurde – dann ist die Liste sonst leer, obwohl es eine
+  // klare Begründung gibt.
+  if (reasons.length === 0 && domain === "nociceptive" && answers["nociceptive.aggravating"] !== undefined) {
+    return [{ text: "Bewegung/Position beeinflusst den Schmerz nicht erkennbar", value: "alle vier Fragen verneint" }];
+  }
+  return reasons;
+}
+
 export function evaluatePDDM(answers: Record<string, string>): Record<PDDMDomainId, PDDMDomainResult> {
   return {
     nociceptive: evalNociceptive(answers),
@@ -312,31 +345,31 @@ export function domainRecommendation(domain: PDDMDomainId, result: PDDMDomainRes
 
   if (domain === "nociceptive") {
     return result.status === "A"
-      ? "Übungen gezielt in die Richtung wählen, die Erleichterung bringt."
-      : "Schmerz lässt sich nicht eindeutig über Bewegung steuern – ärztliche Abklärung in Betracht ziehen, falls noch nicht erfolgt.";
+      ? "Belastung in die Richtung steigern, die den Schmerz lindert oder unverändert lässt; die Bewegung/Position, die ihn sofort auslöst, vorerst reduzieren oder anpassen (Umfang, Winkel, Tempo)."
+      : "Kein klarer Zusammenhang zwischen Bewegung/Position und Schmerz erkennbar – vor weiterer Belastungssteigerung eine ärztliche Abklärung in Betracht ziehen, falls noch nicht erfolgt.";
   }
   if (domain === "nervousSystem") {
     if (result.status === "B") {
-      return "Hinweise auf ein sensibilisiertes Nervensystem (zentrale Sensibilisierung / nozizeptiv-plastischer Schmerz) – Schmerzedukation und behutsame, graduelle Belastungssteigerung sind hier oft hilfreicher als reine Struktur-Übungen.";
+      return "Vor intensiven Struktur-Übungen zuerst Schmerzedukation anbieten (Schmerz ist nicht gleich Gewebeschaden) und die Belastung in kleinen, gut tolerierten Schritten statt schnell steigern.";
     }
     return result.subtype === "central_sensitization"
-      ? "Erste, noch milde Hinweise auf eine Sensibilisierung des Nervensystems – im Verlauf beobachten, Schmerzedukation kann schon jetzt hilfreich sein."
-      : "Hinweise auf eine periphere Nervenbeteiligung – Verlauf der Ausstrahlung/Sensibilität im Blick behalten.";
+      ? "Noch milde Sensibilisierungszeichen – bei der nächsten Einschätzung erneut abfragen, ob sie zunehmen; einfache Schmerzedukation kann schon jetzt helfen."
+      : "Verlauf von Ausstrahlung, Kribbeln oder Taubheit über die nächsten Termine dokumentieren; bei Verschlechterung oder neuen Ausfällen ärztlich abklären lassen.";
   }
   if (domain === "comorbidities") {
     return result.status === "A"
-      ? "Andere körperliche Beschwerden oder ein belastender Alltag bei der Trainingsplanung mitdenken."
-      : "Schlaf, Stress oder Aktivitätsniveau belasten die Erholung deutlich – ansprechen, ob ärztliche oder psychologische Unterstützung sinnvoll ist.";
+      ? "Diagnosen/Beschwerden bei der Übungsauswahl berücksichtigen (z. B. Kontraindikationen prüfen); Aktivitätsniveau im Auge behalten."
+      : "Schlaf, Stresslevel oder Aktivitätsniveau aktiv ansprechen; bei anhaltend starker Belastung Rücksprache mit Hausarzt oder Psychotherapeut anregen, parallel zur Physiotherapie.";
   }
   if (domain === "cognitiveEmotional") {
     return result.status === "A"
-      ? "Offene Fragen oder Sorgen zum Schmerz ansprechen und Informationen dazu einholen."
-      : "Das Verhalten (Vermeidung oder Übertreiben) beeinflusst den Verlauf – gezieltes, schrittweises Belastungsmanagement und ggf. psychologische Unterstützung sind sinnvoll.";
+      ? "Konkret nachfragen, was genau die Sorge auslöst, und mit verständlicher Information dagegenhalten (Schmerz ist nicht gleich Gewebeschaden)."
+      : "Vermeidungs- oder Übertreibungsverhalten aktiv ansprechen; graduelle, gemeinsam geplante Belastungssteigerung statt reiner Ansagen; bei ausgeprägter Symptomatik psychologische Unterstützung vorschlagen.";
   }
   if (domain === "contextual") {
     return result.status === "A"
-      ? "Arbeitsbezogene Belastung als möglichen Reiz mittracken."
-      : "Umfeldfaktoren jenseits der Arbeit spielen eine Rolle – ggf. zusätzliche Unterstützung (Beratung, Angehörige einbeziehen) sinnvoll.";
+      ? "Arbeitsbezogene Belastungsspitzen als möglichen Reiz mittracken (z. B. im Notizfeld beim Check-in vermerken)."
+      : "Mit dem Patienten besprechen, welche Unterstützung im Umfeld sinnvoll wäre; Erwartungen zwischen Patient und Umfeld aktiv klären, ggf. gemeinsames Gespräch anregen.";
   }
   return null;
 }

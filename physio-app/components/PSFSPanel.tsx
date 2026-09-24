@@ -46,7 +46,7 @@ function GoalCard({
       <div>
         <div className="flex items-center justify-between mb-1">
           <label className="text-sm font-medium text-slate-700">
-            Wie nah bist Du dran, &quot;{goal.label}&quot; wieder so gut zu können wie vor der Beschwerde?
+            Wie nah bist Du dran, &quot;{goal.label}&quot; wieder zu können?
           </label>
           <span className="text-sm font-semibold text-slate-900 tabular-nums shrink-0 ml-2">{value}/10</span>
         </div>
@@ -60,7 +60,7 @@ function GoalCard({
         />
         <div className="flex justify-between text-xs text-slate-400 mt-1">
           <span>0 = aktuell gar nicht möglich</span>
-          <span>10 = genau wie vor der Beschwerde</span>
+          <span>10 = wieder möglich</span>
         </div>
       </div>
 
@@ -126,7 +126,7 @@ export default function PSFSPanel({
           Nenne 2-5 konkrete Alltags- oder Sportaktivitäten, die Dir wirklich wichtig sind – nicht was
           andere für wichtig halten (z. B. &quot;Schraubglas aufschrauben&quot;, &quot;Bouldern&quot;,
           &quot;mit links eine Tasse halten&quot;). Bewerte dann regelmäßig, wie nah Du daran bist, das
-          wieder wie vor der Beschwerde zu können.
+          wieder zu können.
         </p>
 
         {goals.length < MAX_GOALS ? (

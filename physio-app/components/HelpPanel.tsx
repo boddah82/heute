@@ -33,7 +33,7 @@ const SECTIONS: { title: string; body: string }[] = [
   },
   {
     title: "Tab \"Ziele\" (PSFS)",
-    body: "Nenne 2-5 für Dich persönlich bedeutsame Aktivitäten (z. B. \"Schraubglas aufschrauben\", \"Bouldern\") – nicht was andere für wichtig halten. Bewerte regelmäßig auf einer Skala 0-10, wie nah Du daran bist, das wieder wie vor der Beschwerde zu können. So siehst Du Fortschritt bei dem, was Dir wirklich wichtig ist, nicht nur beim Schmerzwert.",
+    body: "Nenne 2-5 für Dich persönlich bedeutsame Aktivitäten (z. B. \"Schraubglas aufschrauben\", \"Bouldern\") – nicht was andere für wichtig halten. Bewerte regelmäßig auf einer Skala 0-10, wie nah Du daran bist, das wieder zu können. So siehst Du Fortschritt bei dem, was Dir wirklich wichtig ist, nicht nur beim Schmerzwert.",
   },
   {
     title: "Tab \"Plan\" (für Therapeutinnen/Therapeuten)",

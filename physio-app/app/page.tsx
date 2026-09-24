@@ -17,6 +17,7 @@ import HistoryImportModal from "@/components/HistoryImportModal";
 import TherapistArea from "@/components/TherapistArea";
 import PSFSPanel from "@/components/PSFSPanel";
 import PainTrendChart from "@/components/PainTrendChart";
+import PDDMPainTrendChart from "@/components/PDDMPainTrendChart";
 import QuestionnairePanel from "@/components/QuestionnairePanel";
 import {
   useActiveRegion,
@@ -232,9 +233,12 @@ export default function Home() {
                       Noch keine Einschätzung für diesen Bereich. Eine Wiederholung alle ca. 4 Wochen reicht aus.
                     </p>
                   ) : (
-                    assessments.map((a) => (
-                      <PDDMResultCard key={a.id} assessment={a} onDelete={deleteAssessment} />
-                    ))
+                    <>
+                      <PDDMPainTrendChart assessments={assessments} />
+                      {assessments.map((a) => (
+                        <PDDMResultCard key={a.id} assessment={a} onDelete={deleteAssessment} />
+                      ))}
+                    </>
                   )}
                 </div>
               ))}

@@ -7,6 +7,7 @@ import { PDDM_DOMAINS, PDDM_DOMAIN_LABELS, statusLabel } from "@/lib/pddm";
 import { QUESTIONNAIRES } from "@/lib/questionnaires";
 import { OEREBRO_SCORE_RANGE, OEREBRO_CUTOFF } from "@/lib/oerebro";
 import TrafficLightBadge from "./TrafficLightBadge";
+import PDDMPainTrendChart from "./PDDMPainTrendChart";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("de-DE", {
@@ -59,9 +60,21 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
           <div key={regionId} className="space-y-3">
             <h3 className="font-semibold text-slate-900">{region.label}</h3>
 
+            {pddm.filter((a) => a.painBaseline).length > 1 && (
+              <div className="bg-white rounded-lg border border-slate-200 p-4">
+                <PDDMPainTrendChart assessments={pddm} />
+              </div>
+            )}
+
             {pddm.map((a) => (
               <div key={a.id} className="bg-white rounded-lg border border-slate-200 p-4 space-y-2">
                 <p className="text-xs text-slate-500">Bereichs-Einschätzung vom {formatDate(a.date)}</p>
+                {a.painBaseline && (
+                  <p className="text-sm text-slate-700">
+                    Schmerz: aktuell {a.painBaseline.current} · Ø 4 Wochen {a.painBaseline.avg4Weeks} · max.
+                    Belastung {a.painBaseline.maxLoad}
+                  </p>
+                )}
                 <div className="space-y-1">
                   {PDDM_DOMAINS.filter((d) => a.results[d].status !== "NONE").map((d) => (
                     <p key={d} className="text-sm text-slate-700">

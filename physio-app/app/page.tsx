@@ -254,6 +254,19 @@ export default function Home() {
                     </p>
                   ) : (
                     <>
+                      {goals.length === 0 && (
+                        <div className="bg-brand-50 border border-brand-200 rounded-lg p-3 flex items-center justify-between gap-3">
+                          <p className="text-sm text-brand-900">
+                            Nächster Schritt: Lege Deine Ziele fest – damit werden die Empfehlungen oben konkreter.
+                          </p>
+                          <button
+                            onClick={() => setTab("ziele")}
+                            className="shrink-0 rounded-md bg-brand-700 text-white text-xs font-medium px-3 py-1.5 hover:bg-brand-800 transition"
+                          >
+                            Zu den Zielen
+                          </button>
+                        </div>
+                      )}
                       <PDDMPainTrendChart assessments={assessments} />
                       {assessments.map((a) => (
                         <PDDMResultCard key={a.id} assessment={a} onDelete={deleteAssessment} />

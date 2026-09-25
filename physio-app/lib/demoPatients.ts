@@ -123,9 +123,9 @@ function pddmAnswersFor(patientId: DemoPatientDefinition["id"]): Record<string, 
 }
 
 function painBaselineFor(patientId: DemoPatientDefinition["id"]): PDDMPainBaseline {
-  if (patientId === "patientA") return { current: 6, avg4Weeks: 7, maxLoad: 9 };
-  if (patientId === "patientB") return { current: 3, avg4Weeks: 4, maxLoad: 6 };
-  return { current: 1, avg4Weeks: 2, maxLoad: 3 };
+  if (patientId === "patientA") return { current: 6, avg4Weeks: 7, maxLoad: 9, afterMaxLoad: 7 };
+  if (patientId === "patientB") return { current: 3, avg4Weeks: 4, maxLoad: 6, afterMaxLoad: 4 };
+  return { current: 1, avg4Weeks: 2, maxLoad: 3, afterMaxLoad: 1 };
 }
 
 export function buildDemoPatientData(

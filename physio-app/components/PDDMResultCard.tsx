@@ -45,7 +45,7 @@ export default function PDDMResultCard({
       </div>
 
       {assessment.painBaseline && (
-        <div className="grid grid-cols-3 gap-2 text-center pb-2 border-b border-slate-100">
+        <div className="grid grid-cols-4 gap-2 text-center pb-2 border-b border-slate-100">
           <div>
             <p className="text-lg font-semibold text-slate-900">{assessment.painBaseline.current}</p>
             <p className="text-[11px] text-slate-500">Aktuell</p>
@@ -57,6 +57,10 @@ export default function PDDMResultCard({
           <div>
             <p className="text-lg font-semibold text-slate-900">{assessment.painBaseline.maxLoad}</p>
             <p className="text-[11px] text-slate-500">Max. Belastung</p>
+          </div>
+          <div>
+            <p className="text-lg font-semibold text-slate-900">{assessment.painBaseline.afterMaxLoad ?? "–"}</p>
+            <p className="text-[11px] text-slate-500">Danach</p>
           </div>
         </div>
       )}

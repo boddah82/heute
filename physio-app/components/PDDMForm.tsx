@@ -38,6 +38,7 @@ export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
   const [current, setCurrent] = useState(0);
   const [avg4Weeks, setAvg4Weeks] = useState(0);
   const [maxLoad, setMaxLoad] = useState(0);
+  const [afterMaxLoad, setAfterMaxLoad] = useState(0);
 
   function setAnswer(id: string, value: string) {
     setAnswers((prev) => ({ ...prev, [id]: value }));
@@ -46,7 +47,7 @@ export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const results = evaluatePDDM(answers);
-    onSubmit({ regionId, date: today(), answers, results, painBaseline: { current, avg4Weeks, maxLoad } });
+    onSubmit({ regionId, date: today(), answers, results, painBaseline: { current, avg4Weeks, maxLoad, afterMaxLoad } });
     onDone();
   }
 
@@ -65,6 +66,11 @@ export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
         <PainSliderRow label="Schmerz aktuell" value={current} onChange={setCurrent} />
         <PainSliderRow label="Schmerz im Durchschnitt (letzte 4 Wochen)" value={avg4Weeks} onChange={setAvg4Weeks} />
         <PainSliderRow label="Schmerz bei maximaler Belastung" value={maxLoad} onChange={setMaxLoad} />
+        <PainSliderRow
+          label="Schmerz nach maximaler Belastung (danach/am Folgetag)"
+          value={afterMaxLoad}
+          onChange={setAfterMaxLoad}
+        />
       </div>
 
       {PDDM_DOMAINS.map((domain) => (

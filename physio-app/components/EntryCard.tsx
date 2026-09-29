@@ -17,12 +17,14 @@ export default function EntryCard({
   entry,
   onUpdate,
   onDelete,
+  defaultFollowUpOpen,
 }: {
   entry: CheckIn;
   onUpdate: (id: string, patch: Partial<CheckIn>) => void;
   onDelete: (id: string) => void;
+  defaultFollowUpOpen?: boolean;
 }) {
-  const [editingFollowUp, setEditingFollowUp] = useState(false);
+  const [editingFollowUp, setEditingFollowUp] = useState(!!defaultFollowUpOpen);
   const [pain24h, setPain24h] = useState(entry.pain24h ?? entry.painAfter);
   const [pain48h, setPain48h] = useState(entry.pain48h ?? entry.painAfter);
   const a = assess(entry);

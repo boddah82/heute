@@ -11,6 +11,7 @@ import {
 import RegionSelector from "./RegionSelector";
 import CheckInForm from "./CheckInForm";
 import EntryCard from "./EntryCard";
+import OpenFollowUpsBanner from "./OpenFollowUpsBanner";
 import PDDMForm from "./PDDMForm";
 import PDDMResultCard from "./PDDMResultCard";
 import PSFSPanel from "./PSFSPanel";
@@ -72,6 +73,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
               Schritt 3 von 3 – Laufendes Tracking
             </p>
           )}
+          <OpenFollowUpsBanner entries={entries} onUpdate={updateEntry} onDelete={deleteEntry} />
           <CheckInForm regionId={regionId} onSubmit={addEntry} />
         </div>
       )}

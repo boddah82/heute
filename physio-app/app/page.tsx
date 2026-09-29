@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import RegionSelector from "@/components/RegionSelector";
 import CheckInForm from "@/components/CheckInForm";
+import OpenFollowUpsBanner from "@/components/OpenFollowUpsBanner";
 import EntryCard from "@/components/EntryCard";
 import PDDMForm from "@/components/PDDMForm";
 import PDDMResultCard from "@/components/PDDMResultCard";
@@ -208,6 +209,7 @@ export default function Home() {
                     Schritt 3 von 3 – Laufendes Tracking
                   </p>
                 )}
+                <OpenFollowUpsBanner entries={entries} onUpdate={updateEntry} onDelete={deleteEntry} />
                 <CheckInForm regionId={regionId} planExercises={plan?.exercises} onSubmit={addEntry} />
               </div>
             )}

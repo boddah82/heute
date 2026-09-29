@@ -30,6 +30,7 @@ const settings = Object.assign(
   { lang: 'it', newWords: 30, newSentences: 10, rate: 0.9, enVariant: 'en-GB', voices: {} },
   load('sl.settings', {})
 );
+settings.profile = Object.assign({ name: '', gender: 'm', origin: 'de', city: '', ts: 0 }, settings.profile);
 function saveSettings() { save('sl.settings', settings); }
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -54,23 +55,48 @@ function parseLines(text) {
 const starterCache = {};
 function starterWords(lang) {
   if (!starterCache[lang]) {
-    starterCache[lang] = parseLines(window.STARTER[lang].words).map(([t, d]) => ({ id: 'w:' + t, t, d }));
+    const seen = new Set();
+    starterCache[lang] = parseLines(window.STARTER[lang].words + '\n' + (window.STARTER[lang].more || ''))
+      .map(([t, d]) => ({ id: 'w:' + t, t, d }))
+      .filter(w => !seen.has(w.id) && seen.add(w.id));
   }
   return starterCache[lang];
 }
 
+// Vorlagen-Inseln bekommen feste IDs, damit sie sich zwischen Geräten nicht verdoppeln.
+function starterIslands(lang) {
+  return window.STARTER[lang].islands.map((isl, i) => ({
+    id: `st-${lang}-${i}`,
+    title: isl.title,
+    ts: 0,
+    sentences: parseLines(isl.sentences).map(([t, d], j) => ({ id: `s:st-${lang}-${i}-${j}`, t, d, ts: 0 })),
+  }));
+}
 function stateKey(lang) { return 'sl.data.' + lang; }
+function emptyState() {
+  return { words: [], islands: [], srs: {}, notes: {}, noteTs: {}, overrides: {}, log: {}, deleted: {}, builderVerbs: [], resetAt: 0 };
+}
 function loadState(lang) {
   let s = load(stateKey(lang), null);
   if (!s) {
-    s = { words: [], islands: [], srs: {}, notes: {}, log: {} };
-    s.islands = window.STARTER[lang].islands.map(isl => ({
-      id: uid(),
-      title: isl.title,
-      sentences: parseLines(isl.sentences).map(([t, d]) => ({ id: 's:' + uid(), t, d })),
-    }));
+    s = emptyState();
+    s.islands = starterIslands(lang);
     save(stateKey(lang), s);
+    return s;
   }
+  s = Object.assign(emptyState(), s);
+  // Alte Version: Vorlagen-Inseln hatten zufällige IDs -> auf feste IDs umstellen
+  starterIslands(lang).forEach((st, i) => {
+    const isl = s.islands[i];
+    if (!isl || isl.id === st.id || isl.title !== st.title || s.islands.some(x => x.id === st.id)) return;
+    isl.id = st.id;
+    isl.sentences.forEach((sen, j) => {
+      const ref = st.sentences[j];
+      if (!ref || sen.t !== ref.t || sen.id === ref.id) return;
+      if (s.srs[sen.id]) { s.srs[ref.id] = s.srs[sen.id]; delete s.srs[sen.id]; }
+      sen.id = ref.id;
+    });
+  });
   return s;
 }
 let state = loadState(settings.lang);
@@ -100,7 +126,36 @@ function streak() {
 }
 
 // ---------- Inhalte ----------
-function allWords() { return starterWords(settings.lang).concat(state.words); }
+function allWords() {
+  return starterWords(settings.lang).concat(state.words).map(w => {
+    const o = state.overrides[w.id];
+    return o ? Object.assign({}, w, { t: o.t || w.t, d: o.d || w.d, fixed: true }) : w;
+  });
+}
+function markDeleted(id) { state.deleted[id] = Date.now(); }
+function setNote(id, text) {
+  if ((state.notes[id] || '') === text) return;
+  if (text) state.notes[id] = text; else delete state.notes[id];
+  state.noteTs[id] = Date.now();
+}
+// Übersetzung eines Worts korrigieren (auch mitgelieferte Wörter)
+function correctWord(id, done) {
+  const w = wordById(id);
+  if (!w) return;
+  const t = prompt(LANGS[settings.lang].name + ':', w.t);
+  if (t === null) return;
+  const d = prompt('Deutsch:', w.d);
+  if (d === null) return;
+  if (id.startsWith('u:')) {
+    const own = state.words.find(x => x.id === id);
+    own.t = t.trim() || own.t; own.d = d.trim() || own.d; own.ts = Date.now();
+  } else {
+    state.overrides[id] = { t: t.trim(), d: d.trim(), ts: Date.now() };
+  }
+  persist();
+  toast('Korrigiert');
+  done && done();
+}
 function wordById(id) { return allWords().find(w => w.id === id); }
 function allSentences() {
   const out = [];
@@ -128,6 +183,7 @@ function grade(id, r) {
     else { c.iv = c.iv < 1 ? 3 : Math.round(Math.max(c.iv, 3) * c.ef * 1.3); c.ef += 0.15; }
     c.reps++; c.due = t + c.iv;
   }
+  c.ts = Date.now();
   state.srs[id] = c;
   const l = dayLog();
   l.reviews++;
@@ -287,7 +343,7 @@ function recallSession(root, ids, cfg) {
         <button class="btn primary grow" id="reveal">Aufdecken</button>
       </div>
       <div id="post" hidden class="stack">
-        <button class="btn" id="replay" style="width:100%">🔊 Nochmal hören</button>
+        <div class="row"><button class="btn grow" id="replay">🔊 Nochmal hören</button>${cfg.correct ? '<button class="btn" id="fix">✎ Korrigieren</button>' : ''}</div>
         <div class="rate">
           <button class="btn again" data-r="0">Nochmal</button>
           <button class="btn hard" data-r="1">Schwer</button>
@@ -321,6 +377,7 @@ function recallSession(root, ids, cfg) {
     };
     $('#reveal', root).onclick = reveal;
     $('#replay', root).onclick = () => speak(it.t);
+    if (cfg.correct) $('#fix', root).onclick = () => cfg.correct(id, () => { const n = cfg.get(id); if (n) { it.t = n.t; it.d = n.d; $('#answer .' + cfg.big, root).textContent = n.t; $('.native', root).textContent = n.d; } });
     $$('.rate .btn', root).forEach(b => { b.onclick = () => rate(Number(b.dataset.r)); });
     if ($('#hint', root)) $('#hint', root).onclick = () => { $('#hint-t', root).hidden = false; };
     if ($('#say', root)) {
@@ -375,6 +432,10 @@ views.home = function (root) {
       <div class="stat"><b>${sentencesInTraining}</b><span>Sätze im Training</span></div>
       <div class="stat"><b>${l.reviews}</b><span>Abfragen heute</span></div>
     </div>
+    <a class="card step" href="#builder/${learnedWords < 300 ? 'modal' : 'drill'}">
+      <div class="num">🧱</div>
+      <div class="grow"><b>Satzbaukasten</b><div class="meta">${learnedWords < 300 ? 'Für den Start: mit wenigen Mustern erste Gespräche führen' : 'Drill: zufällige Sätze laut bilden'} · heute ${l.drill || 0} Sätze</div></div>
+      <div>›</div></a>
     <h2>Tagesablauf (~30 Min.)</h2>
     ${STEPS.map((s, i) => {
       const m = minutesToday(s.key);
@@ -386,7 +447,7 @@ views.home = function (root) {
     <div class="card">
       <div class="row between"><b>Jahresziel: 10.000 Wörter</b><span class="muted small">${learnedWords} / 10.000</span></div>
       <div class="progress" style="margin-top:8px"><div style="width:${Math.min(100, learnedWords / 100)}%"></div></div>
-      <p class="muted small">Mitgeliefert sind ${starterWords(settings.lang).length} Grundwörter. Für mehr: eigene Listen unter „Wörter → Eigene“ importieren.</p>
+      <p class="muted small">Mitgeliefert: ${starterWords(settings.lang).length} Wörter, nach Häufigkeit sortiert. Übersetzungen ungeprüft – Fehler mit ✎ korrigieren. Mehr unter „Wörter → Eigene“ importieren.</p>
     </div>
     <div class="row"><a class="btn grow" href="#settings">⚙️ Einstellungen & Backup</a><a class="btn grow" href="#method">📖 Methode</a></div>`;
 };
@@ -395,6 +456,7 @@ views.method = function (root) {
   root.innerHTML = `
     <h1>Die Methode</h1>
     <div class="card stack">
+      <p><b>Start: Satzbaukasten.</b> Für die ersten Wochen: wenige feste Muster über dich selbst – „Voglio / Posso / Devo / Cerco di + Infinitiv“, „Sono …“, „Mi piace …“ und Grundfragen mit Rückfrage („E tu?“). Jedes neue Verb im Infinitiv passt sofort in jedes Muster. So entstehen hunderte einfache Sätze, mit denen du erste Gespräche führen kannst.</p>
       <p><b>1. Vokabeln zuerst.</b> 30+ neue Wörter pro Tag. Zu jedem Wort ein eigenes, möglichst absurdes Bild ausdenken, das Klang und Bedeutung verbindet, und als Eselsbrücke notieren.</p>
       <p><b>2. Active Recall.</b> Du siehst Deutsch und produzierst die Fremdsprache selbst – laut, getippt oder im Kopf. Erst dann aufdecken. Die Anstrengung beim Erinnern ist der Lerneffekt.</p>
       <p><b>3. Hören.</b> Die eigenen Sprachinseln in Schleife hören, dazu echte Inhalte (Podcasts, Serien) – Zeit dafür unter „Hören“ eintragen.</p>
@@ -421,6 +483,7 @@ views.vocab = function (root, arg) {
     recallSession(pane, dueIds(isWordId), {
       big: 'target',
       emptyText: 'Keine Wörter fällig.',
+      correct: correctWord,
       get: id => { const w = wordById(id); return w && { t: w.t, d: w.d, note: state.notes[id] }; },
     });
   } else if (mode === 'own') {
@@ -455,7 +518,10 @@ function vocabNew(pane) {
     <div class="card flash">
       <div class="target">${esc(w.t)}</div>
       <div class="native">${esc(w.d)}</div>
-      <button class="btn small" id="play" style="margin-top:10px">🔊 Anhören</button>
+      <div class="row" style="justify-content:center;margin-top:10px">
+        <button class="btn small" id="play">🔊 Anhören</button>
+        <button class="btn small" id="fix" title="Übersetzung korrigieren">✎ Korrigieren</button>
+      </div>
     </div>
     <label for="note">Eselsbrücke: Welches Bild verbindet Klang und Bedeutung?</label>
     <textarea id="note" placeholder="z. B. ein absurdes Bild, das du dir vorstellst">${esc(state.notes[w.id] || '')}</textarea>
@@ -464,22 +530,20 @@ function vocabNew(pane) {
       <button class="btn primary grow" id="learned">Gelernt ✓</button>
     </div>
     <p class="muted small">Wort 2–3× laut nachsprechen. Gelernte Wörter kommen heute noch in die Abfrage.</p>`;
-  const saveNote = () => {
-    const v = $('#note', pane).value.trim();
-    if (v) state.notes[w.id] = v; else delete state.notes[w.id];
-  };
+  const saveNote = () => setNote(w.id, $('#note', pane).value.trim());
   speak(w.t);
   $('#play', pane).onclick = () => speak(w.t);
+  $('#fix', pane).onclick = () => { saveNote(); correctWord(w.id, () => vocabNew(pane)); };
   $('#known', pane).onclick = () => {
     saveNote();
     const t = today();
-    state.srs[w.id] = { iv: 21, ef: 2.5, reps: 1, lapses: 0, due: t + 21 };
+    state.srs[w.id] = { iv: 21, ef: 2.5, reps: 1, lapses: 0, due: t + 21, ts: Date.now() };
     persist();
     vocabNew(pane);
   };
   $('#learned', pane).onclick = () => {
     saveNote();
-    state.srs[w.id] = { iv: 0, ef: 2.5, reps: 0, lapses: 0, due: today() };
+    state.srs[w.id] = { iv: 0, ef: 2.5, reps: 0, lapses: 0, due: today(), ts: Date.now() };
     l.newWords++;
     persist();
     vocabNew(pane);
@@ -512,14 +576,14 @@ function vocabOwn(pane) {
     const t = $('#w-t', pane).value.trim(), d = $('#w-d', pane).value.trim();
     if (!t || !d) { toast('Beide Felder ausfüllen'); return; }
     if (exists(t)) { toast('Gibt es schon'); return; }
-    state.words.push({ id: 'u:' + uid(), t, d });
+    state.words.push({ id: 'u:' + uid(), t, d, ts: Date.now() });
     persist();
     vocabOwn(pane);
   };
   $('#w-import', pane).onclick = () => {
     const pairs = parseLines($('#w-bulk', pane).value);
     let n = 0;
-    pairs.forEach(([t, d]) => { if (!exists(t)) { state.words.push({ id: 'u:' + uid(), t, d }); n++; } });
+    pairs.forEach(([t, d]) => { if (!exists(t)) { state.words.push({ id: 'u:' + uid(), t, d, ts: Date.now() }); n++; } });
     persist();
     toast(`${n} Wörter importiert` + (pairs.length - n ? `, ${pairs.length - n} übersprungen` : ''));
     vocabOwn(pane);
@@ -530,6 +594,7 @@ function vocabOwn(pane) {
       state.words = state.words.filter(w => w.id !== id);
       delete state.srs[id];
       delete state.notes[id];
+      markDeleted(id);
       persist();
       vocabOwn(pane);
     };
@@ -732,11 +797,333 @@ views.shadow = function (root) {
   render();
 };
 
+// ---------- Satzbaukasten ----------
+function builderData() { return window.BUILDER[settings.lang]; }
+function builderVerbs() { return builderData().verbs.concat(state.builderVerbs); }
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function fillProfile(s, german) {
+  const b = builderData(), p = settings.profile;
+  const o = b.origins[p.origin] || b.origins.de;
+  const city = p.city || (german || settings.lang === 'en' ? 'Berlin' : 'Berlino');
+  const name = p.name || (settings.lang === 'it' ? 'Luca' : 'Alex');
+  return s.replace('{name}', name).replace('{city}', city).replace('{originDe}', o.de).replace('{origin}', o.t);
+}
+// „ein Buch lesen“ -> „kein Buch lesen“, sonst „nicht …“
+function negateDe(v) {
+  if (v.deNeg) return v.deNeg;
+  const m = v.de.match(/^(ein|eine|einen|einem)\s(.*)$/);
+  return m ? `k${m[1]} ${m[2]}` : 'nicht ' + v.de;
+}
+function buildModal(m, v, time, neg) {
+  const n = neg && m.tNeg;
+  const tm = time ? ' ' + time.t : '';
+  const dm = time ? time.de + ' ' : '';
+  return {
+    t: `${n ? m.tNeg : m.t} ${v.t}${tm}.`,
+    d: m.zu ? `${m.de} ${dm}${v.deZu}.` : `${m.de} ${dm}${n ? negateDe(v) : v.de}.`,
+  };
+}
+function buildBe(a, level, gender) {
+  const adj = gender === 'f' ? a.f : a.m;
+  const deAdj = gender === 'f' && a.deF ? a.deF : a.de;
+  const lv = a.noIntens && level === 'molto' ? '' : level;
+  const it = settings.lang === 'it';
+  const t = lv === 'non' ? (it ? `Non sono ${adj}.` : `I'm not ${adj}.`)
+    : lv === 'molto' ? (it ? `Sono molto ${adj}.` : `I'm very ${adj}.`)
+    : (it ? `Sono ${adj}.` : `I'm ${adj}.`);
+  let d;
+  if (lv === 'non') d = a.deF ? `Ich bin ${gender === 'f' ? 'keine' : 'kein'} ${deAdj}.` : `Ich bin nicht ${deAdj}.`;
+  else d = lv === 'molto' ? `Ich bin sehr ${deAdj}.` : `Ich bin ${deAdj}.`;
+  return { t, d };
+}
+function buildLike(x, level) {
+  let t;
+  if (settings.lang === 'it') {
+    const v = x.pl ? 'piacciono' : 'piace';
+    t = level === 'non' ? `Non mi ${v} ${x.t}.` : level === 'molto' ? `Mi ${v} molto ${x.t}.` : `Mi ${v} ${x.t}.`;
+  } else {
+    t = level === 'non' ? `I don't like ${x.t}.` : level === 'molto' ? `I really like ${x.t}.` : `I like ${x.t}.`;
+  }
+  const d = x.verb
+    ? x.de.replace('{g}', level === 'molto' ? 'sehr gern' : level === 'non' ? 'nicht gern' : 'gern') + '.'
+    : `Ich mag ${x.de}${level === 'molto' ? ' sehr' : level === 'non' ? ' nicht' : ''}.`;
+  return { t, d };
+}
+function dialogItems() {
+  return builderData().dialog.map(p => ({ q: p.q, qd: p.qd, t: fillProfile(p.a), d: fillProfile(p.ad, true) }));
+}
+function randomSentence() {
+  const b = builderData();
+  const r = Math.random();
+  if (r < 0.45) {
+    const m = pick(b.modals);
+    return buildModal(m, pick(builderVerbs()), Math.random() < 0.5 ? pick(b.times) : null, !!m.tNeg && Math.random() < 0.25);
+  }
+  if (r < 0.65) return buildBe(pick(b.adjectives), pick(['', '', 'molto', 'non']), settings.profile.gender);
+  if (r < 0.85) return buildLike(pick(b.likes), pick(['', '', 'molto', 'non']));
+  return pick(dialogItems());
+}
+function addToBuilderIsland(sent, quiet) {
+  const id = 'bk-' + settings.lang;
+  let isl = state.islands.find(i => i.id === id);
+  if (!isl) {
+    isl = { id, title: 'Satzbaukasten', sentences: [], ts: Date.now() };
+    state.islands.push(isl);
+  }
+  if (isl.sentences.some(s => s.t === sent.t)) { if (!quiet) toast('Schon in der Insel'); return false; }
+  isl.sentences.push({ id: 's:' + uid(), t: sent.t, d: sent.d, ts: Date.now() });
+  persist();
+  if (!quiet) toast('In Insel „Satzbaukasten“ – kommt in Wiederholung & Shadowing');
+  return true;
+}
+function islandsSeg(active) {
+  return `<div class="seg">
+    <button data-go="#islands" class="${active === 'islands' ? 'on' : ''}">🏝️ Sprachinseln</button>
+    <button data-go="#builder" class="${active === 'builder' ? 'on' : ''}">🧱 Satzbaukasten</button>
+  </div>`;
+}
+function bindGo(root) { $$('[data-go]', root).forEach(b => { b.onclick = () => { location.hash = b.dataset.go; }; }); }
+function chips(name, items, selected, label, extra = '') {
+  return `<div class="chips" data-name="${name}">${items.map((x, i) =>
+    `<button class="chip ${i === selected ? 'on' : ''}" data-i="${i}">${esc(label(x))}</button>`).join('')}${extra}</div>`;
+}
+function sentenceCard(sent, lead) {
+  return `<div class="card flash">
+    ${lead ? `<div class="muted small">${lead}</div>` : ''}
+    <div class="sentence">${esc(sent.t)}</div>
+    <div class="native">${esc(sent.d)}</div>
+    <div id="b-cmp" class="small"></div>
+    <div class="row" style="justify-content:center;margin-top:10px">
+      <button class="btn small" id="b-play">🔊 Anhören</button>
+      ${SR ? '<button class="btn small" id="b-say">🎙 Nachsprechen</button>' : ''}
+      <button class="btn small" id="b-add">➕ In Insel</button>
+    </div>
+  </div>`;
+}
+function bindSentenceCard(pane, sent) {
+  $('#b-play', pane).onclick = () => speak(sent.t);
+  $('#b-add', pane).onclick = () => addToBuilderIsland(sent);
+  if ($('#b-say', pane)) {
+    $('#b-say', pane).onclick = async () => {
+      const b = $('#b-say', pane);
+      b.textContent = '… sprich jetzt';
+      b.disabled = true;
+      let said = '';
+      try { said = await recognize(); } catch (e) { toast('Spracherkennung: ' + e); }
+      b.textContent = '🎙 Nachsprechen';
+      b.disabled = false;
+      if (!said) { toast('Nichts erkannt'); return; }
+      const c = compareWords(sent.t, said);
+      $('#b-cmp', pane).innerHTML = `<p>Erkannt: „${esc(said)}“</p><p>${c.html} <b>${c.score}%</b></p>`;
+    };
+  }
+}
+
+views.builder = function (root, arg) {
+  const b = builderData();
+  const it = settings.lang === 'it';
+  const mode = ['modal', 'be', 'like', 'dialog', 'drill'].includes(arg) ? arg : 'modal';
+  const selKey = 'sl.builder.' + settings.lang;
+  const sel = Object.assign({ m: 0, v: 0, time: -1, neg: false, a: 2, bl: 0, l: 0, ll: 0 }, load(selKey, {}));
+  const labels = { modal: it ? 'Voglio …' : 'I want to …', be: it ? 'Sono …' : "I'm …", like: it ? 'Mi piace …' : 'I like …', dialog: 'Fragen', drill: '🎲 Drill' };
+  root.innerHTML = `
+    ${islandsSeg('builder')}
+    <p class="muted small">Wenige feste Satzmuster über dich selbst, dazu austauschbare Wörter – so entstehen hunderte einfache Sätze. Damit kannst du nach wenigen Wochen erste kleine Gespräche führen.</p>
+    <div class="seg">${Object.keys(labels).map(k => `<button data-m="${k}" class="${k === mode ? 'on' : ''}">${labels[k]}</button>`).join('')}</div>
+    <div id="pane"></div>`;
+  bindGo(root);
+  $$('.seg [data-m]', root).forEach(x => { x.onclick = () => { location.hash = '#builder/' + x.dataset.m; }; });
+  const pane = $('#pane', root);
+  const store = () => save(selKey, sel);
+  let profileOpen = !settings.profile.name;
+  const onChips = (name, fn) => $$(`.chips[data-name="${name}"] .chip`, pane).forEach(c => { c.onclick = () => { fn(Number(c.dataset.i)); store(); render(); }; });
+
+  function render() {
+    if (mode === 'modal') renderModal();
+    else if (mode === 'be') renderBe();
+    else if (mode === 'like') renderLike();
+    else if (mode === 'dialog') renderDialog();
+    else renderDrill();
+  }
+
+  function renderModal() {
+    const verbs = builderVerbs();
+    if (sel.m >= b.modals.length) sel.m = 0;
+    if (sel.v >= verbs.length) sel.v = 0;
+    const m = b.modals[sel.m];
+    const sent = buildModal(m, verbs[sel.v], sel.time >= 0 ? b.times[sel.time] : null, sel.neg);
+    pane.innerHTML = `
+      ${sentenceCard(sent)}
+      <label>1. Hilfsverb</label>${chips('m', b.modals, sel.m, x => x.t)}
+      <label class="inline"><input type="checkbox" id="b-neg" ${m.tNeg ? '' : 'disabled'} ${sel.neg && m.tNeg ? 'checked' : ''}> verneinen ${m.tNeg ? `(${esc(m.tNeg)})` : '(hier nicht üblich)'}</label>
+      <label>2. Verb im Infinitiv</label>${chips('v', verbs, sel.v, x => x.t)}
+      <label>3. Wann? (optional)</label>${chips('time', [{ t: '—' }].concat(b.times), sel.time + 1, x => x.t)}
+      <details class="card" style="margin-top:12px">
+        <summary><b>Eigenes Verb einsetzen</b></summary>
+        <p class="muted small">Neues Verb im Wörterbuch oder Übersetzer nachschlagen und im Infinitiv eintragen – es passt in jedes Muster.</p>
+        <label for="bv-t">${LANGS[settings.lang].name} (Infinitiv${it ? '' : ' ohne „to“'})</label><input type="text" id="bv-t" autocapitalize="off" placeholder="${it ? 'nuotare' : 'swim'}">
+        <label for="bv-d">Deutsch (Infinitiv)</label><input type="text" id="bv-d" placeholder="schwimmen">
+        <label for="bv-z">Deutsch mit „zu“ (optional – nötig bei trennbaren Verben: anzurufen)</label><input type="text" id="bv-z" placeholder="zu schwimmen">
+        <button class="btn primary" id="bv-add" style="margin-top:8px">Hinzufügen</button>
+        ${state.builderVerbs.length ? `<ul class="list">${state.builderVerbs.map(v => `<li><div class="grow"><div class="t">${esc(v.t)}</div><div class="d">${esc(v.de)}</div></div><button class="btn small danger" data-delv="${v.id}">✕</button></li>`).join('')}</ul>` : ''}
+      </details>`;
+    bindSentenceCard(pane, sent);
+    onChips('m', i => { sel.m = i; });
+    onChips('v', i => { sel.v = i; });
+    onChips('time', i => { sel.time = i - 1; });
+    $('#b-neg', pane).onchange = e => { sel.neg = e.target.checked; store(); render(); };
+    $('#bv-add', pane).onclick = () => {
+      const t = $('#bv-t', pane).value.trim(), de = $('#bv-d', pane).value.trim();
+      if (!t || !de) { toast('Verb und Deutsch ausfüllen'); return; }
+      let deZu = $('#bv-z', pane).value.trim();
+      if (!deZu) { const w = de.split(/\s+/); const last = w.pop(); deZu = w.concat('zu', last).join(' '); }
+      state.builderVerbs.push({ id: 'bv:' + uid(), t, de, deZu, ts: Date.now() });
+      persist();
+      sel.v = builderVerbs().length - 1;
+      store();
+      render();
+    };
+    $$('[data-delv]', pane).forEach(x => {
+      x.onclick = () => {
+        state.builderVerbs = state.builderVerbs.filter(v => v.id !== x.dataset.delv);
+        markDeleted(x.dataset.delv);
+        persist();
+        sel.v = 0;
+        store();
+        render();
+      };
+    });
+  }
+
+  function renderBe() {
+    const g = settings.profile.gender;
+    const levels = it ? ['Sono …', 'Sono molto …', 'Non sono …'] : ["I'm …", "I'm very …", "I'm not …"];
+    const lv = ['', 'molto', 'non'];
+    if (sel.a >= b.adjectives.length) sel.a = 0;
+    const sent = buildBe(b.adjectives[sel.a], lv[sel.bl], g);
+    pane.innerHTML = `
+      ${sentenceCard(sent)}
+      ${it ? `<label>Ich bin …</label>${chips('g', ['männlich (-o)', 'weiblich (-a)'], g === 'f' ? 1 : 0, x => x)}
+        <p class="muted small">Adjektive richten sich nach dir: stanco → stanca. Endet es auf -e (felice), bleibt es gleich.</p>` : ''}
+      <label>Form</label>${chips('bl', levels, sel.bl, x => x)}
+      <label>Eigenschaft</label>${chips('a', b.adjectives, sel.a, x => (g === 'f' ? x.f : x.m))}`;
+    bindSentenceCard(pane, sent);
+    if (it) onChips('g', i => { settings.profile.gender = i ? 'f' : 'm'; settings.profile.ts = Date.now(); saveSettings(); });
+    onChips('bl', i => { sel.bl = i; });
+    onChips('a', i => { sel.a = i; });
+  }
+
+  function renderLike() {
+    const levels = it ? ['Mi piace …', 'Mi piace molto …', 'Non mi piace …'] : ['I like …', 'I really like …', "I don't like …"];
+    const lv = ['', 'molto', 'non'];
+    if (sel.l >= b.likes.length) sel.l = 0;
+    const sent = buildLike(b.likes[sel.l], lv[sel.ll]);
+    pane.innerHTML = `
+      ${sentenceCard(sent)}
+      <label>Form</label>${chips('ll', levels, sel.ll, x => x)}
+      <label>Was? (Nomen oder Verb im ${it ? 'Infinitiv' : '-ing'})</label>${chips('l', b.likes, sel.l, x => x.t)}
+      <p class="muted small">${it ? 'Wörtlich „mir gefällt“ – bei Mehrzahl „mi piacciono“ (i gatti). Verneinung: „non“ ganz nach vorn.' : 'Nach „like“ steht bei Tätigkeiten die -ing-Form: I like cooking.'}</p>`;
+    bindSentenceCard(pane, sent);
+    onChips('ll', i => { sel.ll = i; });
+    onChips('l', i => { sel.l = i; });
+  }
+
+  function renderDialog() {
+    const p = settings.profile;
+    const items = dialogItems();
+    pane.innerHTML = `
+      <div class="notice">${esc(b.backTip)}</div>
+      <details class="card" id="p-box" ${profileOpen ? 'open' : ''}>
+        <summary><b>Deine Angaben</b> <span class="muted small">(für die Antworten)</span></summary>
+        <label for="p-name">Vorname</label><input type="text" id="p-name" value="${esc(p.name)}">
+        <label for="p-city">Wohnort</label><input type="text" id="p-city" value="${esc(p.city)}" placeholder="${it ? 'z. B. Monaco di Baviera' : 'z. B. Munich'}">
+        <label for="p-origin">Herkunft</label>
+        <select id="p-origin">${Object.entries({ de: 'Deutschland', at: 'Österreich', ch: 'Schweiz' }).map(([k, v]) => `<option value="${k}" ${p.origin === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
+      </details>
+      ${items.map((x, i) => `
+        <div class="card">
+          <div class="row between"><div class="grow"><div class="t">${esc(x.q)}</div><div class="d muted small">${esc(x.qd)}</div></div><button class="btn small" data-sq="${i}">🔊</button></div>
+          <div class="row between" style="margin-top:8px"><div class="grow"><div class="t">↳ ${esc(x.t)}</div><div class="d muted small">${esc(x.d)}</div></div><button class="btn small" data-sa="${i}">🔊</button></div>
+        </div>`).join('')}
+      <button class="btn primary big" id="d-all">➕ Alle Antworten in die Insel</button>
+      <p class="muted small">Tipp: Im Drill kommen die Fragen per Audio – du antwortest laut.</p>`;
+    const saveP = () => {
+      p.name = $('#p-name', pane).value.trim();
+      p.city = $('#p-city', pane).value.trim();
+      p.origin = $('#p-origin', pane).value;
+      p.ts = Date.now();
+      saveSettings();
+      render();
+    };
+    ['#p-name', '#p-city', '#p-origin'].forEach(s => { $(s, pane).onchange = saveP; });
+    $('#p-box', pane).ontoggle = e => { profileOpen = e.target.open; };
+    $$('[data-sq]', pane).forEach(x => { x.onclick = () => speak(items[x.dataset.sq].q); });
+    $$('[data-sa]', pane).forEach(x => { x.onclick = () => speak(items[x.dataset.sa].t); });
+    $('#d-all', pane).onclick = () => {
+      const n = items.filter(x => addToBuilderIsland({ t: x.q + ' – ' + x.t, d: x.qd + ' – ' + x.d }, true)).length;
+      toast(n ? `${n} Dialogzeilen in Insel „Satzbaukasten“` : 'Schon alle in der Insel');
+    };
+  }
+
+  function renderDrill() {
+    const l = dayLog();
+    const sent = randomSentence();
+    pane.innerHTML = `
+      <div class="row between muted small"><span>Heute ${l.drill || 0} Sätze gebildet</span><span>laut sprechen!</span></div>
+      <div class="card flash">
+        ${sent.q ? `<div class="muted small">Jemand fragt:</div><div class="sentence">${esc(sent.q)}</div><div class="muted small" style="margin-top:8px">Antworte:</div>` : `<div class="muted small">Sag auf ${LANGS[settings.lang].name}:</div>`}
+        <div class="native">${esc(sent.d)}</div>
+        <div id="answer" hidden><div class="sentence" style="margin-top:10px">${esc(sent.t)}</div><div id="cmp" class="small"></div></div>
+      </div>
+      <div class="row" id="pre">
+        ${SR ? '<button class="btn" id="say">🎙 Sprechen</button>' : ''}
+        <button class="btn primary grow" id="reveal">Aufdecken</button>
+      </div>
+      <div class="row" id="post" hidden>
+        <button class="btn" id="again">🔊</button>
+        <button class="btn" id="add">➕ Insel</button>
+        <button class="btn primary grow" id="next">Nächster Satz ›</button>
+      </div>`;
+    if (sent.q) speak(sent.q);
+    let said = '';
+    const reveal = () => {
+      $('#answer', pane).hidden = false;
+      $('#pre', pane).hidden = true;
+      $('#post', pane).hidden = false;
+      if (said) {
+        const c = compareWords(sent.t, said);
+        $('#cmp', pane).innerHTML = `<p>Gesagt: „${esc(said)}“</p><p>${c.html} <b>${c.score}%</b></p>`;
+      }
+      speak(sent.t);
+    };
+    $('#reveal', pane).onclick = reveal;
+    $('#again', pane).onclick = () => speak(sent.t);
+    $('#add', pane).onclick = () => addToBuilderIsland({ t: sent.q ? sent.q + ' – ' + sent.t : sent.t, d: sent.q ? sent.qd + ' – ' + sent.d : sent.d });
+    $('#next', pane).onclick = () => { l.drill = (l.drill || 0) + 1; persist(); renderDrill(); };
+    if ($('#say', pane)) {
+      $('#say', pane).onclick = async () => {
+        const x = $('#say', pane);
+        x.textContent = '… hört zu';
+        x.disabled = true;
+        try { said = await recognize(); } catch (e) { toast('Spracherkennung: ' + e); }
+        if (!said) { x.textContent = '🎙 Sprechen'; x.disabled = false; toast('Nichts erkannt'); return; }
+        reveal();
+      };
+    }
+    keyHandler = e => {
+      if (e.target.tagName === 'INPUT') return;
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if ($('#pre', pane).hidden) $('#next', pane).click(); else reveal(); }
+    };
+  }
+
+  render();
+};
+
 views.islands = function (root, id) {
   const isl = id && state.islands.find(i => i.id === id);
   if (isl) { islandDetail(root, isl); return; }
   root.innerHTML = `
-    <h1>🏝️ Sprachinseln</h1>
+    ${islandsSeg('islands')}
     <p class="muted small">10–20 Sätze pro Thema, die du im echten Leben sagen wirst. Die mitgelieferten Inseln sind Vorlagen – Namen, Orte und Details an dich anpassen.</p>
     ${state.islands.map(i => `
       <a class="card step" href="#islands/${i.id}">
@@ -748,10 +1135,11 @@ views.islands = function (root, id) {
       <p class="muted small">Ideen: Arbeit, Hobbys, Familie, Wohnung, Wochenende, Arztbesuch, Einkaufen, Meinungen.</p>
       <div class="row"><input type="text" id="i-title" class="grow" placeholder="Thema"><button class="btn primary" id="i-add">Anlegen</button></div>
     </div>`;
+  bindGo(root);
   $('#i-add', root).onclick = () => {
     const title = $('#i-title', root).value.trim();
     if (!title) return;
-    const n = { id: uid(), title, sentences: [] };
+    const n = { id: uid(), title, sentences: [], ts: Date.now() };
     state.islands.push(n);
     persist();
     location.hash = '#islands/' + n.id;
@@ -785,18 +1173,18 @@ function islandDetail(root, isl) {
     </details>
     <button class="btn danger" id="i-del" style="width:100%">Insel löschen</button>`;
   const find = id => isl.sentences.find(s => s.id === id);
-  $('#i-name', root).onchange = e => { isl.title = e.target.value.trim() || isl.title; persist(); };
+  $('#i-name', root).onchange = e => { isl.title = e.target.value.trim() || isl.title; isl.ts = Date.now(); persist(); };
   $('#s-add', root).onclick = () => {
     const d = $('#s-d', root).value.trim(), t = $('#s-t', root).value.trim();
     if (!d || !t) { toast('Beide Felder ausfüllen'); return; }
-    isl.sentences.push({ id: 's:' + uid(), t, d });
+    isl.sentences.push({ id: 's:' + uid(), t, d, ts: Date.now() });
     persist();
     islandDetail(root, isl);
     $('#s-d', root).focus();
   };
   $('#s-import', root).onclick = () => {
     const pairs = parseLines($('#s-bulk', root).value);
-    pairs.forEach(([t, d]) => isl.sentences.push({ id: 's:' + uid(), t, d }));
+    pairs.forEach(([t, d]) => isl.sentences.push({ id: 's:' + uid(), t, d, ts: Date.now() }));
     persist();
     toast(`${pairs.length} Sätze eingefügt`);
     islandDetail(root, isl);
@@ -811,6 +1199,7 @@ function islandDetail(root, isl) {
       if (d === null) return;
       if (t.trim()) s.t = t.trim();
       if (d.trim()) s.d = d.trim();
+      s.ts = Date.now();
       persist();
       islandDetail(root, isl);
     };
@@ -819,13 +1208,15 @@ function islandDetail(root, isl) {
     b.onclick = () => {
       isl.sentences = isl.sentences.filter(s => s.id !== b.dataset.del);
       delete state.srs[b.dataset.del];
+      markDeleted(b.dataset.del);
       persist();
       islandDetail(root, isl);
     };
   });
   $('#i-del', root).onclick = () => {
     if (!confirm(`Insel „${isl.title}“ mit ${isl.sentences.length} Sätzen löschen?`)) return;
-    isl.sentences.forEach(s => delete state.srs[s.id]);
+    isl.sentences.forEach(s => { delete state.srs[s.id]; markDeleted(s.id); });
+    markDeleted(isl.id);
     state.islands = state.islands.filter(i => i !== isl);
     persist();
     location.hash = '#islands';
@@ -851,8 +1242,25 @@ views.settings = function (root) {
       <button class="btn" id="o-test" style="margin-top:10px">🔊 Stimme testen</button>
     </div>
     <div class="card">
+      <b>Über dich</b> <span class="muted small">(für Satzbaukasten & Dialoge)</span>
+      <label for="p-name">Vorname</label><input type="text" id="p-name" value="${esc(settings.profile.name)}">
+      <label for="p-gender">Ich bin</label>
+      <select id="p-gender"><option value="m" ${settings.profile.gender === 'm' ? 'selected' : ''}>männlich (sono stanco)</option><option value="f" ${settings.profile.gender === 'f' ? 'selected' : ''}>weiblich (sono stanca)</option></select>
+    </div>
+    <div class="card">
+      <b>Sync zwischen Geräten (GitHub Gist)</b>
+      ${syncCfg.token ? `
+        <p class="small">Verbunden${syncCfg.last ? ' · zuletzt ' + new Date(syncCfg.last).toLocaleString('de-DE') : ''}${syncCfg.error ? `<br><span style="color:var(--bad)">Fehler: ${esc(syncCfg.error)}</span>` : ''}</p>
+        <div class="row"><button class="btn primary grow" id="y-now">🔄 Jetzt synchronisieren</button><button class="btn danger" id="y-off">Trennen</button></div>
+        <p class="muted small">Synchronisiert automatisch beim Start, beim Verlassen der App und alle 10 Minuten.</p>` : `
+        <p class="muted small">Dein Fortschritt wird als privates Gist in deinem GitHub-Konto gespeichert. Einmalig: auf github.com → Settings → Developer settings → Personal access tokens → <b>Tokens (classic)</b> → „Generate new token“, nur Haken bei <b>gist</b>, Ablaufdatum wählen. Token auf jedem Gerät hier einfügen.</p>
+        <input type="password" id="y-token" placeholder="ghp_…" autocomplete="off">
+        <button class="btn primary" id="y-connect" style="margin-top:8px">Verbinden</button>
+        <p class="muted small">Das Token liegt im Browserspeicher dieses Geräts und erlaubt nur Zugriff auf deine Gists. Nicht weitergeben.</p>`}
+    </div>
+    <div class="card">
       <b>Backup</b>
-      <p class="muted small">Alle Daten liegen nur in diesem Browser. Browserdaten löschen = Fortschritt weg. Regelmäßig exportieren; zum Übertragen aufs Handy dort importieren.</p>
+      <p class="muted small">Ohne Sync liegen alle Daten nur in diesem Browser. Browserdaten löschen = Fortschritt weg. Die Backup-Datei enthält kein Token.</p>
       <div class="row"><button class="btn grow" id="o-export">⬇ Exportieren</button><label class="btn grow" style="margin:0;color:var(--text);font-size:16px">⬆ Importieren<input type="file" id="o-import" accept=".json,application/json" hidden></label></div>
     </div>
     <div class="card">
@@ -867,6 +1275,39 @@ views.settings = function (root) {
   $('#o-var', root).onchange = e => { settings.enVariant = e.target.value; saveSettings(); };
   $('#o-vit', root).onchange = e => { settings.voices.it = e.target.value; saveSettings(); };
   $('#o-ven', root).onchange = e => { settings.voices.en = e.target.value; saveSettings(); };
+  const saveProfile = () => {
+    settings.profile.name = $('#p-name', root).value.trim();
+    settings.profile.gender = $('#p-gender', root).value;
+    settings.profile.ts = Date.now();
+    saveSettings();
+  };
+  $('#p-name', root).onchange = saveProfile;
+  $('#p-gender', root).onchange = saveProfile;
+  if ($('#y-connect', root)) {
+    $('#y-connect', root).onclick = async () => {
+      const token = $('#y-token', root).value.trim();
+      if (!token) return;
+      syncCfg.token = token;
+      syncCfg.gistId = '';
+      $('#y-connect', root).textContent = 'Verbinde …';
+      await syncNow({ manual: true });
+      if (syncCfg.error) { syncCfg.token = ''; saveSync(); } else toast('Sync eingerichtet');
+      route();
+    };
+  } else {
+    $('#y-now', root).onclick = async () => {
+      $('#y-now', root).textContent = 'Synchronisiere …';
+      await syncNow({ manual: true });
+      if (!syncCfg.error) toast('Synchronisiert');
+      route();
+    };
+    $('#y-off', root).onclick = () => {
+      if (!confirm('Sync auf diesem Gerät trennen? Die Daten im Gist bleiben erhalten.')) return;
+      syncCfg.token = ''; syncCfg.gistId = ''; syncCfg.error = '';
+      saveSync();
+      route();
+    };
+  }
   $('#o-test', root).onclick = () => speak(settings.lang === 'it' ? 'Ciao! Come stai oggi?' : 'Hello! How are you today?');
   $('#o-export', root).onclick = () => {
     persist();
@@ -898,10 +1339,154 @@ views.settings = function (root) {
     if (!confirm(`Wirklich alle ${LANGS[settings.lang].name}-Daten löschen?`)) return;
     localStorage.removeItem(stateKey(settings.lang));
     state = loadState(settings.lang);
+    state.resetAt = Date.now();
+    persist();
+    // Mit Sync: zurückgesetzten Stand hochladen, statt ihn wieder mit dem alten zusammenzuführen
+    if (syncCfg.token) syncNow({ overwriteLang: settings.lang, manual: true });
     toast('Zurückgesetzt');
     location.hash = '#home';
   };
 };
+
+// ---------- Sync über ein privates GitHub-Gist ----------
+const SYNC_FILE = 'sprachtraining.json';
+const SYNC_DESC = 'Sprachtraining Sync (nicht löschen)';
+const syncCfg = Object.assign({ token: '', gistId: '', last: 0, error: '' }, load('sl.sync', {}));
+function saveSync() { save('sl.sync', syncCfg); }
+let syncing = false;
+
+// Zwei Stände zusammenführen: pro Eintrag gewinnt der neuere Zeitstempel, Gelöschtes bleibt gelöscht.
+function mergeState(a, b) {
+  a = Object.assign(emptyState(), a);
+  b = Object.assign(emptyState(), b);
+  // Wurde eine Seite zurückgesetzt, zählt von der anderen nur, was danach entstanden ist.
+  if (a.resetAt !== b.resetAt) {
+    const [nw, old] = a.resetAt > b.resetAt ? [a, b] : [b, a];
+    const keep = x => (x.ts || 0) > nw.resetAt;
+    const keepObj = o => Object.fromEntries(Object.entries(o).filter(([, v]) => keep(v)));
+    a = nw;
+    b = Object.assign(emptyState(), {
+      words: old.words.filter(keep),
+      builderVerbs: old.builderVerbs.filter(keep),
+      islands: old.islands.filter(keep).map(i => Object.assign({}, i, { sentences: i.sentences.filter(keep) })),
+      srs: keepObj(old.srs), overrides: keepObj(old.overrides), log: old.log, deleted: old.deleted, resetAt: nw.resetAt,
+    });
+  }
+  const deleted = {};
+  [a.deleted, b.deleted].forEach(d => Object.entries(d).forEach(([k, v]) => { deleted[k] = Math.max(deleted[k] || 0, v); }));
+  const alive = (id, ts) => !(deleted[id] && deleted[id] >= (ts || 0));
+  const newer = (x, y) => ((y.ts || 0) > (x.ts || 0) ? y : x);
+  const mergeList = (la, lb) => {
+    const m = new Map();
+    la.concat(lb).forEach(x => m.set(x.id, m.has(x.id) ? newer(m.get(x.id), x) : x));
+    return [...m.values()].filter(x => alive(x.id, x.ts));
+  };
+  const im = new Map();
+  a.islands.concat(b.islands).forEach(isl => {
+    const prev = im.get(isl.id);
+    if (!prev) { im.set(isl.id, Object.assign({}, isl)); return; }
+    im.set(isl.id, Object.assign({}, newer(prev, isl), { sentences: mergeList(prev.sentences, isl.sentences) }));
+  });
+  const islands = [...im.values()].filter(i => alive(i.id, i.ts))
+    .map(i => Object.assign(i, { sentences: i.sentences.filter(s => alive(s.id, s.ts)) }));
+  const srs = {};
+  new Set(Object.keys(a.srs).concat(Object.keys(b.srs))).forEach(id => {
+    if (!alive(id, 0)) return;
+    const x = a.srs[id], y = b.srs[id];
+    srs[id] = !x ? y : !y ? x : (y.ts || 0) > (x.ts || 0) ? y : x;
+  });
+  const notes = {}, noteTs = {};
+  new Set(Object.keys(a.notes).concat(Object.keys(b.notes), Object.keys(a.noteTs), Object.keys(b.noteTs))).forEach(id => {
+    const useB = (b.noteTs[id] || 0) > (a.noteTs[id] || 0);
+    const v = useB ? b.notes[id] : a.notes[id];
+    if (v) notes[id] = v;
+    noteTs[id] = Math.max(a.noteTs[id] || 0, b.noteTs[id] || 0);
+  });
+  const overrides = Object.assign({}, a.overrides);
+  Object.entries(b.overrides).forEach(([k, v]) => { if (!overrides[k] || (v.ts || 0) > (overrides[k].ts || 0)) overrides[k] = v; });
+  const log = {};
+  new Set(Object.keys(a.log).concat(Object.keys(b.log))).forEach(day => {
+    const x = a.log[day] || { sec: {} }, y = b.log[day] || { sec: {} };
+    const out = { sec: {} };
+    new Set(Object.keys(x.sec || {}).concat(Object.keys(y.sec || {}))).forEach(k => { out.sec[k] = Math.max((x.sec || {})[k] || 0, (y.sec || {})[k] || 0); });
+    new Set(Object.keys(x).concat(Object.keys(y))).forEach(k => { if (k !== 'sec') out[k] = Math.max(x[k] || 0, y[k] || 0); });
+    log[day] = out;
+  });
+  return {
+    words: mergeList(a.words, b.words), islands, srs, notes, noteTs, overrides, log, deleted, resetAt: a.resetAt,
+    builderVerbs: mergeList(a.builderVerbs, b.builderVerbs),
+  };
+}
+
+async function gh(path, opts = {}) {
+  const res = await fetch('https://api.github.com' + path, Object.assign({}, opts, {
+    headers: { Authorization: 'Bearer ' + syncCfg.token, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+  }));
+  if (res.status === 401) throw new Error('Token ungültig oder abgelaufen');
+  if (res.status === 403) throw new Error('Keine Berechtigung – Token braucht „gist“');
+  if (res.status === 404) throw new Error('Gist nicht gefunden');
+  if (!res.ok) throw new Error('GitHub-Fehler ' + res.status);
+  return res.json();
+}
+function syncPayload() {
+  const data = {};
+  Object.keys(LANGS).forEach(l => { data[l] = load(stateKey(l), null); });
+  return { app: 'sprachtraining', version: 2, updated: new Date().toISOString(), profile: settings.profile, data };
+}
+async function findOrCreateGist() {
+  for (let page = 1; page <= 5; page++) {
+    const list = await gh(`/gists?per_page=100&page=${page}`);
+    const hit = list.find(g => g.description === SYNC_DESC && g.files[SYNC_FILE]);
+    if (hit) return hit.id;
+    if (list.length < 100) break;
+  }
+  const g = await gh('/gists', { method: 'POST', body: JSON.stringify({ description: SYNC_DESC, public: false, files: { [SYNC_FILE]: { content: JSON.stringify(syncPayload()) } } }) });
+  return g.id;
+}
+// overwriteLang: diese Sprache nicht zusammenführen, sondern lokalen Stand hochladen (nach Zurücksetzen)
+async function syncNow(opts = {}) {
+  if (!syncCfg.token || syncing) return false;
+  syncing = true;
+  persist();
+  const before = JSON.stringify(state);
+  try {
+    if (!syncCfg.gistId) syncCfg.gistId = await findOrCreateGist();
+    const g = await gh('/gists/' + syncCfg.gistId);
+    const f = g.files[SYNC_FILE];
+    let remote = null;
+    if (f) {
+      const text = f.truncated ? await (await fetch(f.raw_url)).text() : f.content;
+      remote = JSON.parse(text);
+    }
+    if (remote && remote.data) {
+      Object.keys(LANGS).forEach(l => {
+        if (l === opts.overwriteLang) return;
+        const loc = load(stateKey(l), null), rem = remote.data[l];
+        if (rem) save(stateKey(l), loc ? mergeState(loc, rem) : rem);
+      });
+      if (remote.profile && (remote.profile.ts || 0) > (settings.profile.ts || 0)) { settings.profile = remote.profile; saveSettings(); }
+    }
+    state = loadState(settings.lang);
+    await gh('/gists/' + syncCfg.gistId, { method: 'PATCH', body: JSON.stringify({ files: { [SYNC_FILE]: { content: JSON.stringify(syncPayload()) } } }) });
+    syncCfg.last = Date.now();
+    syncCfg.error = '';
+    saveSync();
+    return JSON.stringify(state) !== before;
+  } catch (e) {
+    syncCfg.error = e.message;
+    saveSync();
+    if (opts.manual) toast('Sync fehlgeschlagen: ' + e.message);
+    return false;
+  } finally {
+    syncing = false;
+  }
+}
+// Nach einem Sync, der Daten geändert hat, die Ansicht neu aufbauen (sonst arbeitet sie mit altem Stand).
+async function autoSync() {
+  if (await syncNow()) route();
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) autoSync(); });
+setInterval(() => { if (!document.hidden && Date.now() - syncCfg.last > 10 * 60000) autoSync(); }, 60000);
 
 // ---------- Router ----------
 function renderLangSwitch() {
@@ -914,8 +1499,9 @@ function route() {
   persist();
   const [name, arg] = location.hash.slice(1).split('/');
   const view = views[name] ? name : 'home';
-  activeStep = STEPS.some(s => s.key === view) ? view : null;
-  $$('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === view));
+  activeStep = view === 'builder' ? 'islands' : STEPS.some(s => s.key === view) ? view : null;
+  const tab = view === 'builder' ? 'islands' : view;
+  $$('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
   const root = $('#view');
   views[view](root, arg);
   window.scrollTo(0, 0);
@@ -935,6 +1521,7 @@ $$('#lang-switch button').forEach(b => {
 window.addEventListener('hashchange', route);
 renderLangSwitch();
 route();
+if (syncCfg.token) autoSync();
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});

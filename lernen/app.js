@@ -27,7 +27,7 @@ function save(key, val) {
 }
 
 const settings = Object.assign(
-  { lang: 'it', newWords: 30, newSentences: 10, rate: 0.9, enVariant: 'en-GB', voices: {} },
+  { lang: 'it', newWords: 30, newSentences: 10, rate: 0.9, enVariant: 'en-GB', voices: {}, autoTempo: true, talkModel: 'claude-opus-5-5' },
   load('sl.settings', {})
 );
 settings.profile = Object.assign({ name: '', gender: 'm', origin: 'de', city: '', ts: 0 }, settings.profile);
@@ -74,7 +74,7 @@ function starterIslands(lang) {
 }
 function stateKey(lang) { return 'sl.data.' + lang; }
 function emptyState() {
-  return { words: [], islands: [], srs: {}, notes: {}, noteTs: {}, overrides: {}, log: {}, deleted: {}, builderVerbs: [], resetAt: 0 };
+  return { words: [], islands: [], srs: {}, notes: {}, noteTs: {}, overrides: {}, log: {}, deleted: {}, builderVerbs: [], resetAt: 0, level: null, talkAdjust: 0 };
 }
 function loadState(lang) {
   let s = load(stateKey(lang), null);
@@ -170,6 +170,51 @@ function dueIds(filter) {
     .sort((a, b) => state.srs[a].due - state.srs[b].due);
 }
 
+// ---------- Niveau ----------
+const STAGES = [
+  { id: 'A0', min: 0, text: 'Einstieg – erste Wörter und feste Sätze' },
+  { id: 'A1', min: 100, text: 'Einfache Sätze über dich und den Alltag' },
+  { id: 'A2', min: 500, text: 'Alltagsgespräche zu vertrauten Themen' },
+  { id: 'B1', min: 1000, text: 'Du kommst in den meisten Alltagssituationen zurecht' },
+  { id: 'B2', min: 2000, text: 'Fließende Gespräche zu vielen Themen' },
+];
+// „Sichere“ Wörter: mehrfach richtig abgerufen oder im Test als bekannt bestätigt
+function secureWordCount() {
+  return Object.entries(state.srs).filter(([id, c]) => isWordId(id) && c.iv >= 3).length;
+}
+function accuracy(days) {
+  let ok = 0, fail = 0;
+  for (let d = today() - days + 1; d <= today(); d++) {
+    const l = state.log[d];
+    if (l) { ok += l.wok || 0; fail += l.wfail || 0; }
+  }
+  return { ok, fail, total: ok + fail, rate: ok + fail ? ok / (ok + fail) : null };
+}
+function levelInfo() {
+  const words = secureWordCount();
+  let i = 0;
+  while (i + 1 < STAGES.length && words >= STAGES[i + 1].min) i++;
+  const next = STAGES[i + 1];
+  return {
+    stage: STAGES[i], idx: i, words, next,
+    progress: next ? (words - STAGES[i].min) / (next.min - STAGES[i].min) : 1,
+    acc: accuracy(7),
+  };
+}
+// Neue Wörter pro Tag an die Trefferquote und den Rückstand anpassen
+function newWordTempo() {
+  const base = settings.newWords;
+  if (!settings.autoTempo) return { n: base, reason: '' };
+  const acc = accuracy(7);
+  const backlog = dueIds(isWordId).length;
+  let f = 1, reason = '';
+  if (backlog > 150) { f = 0.5; reason = `${backlog} Wörter sind fällig – erst wiederholen`; }
+  else if (acc.total >= 30 && acc.rate < 0.6) { f = 0.5; reason = `Trefferquote ${Math.round(acc.rate * 100)} % in 7 Tagen`; }
+  else if (acc.total >= 30 && acc.rate < 0.75) { f = 0.75; reason = `Trefferquote ${Math.round(acc.rate * 100)} % in 7 Tagen`; }
+  else if (acc.total >= 30 && acc.rate > 0.9 && backlog < 20) { f = 1.3; reason = `Trefferquote ${Math.round(acc.rate * 100)} % – du schaffst mehr`; }
+  return { n: Math.max(5, Math.min(80, Math.round(base * f))), reason };
+}
+
 // Einfache Wiederholungsplanung nach SM-2 (Intervalle in Tagen).
 function grade(id, r) {
   const t = today();
@@ -187,6 +232,7 @@ function grade(id, r) {
   state.srs[id] = c;
   const l = dayLog();
   l.reviews++;
+  if (isWordId(id)) { if (r === 0) l.wfail = (l.wfail || 0) + 1; else l.wok = (l.wok || 0) + 1; }
   if (isNew && id.startsWith('s:')) l.newSent++;
   persist();
 }
@@ -414,7 +460,7 @@ views.home = function (root) {
   const dueS = dueIds(id => id.startsWith('s:')).length;
   const sentCount = allSentences().length;
   const info = {
-    vocab: `${l.newWords}/${settings.newWords} neu · ${dueW} fällig`,
+    vocab: `${l.newWords}/${newWordTempo().n} neu · ${dueW} fällig`,
     review: `${dueS} fällig · bis zu ${Math.max(0, settings.newSentences - l.newSent)} neue`,
     listen: 'so viel wie möglich',
     shadow: '5–15 Minuten',
@@ -432,6 +478,14 @@ views.home = function (root) {
       <div class="stat"><b>${sentencesInTraining}</b><span>Sätze im Training</span></div>
       <div class="stat"><b>${l.reviews}</b><span>Abfragen heute</span></div>
     </div>
+    <a class="card step" href="#level">
+      <div class="num">${levelInfo().stage.id}</div>
+      <div class="grow"><b>Dein Niveau</b><div class="meta">${levelInfo().words} sichere Wörter${levelInfo().acc.total ? ` · ${Math.round(levelInfo().acc.rate * 100)} % Treffer (7 Tage)` : ''}${state.level ? '' : ' · Einstufungstest machen'}</div></div>
+      <div>›</div></a>
+    <a class="card step" href="#talk">
+      <div class="num">💬</div>
+      <div class="grow"><b>Gespräch führen</b><div class="meta">${talkCfg.key ? `frei sprechen mit Claude · heute ${l.talks || 0} Gespräche · ${minutesToday('talk')} Min.` : 'KI-Gesprächspartner einrichten'}</div></div>
+      <div>›</div></a>
     <a class="card step" href="#builder/${learnedWords < 300 ? 'modal' : 'drill'}">
       <div class="num">🧱</div>
       <div class="grow"><b>Satzbaukasten</b><div class="meta">${learnedWords < 300 ? 'Für den Start: mit wenigen Mustern erste Gespräche führen' : 'Drill: zufällige Sätze laut bilden'} · heute ${l.drill || 0} Sätze</div></div>
@@ -495,7 +549,8 @@ views.vocab = function (root, arg) {
 
 function vocabNew(pane) {
   const l = dayLog();
-  const limit = settings.newWords + (l.extraNew || 0);
+  const tempo = newWordTempo();
+  const limit = tempo.n + (l.extraNew || 0);
   const recallTab = $('.seg [data-m="recall"]');
   if (recallTab) recallTab.textContent = `Abfragen (${dueIds(isWordId).length})`;
   const pool = allWords().filter(w => !state.srs[w.id]);
@@ -514,6 +569,7 @@ function vocabNew(pane) {
   pane.innerHTML = `
     <div class="row between muted small"><span>Heute ${l.newWords}/${limit}</span><span>${pool.length} noch nicht gelernt</span></div>
     <div class="progress" style="margin:6px 0 12px"><div style="width:${l.newWords / limit * 100}%"></div></div>
+    ${tempo.reason ? `<div class="notice small">Tempo angepasst: ${tempo.n} statt ${settings.newWords} neue Wörter – ${tempo.reason}</div>` : ''}
     ${nudge ? `<div class="notice">${l.newWords} neue Wörter – kurz <a href="#vocab/recall">abfragen</a>, bevor es weitergeht?</div>` : ''}
     <div class="card flash">
       <div class="target">${esc(w.t)}</div>
@@ -1223,6 +1279,487 @@ function islandDetail(root, isl) {
   };
 }
 
+// ---------- Niveau & Einstufungstest ----------
+// Häufigkeitsstufen der mitgelieferten Wortliste (sortiert: Grundwörter, dann nach Häufigkeit)
+const BANDS = [[0, 100], [100, 250], [250, 500], [500, 800], [800, 1150], [1150, 1500]];
+const PER_BAND = 6;
+
+views.level = function (root, arg) {
+  if (arg === 'test') { levelTest(root); return; }
+  const li = levelInfo();
+  const lv = state.level;
+  const acc = li.acc;
+  root.innerHTML = `
+    <h1>📈 Dein Niveau</h1>
+    <div class="card">
+      <div class="row between"><b style="font-size:22px">${li.stage.id}</b><span class="muted small">${li.words} sichere Wörter</span></div>
+      <p>${li.stage.text}</p>
+      ${li.next ? `<div class="progress"><div style="width:${Math.round(li.progress * 100)}%"></div></div>
+        <p class="muted small">Noch ${li.next.min - li.words} sichere Wörter bis ${li.next.id}.</p>` : ''}
+      <p class="muted small">Grobe Einschätzung nur über den Wortschatz – kein offizielles Sprachniveau. „Sicher“ = mehrmals richtig abgerufen oder im Test bestätigt.</p>
+    </div>
+    <div class="card">
+      <b>Trefferquote (7 Tage)</b>
+      <p>${acc.total ? `${Math.round(acc.rate * 100)} % richtig bei ${acc.total} Wortabfragen` : 'Noch keine Abfragen.'}</p>
+      <label class="inline"><input type="checkbox" id="lv-auto" ${settings.autoTempo ? 'checked' : ''}> Tempo automatisch anpassen</label>
+      <p class="muted small">Heute: ${newWordTempo().n} neue Wörter${newWordTempo().reason ? ' – ' + esc(newWordTempo().reason) : ''}. Unter 75 % Treffern wird es weniger, über 90 % mehr.</p>
+    </div>
+    <div class="card">
+      <b>Einstufungstest</b>
+      ${lv ? `<p class="small">Zuletzt am ${new Date(lv.ts).toLocaleDateString('de-DE')}: ca. <b>${lv.estimate}</b> Wörter der Liste bekannt.</p>
+        ${lv.bands.map((b, i) => `<div class="band"><span>Stufe ${i + 1}</span><div class="progress"><div style="width:${b === null ? 0 : Math.round(b * 100)}%"></div></div><span>${b === null ? '–' : Math.round(b * 100) + '%'}</span></div>`).join('')}` :
+        '<p class="muted small">Etwa 5 Minuten. Du bekommst deutsche Wörter aus immer selteneren Häufigkeitsstufen, sagst sie auf ' + LANGS[settings.lang].name + ' und bewertest dich ehrlich. Stufen, die du sicher kannst, werden als bekannt übernommen und nur noch gelegentlich geprüft.</p>'}
+      <a class="btn primary" href="#level/test" style="display:inline-block;margin-top:8px">${lv ? 'Test wiederholen' : 'Test starten'}</a>
+    </div>
+    <div class="card">
+      <b>Gespräche</b>
+      <p class="small">Der Gesprächspartner spricht auf Stufe <b>${STAGES[Math.max(0, Math.min(STAGES.length - 1, li.idx + (state.talkAdjust || 0)))].id}</b>${state.talkAdjust ? ` (angepasst: ${state.talkAdjust > 0 ? '+' : ''}${state.talkAdjust})` : ''}.</p>
+      <div class="row"><button class="btn grow" id="lv-easier">Einfacher</button><button class="btn grow" id="lv-harder">Schwieriger</button></div>
+    </div>`;
+  $('#lv-auto', root).onchange = e => { settings.autoTempo = e.target.checked; saveSettings(); route(); };
+  const adj = d => {
+    state.talkAdjust = Math.max(-2, Math.min(2, (state.talkAdjust || 0) + d));
+    state.talkAdjustTs = Date.now();
+    persist();
+    route();
+  };
+  $('#lv-easier', root).onclick = () => adj(-1);
+  $('#lv-harder', root).onclick = () => adj(1);
+};
+
+function levelTest(root) {
+  const words = starterWords(settings.lang);
+  const bands = BANDS.map(([a, b]) => words.slice(a, Math.min(b, words.length))).filter(b => b.length);
+  const results = bands.map(() => null);
+  let bi = 0, qi = 0, known = 0, sample = [];
+  const newSample = () => {
+    const pool = bands[bi].slice();
+    sample = [];
+    while (sample.length < PER_BAND && pool.length) sample.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  };
+  newSample();
+  function show() {
+    const w = sample[qi];
+    root.innerHTML = `
+      <h1>📈 Einstufungstest</h1>
+      <div class="row between muted small"><span>Stufe ${bi + 1} von ${bands.length}</span><span>Wort ${qi + 1}/${sample.length}</span></div>
+      <div class="progress" style="margin:6px 0 12px"><div style="width:${(bi * PER_BAND + qi) / (bands.length * PER_BAND) * 100}%"></div></div>
+      <div class="card flash">
+        <div class="muted small">Wie heißt das auf ${LANGS[settings.lang].name}?</div>
+        <div class="target" style="font-size:26px">${esc(w.d)}</div>
+        <div id="answer" hidden><div class="sentence">${esc(w.t)}</div></div>
+      </div>
+      <div class="row" id="pre"><button class="btn grow" id="skip">Weiß ich nicht</button><button class="btn primary grow" id="reveal">Aufdecken</button></div>
+      <div id="post" hidden>
+        <p class="muted small">Hattest du es (fast) richtig? Kleine Fehler beim Artikel zählen als richtig.</p>
+        <div class="row"><button class="btn grow" id="no">✗ Nein</button><button class="btn primary grow" id="yes">✓ Ja, gewusst</button></div>
+      </div>
+      <p class="muted small">Ehrlich bewerten – sonst bekommst du zu schwere Wörter und Gespräche.</p>`;
+    $('#reveal', root).onclick = () => { $('#answer', root).hidden = false; $('#pre', root).hidden = true; $('#post', root).hidden = false; speak(w.t); };
+    const answer = ok => {
+      if (ok) known++;
+      qi++;
+      if (qi < sample.length) { show(); return; }
+      results[bi] = known / sample.length;
+      const stop = results[bi] < 0.34;
+      bi++; qi = 0; known = 0;
+      if (stop || bi >= bands.length) { finish(); return; }
+      newSample();
+      show();
+    };
+    $('#skip', root).onclick = () => answer(false);
+    $('#no', root).onclick = () => answer(false);
+    $('#yes', root).onclick = () => answer(true);
+  }
+  function finish() {
+    const estimate = Math.round(bands.reduce((sum, b, i) => sum + b.length * (results[i] || 0), 0));
+    const sure = bands.map((b, i) => (results[i] !== null && results[i] >= 5 / 6 ? i : -1)).filter(i => i >= 0);
+    const toMark = [].concat(...sure.map(i => bands[i])).filter(w => !state.srs[w.id]);
+    state.level = { ts: Date.now(), estimate, bands: results };
+    persist();
+    root.innerHTML = `
+      <h1>📈 Ergebnis</h1>
+      <div class="card">
+        <p>Du kennst geschätzt <b>${estimate}</b> der ${words.length} mitgelieferten Wörter.</p>
+        ${results.map((b, i) => `<div class="band"><span>Stufe ${i + 1}</span><div class="progress"><div style="width:${b === null ? 0 : Math.round(b * 100)}%"></div></div><span>${b === null ? '–' : Math.round(b * 100) + '%'}</span></div>`).join('')}
+        ${results.includes(null) ? '<p class="muted small">Seltenere Stufen übersprungen, weil die vorherige unter einem Drittel lag.</p>' : ''}
+      </div>
+      ${toMark.length ? `<div class="card">
+        <p>In ${sure.length === 1 ? 'Stufe ' + (sure[0] + 1) : 'den Stufen ' + sure.map(i => i + 1).join(', ')} hast du fast alles gewusst. <b>${toMark.length}</b> Wörter daraus als bekannt übernehmen?</p>
+        <p class="muted small">Sie werden in den nächsten 1–2 Wochen verteilt kurz geprüft. Was du doch nicht kannst, kommt über „Nochmal“ zurück ins Training.</p>
+        <button class="btn primary big" id="apply">Übernehmen</button></div>` : '<p class="muted small">Keine Stufe fast vollständig gewusst – du startest mit den häufigsten Wörtern. Das ist genau richtig.</p>'}
+      <a class="btn big" href="#level" style="display:block;margin-top:8px">Zur Übersicht</a>`;
+    if (toMark.length) {
+      $('#apply', root).onclick = () => {
+        const t = today();
+        toMark.forEach(w => { state.srs[w.id] = { iv: 7, ef: 2.5, reps: 1, lapses: 0, due: t + 3 + Math.floor(Math.random() * 12), ts: Date.now(), placed: true }; });
+        persist();
+        toast(`${toMark.length} Wörter übernommen`);
+        location.hash = '#level';
+      };
+    }
+  }
+  show();
+}
+
+// ---------- Gespräche mit KI ----------
+const TALK_MODELS = {
+  'claude-opus-5-5': { name: 'Claude Opus 5.5 (beste Qualität)', in: 4, out: 20, fallback: true, effort: true },
+  'claude-sonnet-5-5': { name: 'Claude Sonnet 5.5 (günstiger)', in: 2, out: 10, fallback: true, effort: true },
+  'claude-haiku-4-5': { name: 'Claude Haiku 4.5 (am günstigsten)', in: 1, out: 5, fallback: false, effort: false },
+};
+const SCENARIOS = {
+  free: { label: 'Freies Gespräch', it: 'Casual small talk as a friendly acquaintance: ask about the learner\'s day, life, work and hobbies.' },
+  meet: { label: 'Kennenlernen', it: 'You meet the learner for the first time at a friend\'s party. Get to know each other.' },
+  cafe: { label: 'Im Café', it: 'You work at a café in {city}. The learner is the customer and orders. Stay in role.' },
+  way: { label: 'Nach dem Weg fragen', it: 'You are a local passer-by in {city}. The learner asks for directions. Stay in role.' },
+  shop: { label: 'Einkaufen', it: 'You are a shop assistant in a clothes shop in {city}. The learner is the customer. Stay in role.' },
+  hotel: { label: 'Im Hotel', it: 'You are a hotel receptionist in {city}. The learner is checking in. Stay in role.' },
+  doctor: { label: 'Beim Arzt', it: 'You are a doctor. The learner describes how they feel. Keep it light, simple and not alarming. Stay in role.' },
+  weekend: { label: 'Wochenende', it: 'You are a friend. Talk about what the learner did last weekend and plans for the next one.' },
+};
+const TALK_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['reply', 'translation', 'correction', 'new_words'],
+  properties: {
+    reply: { type: 'string' },
+    translation: { type: 'string' },
+    correction: {
+      type: 'object', additionalProperties: false, required: ['needed', 'corrected', 'explanation'],
+      properties: { needed: { type: 'boolean' }, corrected: { type: 'string' }, explanation: { type: 'string' } },
+    },
+    new_words: {
+      type: 'array',
+      items: { type: 'object', additionalProperties: false, required: ['t', 'd'], properties: { t: { type: 'string' }, d: { type: 'string' } } },
+    },
+  },
+};
+const FEEDBACK_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['summary', 'mistakes', 'sentences'],
+  properties: {
+    summary: { type: 'string' },
+    mistakes: {
+      type: 'array',
+      items: { type: 'object', additionalProperties: false, required: ['wrong', 'right', 'explanation'], properties: { wrong: { type: 'string' }, right: { type: 'string' }, explanation: { type: 'string' } } },
+    },
+    sentences: {
+      type: 'array',
+      items: { type: 'object', additionalProperties: false, required: ['t', 'd'], properties: { t: { type: 'string' }, d: { type: 'string' } } },
+    },
+  },
+};
+const talkCfg = Object.assign({ key: '' }, load('sl.talkcfg', {}));
+function saveTalkCfg() { save('sl.talkcfg', talkCfg); }
+let sdkModule = null;
+async function claudeClient() {
+  if (!sdkModule) sdkModule = await import('./vendor/anthropic-sdk.js');
+  const Anthropic = sdkModule.default;
+  // Der Schlüssel bleibt auf diesem Gerät; die Anfrage geht direkt vom Browser an die Claude-API.
+  return { Anthropic, client: new Anthropic({ apiKey: talkCfg.key, dangerouslyAllowBrowser: true, maxRetries: 2 }) };
+}
+function talkError(e, Anthropic) {
+  if (Anthropic && e instanceof Anthropic.AuthenticationError) return 'API-Schlüssel ungültig. Bitte unter „Reden → ⚙️ Schlüssel & Modell“ prüfen.';
+  if (Anthropic && e instanceof Anthropic.PermissionDeniedError) return 'Keine Berechtigung für dieses Modell.';
+  if (Anthropic && e instanceof Anthropic.RateLimitError) return 'Zu viele Anfragen – kurz warten und nochmal versuchen.';
+  if (Anthropic && e instanceof Anthropic.BadRequestError) return /credit/i.test(e.message) ? 'Guthaben aufgebraucht – auf console.anthropic.com aufladen.' : 'Anfrage abgelehnt: ' + e.message;
+  if (Anthropic && e instanceof Anthropic.APIConnectionError) return 'Keine Verbindung – Gespräche brauchen Internet.';
+  if (Anthropic && e instanceof Anthropic.APIError) return 'Claude-Fehler ' + (e.status || '') + ': ' + e.message;
+  return 'Fehler: ' + (e && e.message ? e.message : e);
+}
+function knownWordList(max) {
+  return Object.entries(state.srs)
+    .filter(([id]) => isWordId(id))
+    .sort((a, b) => b[1].iv - a[1].iv)
+    .slice(0, max)
+    .map(([id]) => { const w = wordById(id); return w ? w.t : null; })
+    .filter(Boolean);
+}
+function talkStage() {
+  const li = levelInfo();
+  return STAGES[Math.max(0, Math.min(STAGES.length - 1, li.idx + (state.talkAdjust || 0)))];
+}
+function talkSystem(scenarioKey, custom) {
+  const lang = settings.lang === 'it' ? 'Italian' : 'British English';
+  const stage = talkStage();
+  const p = settings.profile;
+  const city = settings.lang === 'it' ? 'Rome' : 'London';
+  const scen = scenarioKey === 'custom' ? `Talk about this topic chosen by the learner: ${custom}` : SCENARIOS[scenarioKey].it.replace('{city}', city);
+  const known = knownWordList(400);
+  const length = { A0: 'one very short, simple sentence plus a question', A1: '1–2 short, simple sentences (present tense)', A2: '2–3 simple sentences', B1: 'up to 4 natural sentences', B2: 'natural, conversational length (max 5 sentences)' }[stage.id];
+  return `You are a warm, patient conversation partner helping a German-speaking learner practise spoken ${lang}. The conversation is spoken aloud: your reply is read out by text-to-speech and the learner answers by voice.
+
+Learner: ${p.name || 'unknown name'}${settings.lang === 'it' ? `, ${p.gender === 'f' ? 'female' : 'male'} (use matching adjective endings when you talk about them)` : ''}.
+Estimated level: ${stage.id} – vocabulary-based estimate, adapt if the learner clearly understands more or less.
+Words the learner already knows (${known.length}): ${known.length ? known.join(', ') : 'almost none – use only the most basic, common words and very short sentences'}.
+Scenario: ${scen}
+
+How to reply:
+- "reply": only ${lang}. Length: ${length}. Mostly use words the learner knows; introduce at most 2 new words per reply.
+- Always end with a question or a clear prompt so the learner has to speak again.
+- The learner's messages come from speech recognition: ignore missing punctuation or capitals and obvious recognition glitches.
+- If the learner answers in German or mixes languages, respond kindly and give the ${lang} version in "correction".
+- "correction": needed=true only for a real grammar or vocabulary mistake in the learner's last message; "corrected" = the natural full sentence in ${lang}; "explanation" = one short sentence in German. Otherwise needed=false with empty strings.
+- "translation": German translation of your reply.
+- "new_words": up to 3 words from your reply the learner probably does not know yet, in base form, with the German meaning.
+- A note in square brackets from the learner, such as [einfacher] or [schwieriger], means: adjust your difficulty from now on.`;
+}
+function loadTalk() { return load('sl.talk.' + settings.lang, null); }
+function saveTalk(t) { if (t) save('sl.talk.' + settings.lang, t); else localStorage.removeItem('sl.talk.' + settings.lang); }
+function addUsage(model, usage) {
+  const m = TALK_MODELS[model] || TALK_MODELS['claude-opus-5-5'];
+  const inTok = (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0) * 1.25 + (usage.cache_read_input_tokens || 0) * 0.1;
+  const usd = (inTok * m.in + (usage.output_tokens || 0) * m.out) / 1e6;
+  const month = new Date().toISOString().slice(0, 7);
+  const u = load('sl.usage', {});
+  u[month] = (u[month] || 0) + usd;
+  save('sl.usage', u);
+  return usd;
+}
+async function callClaude(system, messages, schema, maxTokens) {
+  const { Anthropic, client } = await claudeClient();
+  const model = TALK_MODELS[settings.talkModel] ? settings.talkModel : 'claude-opus-5-5';
+  const m = TALK_MODELS[model];
+  const params = {
+    model,
+    max_tokens: maxTokens,
+    system,
+    messages,
+    cache_control: { type: 'ephemeral' },
+    output_config: Object.assign({ format: { type: 'json_schema', schema } }, m.effort ? { effort: 'low' } : {}),
+  };
+  let res;
+  try {
+    // Server-seitiger Fallback: lehnt das Modell eine Anfrage ab, übernimmt automatisch ein anderes.
+    res = m.fallback
+      ? await client.beta.messages.create(Object.assign(params, { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' }))
+      : await client.messages.create(params);
+  } catch (e) {
+    throw new Error(talkError(e, Anthropic));
+  }
+  const cost = addUsage(model, res.usage || {});
+  if (res.stop_reason === 'refusal') throw new Error('Claude hat diese Anfrage abgelehnt. Formuliere es anders oder starte ein neues Gespräch.');
+  if (res.stop_reason === 'max_tokens') throw new Error('Antwort abgeschnitten – bitte nochmal senden.');
+  const text = res.content.filter(b => b.type === 'text').map(b => b.text).join('');
+  let data;
+  try { data = JSON.parse(text); } catch (e) { throw new Error('Antwort nicht lesbar – bitte nochmal senden.'); }
+  return { data, content: res.content, cost };
+}
+
+let talkBusy = false;
+views.talk = function (root, arg) {
+  if (!talkCfg.key || arg === 'setup') { talkSetup(root); return; }
+  const t = loadTalk();
+  if (arg === 'feedback' && t) { talkFeedback(root, t); return; }
+  if (!t) { talkStart(root); return; }
+  talkChat(root, t);
+};
+
+function talkSetup(root) {
+  const month = new Date().toISOString().slice(0, 7);
+  const spent = load('sl.usage', {})[month] || 0;
+  root.innerHTML = `
+    <h1>💬 Gespräche – Einrichtung</h1>
+    <div class="card stack">
+      <p>Der Gesprächspartner ist Claude. Du brauchst einen eigenen API-Schlüssel:</p>
+      <p class="small">1. Auf <b>console.anthropic.com</b> anmelden.<br>2. Unter „Billing“ Guthaben aufladen (Prepaid) und ein Monatslimit setzen.<br>3. Unter „API Keys“ einen Schlüssel erstellen und hier einfügen.</p>
+      <input type="password" id="k" placeholder="sk-ant-…" value="${esc(talkCfg.key)}" autocomplete="off">
+      <label for="m">Modell</label>
+      <select id="m">${Object.entries(TALK_MODELS).map(([id, m]) => `<option value="${id}" ${settings.talkModel === id ? 'selected' : ''}>${m.name} – $${m.in}/$${m.out} pro 1 Mio. Tokens</option>`).join('')}</select>
+      <p class="muted small">Ein Gespräch mit 15–20 Wechseln kostet mit Opus 5.5 grob 20–50 Cent, mit Sonnet etwa die Hälfte, mit Haiku ein Viertel – je länger das Gespräch, desto teurer jeder weitere Wechsel. Diesen Monat geschätzt verbraucht: <b>$${spent.toFixed(2)}</b> (auf diesem Gerät).</p>
+      <p class="muted small">Der Schlüssel wird nur in diesem Browser gespeichert (nicht im Sync, nicht im Backup) und direkt an die Claude-API geschickt. Wer Zugriff auf dein entsperrtes Gerät hat, könnte ihn auslesen – deshalb ein Limit in der Console setzen.</p>
+      <div class="row"><button class="btn primary grow" id="save">Speichern</button>${talkCfg.key ? '<button class="btn danger" id="del">Schlüssel löschen</button>' : ''}</div>
+    </div>`;
+  $('#m', root).onchange = e => { settings.talkModel = e.target.value; saveSettings(); };
+  $('#save', root).onclick = () => {
+    talkCfg.key = $('#k', root).value.trim();
+    saveTalkCfg();
+    toast(talkCfg.key ? 'Gespeichert' : 'Kein Schlüssel');
+    if (talkCfg.key) { if (location.hash === '#talk') route(); else location.hash = '#talk'; }
+  };
+  if ($('#del', root)) $('#del', root).onclick = () => { talkCfg.key = ''; saveTalkCfg(); route(); };
+}
+
+function talkStart(root) {
+  const stage = talkStage();
+  root.innerHTML = `
+    <h1>💬 Gespräch führen</h1>
+    ${!SR ? '<div class="notice warn">Dieser Browser hat keine Spracherkennung – du kannst tippen. Zum Sprechen Chrome (Android/PC) oder Safari (iPhone) nutzen.</div>' : ''}
+    <div class="card">
+      <div class="row between"><span>Niveau im Gespräch: <b>${stage.id}</b></span><a href="#level" class="small">anpassen</a></div>
+      ${!state.level ? '<p class="muted small">Tipp: Mach zuerst den <a href="#level/test">Einstufungstest</a>, damit der Gesprächspartner deine Wörter kennt.</p>' : ''}
+    </div>
+    <label>Worüber willst du reden?</label>
+    ${chips('scen', Object.values(SCENARIOS), -1, x => x.label)}
+    <div class="row" style="margin-top:8px"><input type="text" id="topic" class="grow" placeholder="Eigenes Thema (Deutsch geht)"><button class="btn" id="go-custom">Los</button></div>
+    <p class="muted small" style="margin-top:12px">So läuft es: Claude beginnt, liest vor, du antwortest laut (🎙). Korrekturen erscheinen unter deiner Nachricht, die Übersetzung per Tipp. Am Ende gibt es eine Auswertung.</p>
+    <a href="#talk/setup" class="small">⚙️ Schlüssel & Modell</a>`;
+  const begin = async (key, custom) => {
+    if (talkBusy) return;
+    const system = talkSystem(key, custom);
+    const t = { scenario: key, custom: custom || '', system, messages: [], turns: [], cost: 0, started: Date.now(), model: settings.talkModel };
+    saveTalk(t);
+    route();
+    await talkSend(t, settings.lang === 'it' ? 'Inizia tu la conversazione, per favore.' : 'Please start the conversation.', true);
+  };
+  $$('.chips[data-name="scen"] .chip', root).forEach(c => { c.onclick = () => begin(Object.keys(SCENARIOS)[Number(c.dataset.i)]); });
+  $('#go-custom', root).onclick = () => { const v = $('#topic', root).value.trim(); if (v) begin('custom', v); };
+}
+
+// Eine Nachricht senden und die Antwort anhängen. hidden: nicht im Chat anzeigen (Start-Anweisung)
+async function talkSend(t, text, hidden, note) {
+  if (talkBusy) return;
+  talkBusy = true;
+  const content = note ? [{ type: 'text', text }, { type: 'text', text: `[${note}]` }] : text;
+  t.messages.push({ role: 'user', content });
+  if (!hidden) t.turns.push({ role: 'me', text });
+  saveTalk(t);
+  renderTalkIfOpen();
+  try {
+    const { data, content: reply, cost } = await callClaude(t.system, t.messages, TALK_SCHEMA, 4000);
+    // Vollständigen Antwortinhalt anhängen (inkl. Denkblöcken), damit der Verlauf gültig bleibt
+    t.messages.push({ role: 'assistant', content: reply });
+    t.cost += cost;
+    const lastMe = [...t.turns].reverse().find(x => x.role === 'me');
+    if (lastMe && data.correction && data.correction.needed && !hidden) lastMe.fix = data.correction;
+    t.turns.push({ role: 'ai', text: data.reply, tr: data.translation, words: data.new_words || [] });
+    saveTalk(t);
+    talkBusy = false;
+    renderTalkIfOpen();
+    speak(data.reply, { onend: () => { if (talkHandsFree && location.hash.startsWith('#talk')) listenAndSend(); } });
+  } catch (e) {
+    // Fehlgeschlagene Nutzernachricht wieder entfernen, damit der Verlauf abwechselnd bleibt
+    t.messages.pop();
+    if (!hidden) t.turns.pop();
+    if (!t.messages.length) saveTalk(null); else saveTalk(t);
+    talkBusy = false;
+    toast(e.message);
+    renderTalkIfOpen();
+  }
+}
+let talkHandsFree = false;
+function renderTalkIfOpen() { if (location.hash.startsWith('#talk')) views.talk($('#view')); }
+async function listenAndSend(note) {
+  const t = loadTalk();
+  if (!t || talkBusy) return;
+  const btn = $('#t-mic');
+  if (btn) { btn.textContent = '… ich höre zu'; btn.disabled = true; }
+  let said = '';
+  try { said = await recognize(); } catch (e) { toast('Spracherkennung: ' + e); }
+  if (btn) { btn.textContent = '🎙 Sprechen'; btn.disabled = false; }
+  if (!said) { toast('Nichts erkannt'); return; }
+  talkSend(t, said, false, note);
+}
+
+function talkChat(root, t) {
+  const scen = t.scenario === 'custom' ? t.custom : SCENARIOS[t.scenario].label;
+  root.innerHTML = `
+    <div class="row between"><b>💬 ${esc(scen)}</b><span class="muted small">≈ $${t.cost.toFixed(2)}</span></div>
+    <div class="chat" id="chat" style="margin-top:10px">
+      ${t.turns.map((x, i) => x.role === 'me' ? `
+        <div class="bubble me">${esc(x.text)}
+          ${x.fix ? `<div class="fix">✏️ <b>${esc(x.fix.corrected)}</b><br><span class="muted">${esc(x.fix.explanation)}</span> <button class="btn small" data-say="${i}">🔊</button></div>` : ''}
+        </div>` : `
+        <div class="bubble">${esc(x.text)}
+          <div class="tr" id="tr-${i}" hidden>${esc(x.tr)}</div>
+          <div class="tools">
+            <button class="btn small" data-play="${i}">🔊</button>
+            <button class="btn small" data-tr="${i}">DE</button>
+            ${(x.words || []).map((w, j) => `<button class="btn small" data-word="${i}-${j}" title="${esc(w.d)}">＋ ${esc(w.t)}</button>`).join('')}
+          </div>
+        </div>`).join('')}
+      ${talkBusy ? '<div class="typing">… schreibt</div>' : ''}
+    </div>
+    <div class="talkbar">
+      <div class="row">
+        ${SR ? '<button class="btn primary grow" id="t-mic" style="padding:14px">🎙 Sprechen</button>' : ''}
+      </div>
+      <div class="row" style="margin-top:6px"><input type="text" id="t-text" class="grow" placeholder="oder tippen …"><button class="btn" id="t-send">➤</button></div>
+      <div class="row" style="margin-top:6px">
+        ${SR ? `<label class="inline small" style="margin:0"><input type="checkbox" id="t-hf" ${talkHandsFree ? 'checked' : ''}> freihändig</label>` : ''}
+        <button class="btn small" id="t-easy">Zu schwer</button>
+        <button class="btn small" id="t-hard">Zu leicht</button>
+        <button class="btn small" id="t-end">Beenden</button>
+      </div>
+    </div>`;
+  window.scrollTo(0, document.body.scrollHeight);
+  $$('[data-play]', root).forEach(b => { b.onclick = () => speak(t.turns[b.dataset.play].text); });
+  $$('[data-say]', root).forEach(b => { b.onclick = () => speak(t.turns[b.dataset.say].fix.corrected); });
+  $$('[data-tr]', root).forEach(b => { b.onclick = () => { const el = $('#tr-' + b.dataset.tr, root); el.hidden = !el.hidden; }; });
+  $$('[data-word]', root).forEach(b => {
+    b.onclick = () => {
+      const [i, j] = b.dataset.word.split('-').map(Number);
+      const w = t.turns[i].words[j];
+      if (allWords().some(x => x.t.toLowerCase() === w.t.toLowerCase())) { toast('Wort gibt es schon'); return; }
+      state.words.push({ id: 'u:' + uid(), t: w.t, d: w.d, ts: Date.now() });
+      persist();
+      toast(`„${w.t}“ zu deinen Wörtern hinzugefügt`);
+      b.disabled = true;
+    };
+  });
+  if ($('#t-mic', root)) $('#t-mic', root).onclick = () => { if (!talkBusy) listenAndSend(); };
+  const sendText = () => { const v = $('#t-text', root).value.trim(); if (v && !talkBusy) talkSend(t, v, false); };
+  $('#t-send', root).onclick = sendText;
+  $('#t-text', root).addEventListener('keydown', e => { if (e.key === 'Enter') sendText(); });
+  if ($('#t-hf', root)) $('#t-hf', root).onchange = e => { talkHandsFree = e.target.checked; };
+  // Schwierigkeit gilt fürs Gespräch sofort und künftig: Hinweis an die nächste Nachricht hängen
+  let pendingNote = null;
+  const adjust = (d, note) => {
+    state.talkAdjust = Math.max(-2, Math.min(2, (state.talkAdjust || 0) + d));
+    state.talkAdjustTs = Date.now();
+    persist();
+    pendingNote = note;
+    toast(d < 0 ? 'Wird einfacher – gilt ab deiner nächsten Antwort' : 'Wird anspruchsvoller – gilt ab deiner nächsten Antwort');
+    if ($('#t-mic', root)) $('#t-mic', root).onclick = () => { if (!talkBusy) listenAndSend(pendingNote); };
+    $('#t-send', root).onclick = () => { const v = $('#t-text', root).value.trim(); if (v && !talkBusy) talkSend(t, v, false, pendingNote); };
+  };
+  $('#t-easy', root).onclick = () => adjust(-1, 'einfacher');
+  $('#t-hard', root).onclick = () => adjust(1, 'schwieriger');
+  $('#t-end', root).onclick = () => { stopAudio(); talkHandsFree = false; location.hash = '#talk/feedback'; };
+}
+
+async function talkFeedback(root, t) {
+  const mine = t.turns.filter(x => x.role === 'me');
+  if (!mine.length) { saveTalk(null); location.hash = '#talk'; return; }
+  root.innerHTML = `<h1>📝 Auswertung</h1><div class="card"><p class="typing">Claude wertet das Gespräch aus …</p></div>`;
+  const transcript = t.turns.map(x => (x.role === 'me' ? 'Learner: ' : 'Partner: ') + x.text).join('\n');
+  const lang = settings.lang === 'it' ? 'Italian' : 'British English';
+  let fb;
+  try {
+    const r = await callClaude(
+      `You give short, encouraging feedback to a German-speaking ${lang} learner (level ${talkStage().id}) after a spoken practice conversation. Write "summary" in German (2–3 sentences: what went well, one thing to practise). "mistakes": up to 5 of the learner's most useful mistakes (ignore punctuation, capitals and likely speech-recognition glitches). "sentences": 3–6 useful ${lang} sentences the learner could have said or should keep for next time, adapted to their situation, with German translation.`,
+      [{ role: 'user', content: transcript }], FEEDBACK_SCHEMA, 6000);
+    fb = r.data;
+    t.cost += r.cost;
+  } catch (e) {
+    root.innerHTML = `<h1>📝 Auswertung</h1><div class="card"><p>${esc(e.message)}</p><div class="row"><button class="btn" id="retry">Nochmal</button><button class="btn danger" id="drop">Ohne Auswertung beenden</button></div></div>`;
+    $('#retry', root).onclick = () => route();
+    $('#drop', root).onclick = () => { saveTalk(null); location.hash = '#talk'; };
+    return;
+  }
+  const l = dayLog();
+  l.talks = (l.talks || 0) + 1;
+  persist();
+  saveTalk(null);
+  root.innerHTML = `
+    <h1>📝 Auswertung</h1>
+    <div class="card"><p>${esc(fb.summary)}</p><p class="muted small">${mine.length} Antworten von dir · Kosten ≈ $${t.cost.toFixed(2)}</p></div>
+    ${fb.mistakes.length ? `<h2>Besser so</h2><ul class="list card">${fb.mistakes.map(m => `<li><div class="grow"><div class="d" style="text-decoration:line-through">${esc(m.wrong)}</div><div class="t">${esc(m.right)}</div><div class="d">${esc(m.explanation)}</div></div></li>`).join('')}</ul>` : ''}
+    ${fb.sentences.length ? `<h2>Sätze für dich</h2><ul class="list card">${fb.sentences.map((s, i) => `<li><button class="btn small" data-p="${i}">🔊</button><div class="grow"><div class="t">${esc(s.t)}</div><div class="d">${esc(s.d)}</div></div></li>`).join('')}</ul>
+      <button class="btn primary big" id="keep">➕ Sätze in Insel „Gespräche“ (Wiederholung & Shadowing)</button>` : ''}
+    <a class="btn big" href="#talk" style="display:block;margin-top:8px">Neues Gespräch</a>`;
+  $$('[data-p]', root).forEach(b => { b.onclick = () => speak(fb.sentences[b.dataset.p].t); });
+  if ($('#keep', root)) {
+    $('#keep', root).onclick = () => {
+      const id = 'talk-' + settings.lang;
+      let isl = state.islands.find(i => i.id === id);
+      if (!isl) { isl = { id, title: 'Gespräche', sentences: [], ts: Date.now() }; state.islands.push(isl); }
+      const n = fb.sentences.filter(s => !isl.sentences.some(x => x.t === s.t)).map(s => { isl.sentences.push({ id: 's:' + uid(), t: s.t, d: s.d, ts: Date.now() }); return 1; }).length;
+      persist();
+      toast(n === 1 ? '1 Satz übernommen' : `${n} Sätze übernommen`);
+      $('#keep', root).disabled = true;
+    };
+  }
+}
+
 views.settings = function (root) {
   const voiceOpts = lang => {
     const list = voicesFor(lang);
@@ -1414,6 +1951,9 @@ function mergeState(a, b) {
   });
   return {
     words: mergeList(a.words, b.words), islands, srs, notes, noteTs, overrides, log, deleted, resetAt: a.resetAt,
+    level: !a.level ? b.level : !b.level ? a.level : (b.level.ts || 0) > (a.level.ts || 0) ? b.level : a.level,
+    talkAdjust: (b.talkAdjustTs || 0) > (a.talkAdjustTs || 0) ? b.talkAdjust : a.talkAdjust,
+    talkAdjustTs: Math.max(a.talkAdjustTs || 0, b.talkAdjustTs || 0),
     builderVerbs: mergeList(a.builderVerbs, b.builderVerbs),
   };
 }
@@ -1499,7 +2039,7 @@ function route() {
   persist();
   const [name, arg] = location.hash.slice(1).split('/');
   const view = views[name] ? name : 'home';
-  activeStep = view === 'builder' ? 'islands' : STEPS.some(s => s.key === view) ? view : null;
+  activeStep = view === 'builder' ? 'islands' : view === 'talk' ? 'talk' : STEPS.some(s => s.key === view) ? view : null;
   const tab = view === 'builder' ? 'islands' : view;
   $$('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
   const root = $('#view');

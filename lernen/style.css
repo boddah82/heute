@@ -51,7 +51,7 @@ main { max-width: 640px; margin: 0 auto; padding: 16px; }
 
 .tabs {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 5;
-  display: grid; grid-template-columns: repeat(6, 1fr);
+  display: grid; grid-template-columns: repeat(7, 1fr);
   background: var(--card); border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -154,3 +154,13 @@ label.inline input { width: auto; }
 .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .seg button { font-size: 14px; padding: 8px 4px; }
 details summary { cursor: pointer; }
+
+.chat { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.bubble { max-width: 88%; padding: 10px 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+.bubble.me { align-self: flex-end; background: var(--accent-soft); border-color: transparent; }
+.bubble .tr { font-size: 14px; color: var(--muted); margin-top: 4px; }
+.bubble .fix { font-size: 14px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.bubble .tools { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.talkbar { position: sticky; bottom: calc(64px + env(safe-area-inset-bottom)); background: var(--bg); padding: 8px 0; }
+.typing { color: var(--muted); font-style: italic; }
+.band { display: grid; grid-template-columns: 90px 1fr 44px; gap: 8px; align-items: center; font-size: 14px; margin: 4px 0; }

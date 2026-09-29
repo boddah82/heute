@@ -5,6 +5,12 @@ Web-App (PWA) nach dem Ansatz „Vokabeln zuerst, Active Recall, Shadowing, Spra
 ## Start: Satzbaukasten
 Für die ersten Wochen: feste Satzmuster über dich selbst (Modalverb + Infinitiv, „Ich bin …“ mit m/w-Endung, „Ich mag …“, Grundfragen mit Rückfrage „E tu?“ / „And you?“). Eigene Verben lassen sich einsetzen. Der Drill erzeugt zufällige Sätze zum lauten Bilden; gute Sätze wandern per ➕ in die Insel „Satzbaukasten“ und damit in Wiederholung und Shadowing.
 
+## Niveau
+Einstufungstest (~5 Min.) über sechs Häufigkeitsstufen der Wortliste; sicher gewusste Stufen werden als bekannt übernommen und verteilt nachgeprüft. Danach grobe Stufe A0–B2 anhand der sicheren Wörter (kein offizielles Niveau). Die Zahl neuer Wörter pro Tag passt sich an Trefferquote und Rückstand an (abschaltbar).
+
+## Gespräche (Claude)
+Freie Gespräche oder Rollenspiele (Café, Weg fragen, Hotel …) per Sprache. Claude antwortet auf deinem Niveau mit deinen bekannten Wörtern, liest vor, korrigiert und liefert am Ende eine Auswertung mit Sätzen für die Insel „Gespräche“. Braucht einen eigenen API-Schlüssel (console.anthropic.com, Prepaid, Limit setzen); Schlüssel bleibt nur im Browser. Kostenschätzung in der App.
+
 ## Tagesablauf (~30 Min.)
 1. **Wörter** – neue Wörter mit eigener Eselsbrücke, danach Abfrage (Deutsch → Zielsprache) mit Wiederholungsplanung (SM-2).
 2. **Sätze** – Sätze aus den Sprachinseln aktiv abrufen (sprechen, tippen oder im Kopf), aufdecken, bewerten.

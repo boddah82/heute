@@ -13,7 +13,7 @@ const SECTIONS: { title: string; body: string }[] = [
   },
   {
     title: "Tab \"Heute\" – Check-in",
-    body: "Trage nach einer Aktivität (Training, aber auch Alltag wie langes Sitzen) ein: was Du gemacht hast, wie stark der Schmerz direkt davor und direkt danach war (0 = kein Schmerz, 10 = maximaler Schmerz). Dauert etwa 30 Sekunden.",
+    body: "Ein Belastungs-Tagebuch, kein Schmerz-Tagebuch: trage ein, wenn Du bewusst etwas belastet hast, das mit dem Bereich zu tun hat (Training, aber auch Alltag wie langes Sitzen) – nicht jeden Schmerz ohne erkennbaren Auslöser. Erfasst wird, was Du gemacht hast und wie stark der Schmerz direkt davor und direkt danach war (0 = kein Schmerz, 10 = maximaler Schmerz). Dauert etwa 30 Sekunden.",
   },
   {
     title: "Tab \"Rechner\"",

@@ -25,6 +25,7 @@ export default function CheckInForm({ regionId, planExercises, onSubmit }: Props
   const [painAfter, setPainAfter] = useState(0);
   const [notes, setNotes] = useState("");
   const [saved, setSaved] = useState(false);
+  const [showRule, setShowRule] = useState(false);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -73,9 +74,34 @@ export default function CheckInForm({ regionId, planExercises, onSubmit }: Props
       </div>
 
       <div>
-        <label className="text-sm font-medium text-slate-700 block mb-1">
-          Reiz / Aktivität (Belastung oder Entlastung)
-        </label>
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium text-slate-700 block mb-1">
+            Reiz / Aktivität (Belastung oder Entlastung)
+          </label>
+          <button
+            type="button"
+            onClick={() => setShowRule((v) => !v)}
+            className="text-xs text-brand-700 underline underline-offset-2 mb-1"
+          >
+            Was trage ich hier ein?
+          </button>
+        </div>
+        {showRule && (
+          <div className="mb-2 rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 space-y-1.5">
+            <p>
+              <span className="font-medium text-slate-800">Eintragen</span>, wenn Du bewusst etwas belastet hast,
+              das mit diesem Bereich zu tun hat (z. B. Training, eine Bewegung, vor der Du Respekt hast) – auch
+              wenn&apos;s schmerzfrei blieb. Oder wenn der Schmerz danach anders war als erwartet.
+            </p>
+            <p>
+              <span className="font-medium text-slate-800">Nicht eintragen</span>: normale Alltagsbewegungen ohne
+              besonderen Belastungscharakter, oder Schmerz &quot;einfach so&quot;, ohne erkennbaren Auslöser.
+            </p>
+            <p className="text-slate-500 italic">
+              Kurz: ein Belastungs-Tagebuch, kein Schmerz-Tagebuch.
+            </p>
+          </div>
+        )}
         <div className="mb-2">
           <ActivityPicker planExercises={planExercises} onPick={setActivity} />
         </div>

@@ -50,12 +50,13 @@ export interface PDDMDomainResult {
 }
 
 // Periodische Schmerz-Baseline (unabhängig vom aktivitätsgebundenen
-// Check-in): aktueller Schmerz, Durchschnitt der letzten 4 Wochen, Schmerz
-// bei maximaler Belastung, Schmerz danach (klingt er ab oder bleibt er?).
-// Teil der PDDM-Anamnese, da im selben Bogen erhoben.
+// Check-in): aktueller Schmerz, Schmerz bei maximaler Belastung, Schmerz
+// danach (klingt er ab oder bleibt er?). Teil der PDDM-Anamnese, da im
+// selben Bogen erhoben. Der Verlauf über mehrere Einschätzungen (siehe
+// PDDMPainTrendChart) übernimmt die Rolle eines Durchschnitts – bewusst
+// keine Schätzung eines Mittelwerts aus dem Gedächtnis.
 export interface PDDMPainBaseline {
   current: number; // 0-10
-  avg4Weeks: number; // 0-10
   maxLoad: number; // 0-10
   afterMaxLoad: number; // 0-10
 }

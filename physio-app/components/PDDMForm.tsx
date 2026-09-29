@@ -36,7 +36,6 @@ function PainSliderRow({ label, value, onChange }: { label: string; value: numbe
 export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [current, setCurrent] = useState(0);
-  const [avg4Weeks, setAvg4Weeks] = useState(0);
   const [maxLoad, setMaxLoad] = useState(0);
   const [afterMaxLoad, setAfterMaxLoad] = useState(0);
 
@@ -47,7 +46,7 @@ export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const results = evaluatePDDM(answers);
-    onSubmit({ regionId, date: today(), answers, results, painBaseline: { current, avg4Weeks, maxLoad, afterMaxLoad } });
+    onSubmit({ regionId, date: today(), answers, results, painBaseline: { current, maxLoad, afterMaxLoad } });
     onDone();
   }
 
@@ -64,7 +63,6 @@ export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
       <div className="space-y-3 pt-3 border-t border-slate-100">
         <p className="text-sm font-semibold text-slate-900">Schmerzintensität &amp; Schmerzverlauf</p>
         <PainSliderRow label="Schmerz aktuell" value={current} onChange={setCurrent} />
-        <PainSliderRow label="Schmerz im Durchschnitt (letzte 4 Wochen)" value={avg4Weeks} onChange={setAvg4Weeks} />
         <PainSliderRow label="Schmerz bei maximaler Belastung" value={maxLoad} onChange={setMaxLoad} />
         <PainSliderRow
           label="Schmerz nach maximaler Belastung (danach/am Folgetag)"

@@ -11,7 +11,6 @@ const PADDING_BOTTOM = 26;
 
 const SERIES = [
   { key: "current" as const, label: "Aktuell", color: "#2c4a63" }, // brand-700
-  { key: "avg4Weeks" as const, label: "Ø 4 Wochen", color: "#94a3b8" }, // slate-400
   { key: "maxLoad" as const, label: "Max. Belastung", color: "#16293a" }, // brand-900
   { key: "afterMaxLoad" as const, label: "Danach", color: "#475569" }, // slate-600
 ];

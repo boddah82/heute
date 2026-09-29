@@ -125,7 +125,7 @@ export default function PSFSPanel({
         <p className="text-sm text-slate-600">
           Nenne 2-5 konkrete Alltags- oder Sportaktivitäten, die Dir wirklich wichtig sind – nicht was
           andere für wichtig halten (z. B. &quot;Schraubglas aufschrauben&quot;, &quot;Bouldern&quot;,
-          &quot;mit links eine Tasse halten&quot;). Bewerte dann regelmäßig, wie nah Du daran bist, das
+          &quot;mit links eine Tasse halten&quot;). Bewerte dann wöchentlich, wie nah Du daran bist, das
           wieder zu können.
         </p>
 

@@ -71,8 +71,8 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
                 <p className="text-xs text-slate-500">Bereichs-Einschätzung vom {formatDate(a.date)}</p>
                 {a.painBaseline && (
                   <p className="text-sm text-slate-700">
-                    Schmerz: aktuell {a.painBaseline.current} · Ø 4 Wochen {a.painBaseline.avg4Weeks} · max.
-                    Belastung {a.painBaseline.maxLoad}
+                    Schmerz: aktuell {a.painBaseline.current} · max. Belastung {a.painBaseline.maxLoad}
+                    {a.painBaseline.afterMaxLoad !== undefined && ` · danach ${a.painBaseline.afterMaxLoad}`}
                   </p>
                 )}
                 <div className="space-y-1">

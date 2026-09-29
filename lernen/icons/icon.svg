@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0f766e"/>
+  <path d="M112 150h210a48 48 0 0 1 48 48v96a48 48 0 0 1-48 48H200l-64 52v-52h-24a48 48 0 0 1-48-48v-96a48 48 0 0 1 48-48z" fill="#fff"/>
+  <path d="M250 226h150a44 44 0 0 1 44 44v80a44 44 0 0 1-44 44h-14v46l-56-46h-80a44 44 0 0 1-44-44v-80a44 44 0 0 1 44-44z" fill="#5eead4"/>
+  <text x="170" y="272" font-family="Arial, sans-serif" font-size="96" font-weight="700" fill="#0f766e" text-anchor="middle">Ci</text>
+  <text x="325" y="345" font-family="Arial, sans-serif" font-size="80" font-weight="700" fill="#0f3b37" text-anchor="middle">Hi</text>
+</svg>

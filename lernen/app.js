@@ -1,0 +1,1528 @@
+'use strict';
+
+// ---------- Konstanten ----------
+const LANGS = {
+  it: { name: 'Italienisch', flag: '🇮🇹' },
+  en: { name: 'Englisch', flag: '🇬🇧' },
+};
+const STEPS = [
+  { key: 'vocab', title: 'Vokabeln mit Eselsbrücken', goal: 15 },
+  { key: 'review', title: 'Sätze wiederholen', goal: 5 },
+  { key: 'listen', title: 'Hören', goal: 5 },
+  { key: 'shadow', title: 'Shadowing', goal: 10 },
+  { key: 'islands', title: 'Sprachinseln erstellen', goal: 5 },
+];
+const DAILY_GOAL_MIN = 30;
+const IDLE_MS = 120000; // ohne Eingabe wird nach 2 Minuten keine Zeit mehr gezählt
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+// ---------- Speicher ----------
+function load(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; }
+}
+function save(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { toast('Speichern fehlgeschlagen'); }
+}
+
+const settings = Object.assign(
+  { lang: 'it', newWords: 30, newSentences: 10, rate: 0.9, enVariant: 'en-GB', voices: {} },
+  load('sl.settings', {})
+);
+settings.profile = Object.assign({ name: '', gender: 'm', origin: 'de', city: '', ts: 0 }, settings.profile);
+function saveSettings() { save('sl.settings', settings); }
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function today() {
+  const d = new Date();
+  return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+}
+function splitPair(line) {
+  for (const sep of ['|', '\t', ';']) {
+    const i = line.indexOf(sep);
+    if (i > 0) return [line.slice(0, i).trim(), line.slice(i + 1).trim()];
+  }
+  return null;
+}
+function parseLines(text) {
+  return text.split('\n').map(l => l.trim()).filter(Boolean).map(splitPair).filter(p => p && p[0] && p[1]);
+}
+
+const starterCache = {};
+function starterWords(lang) {
+  if (!starterCache[lang]) {
+    const seen = new Set();
+    starterCache[lang] = parseLines(window.STARTER[lang].words + '\n' + (window.STARTER[lang].more || ''))
+      .map(([t, d]) => ({ id: 'w:' + t, t, d }))
+      .filter(w => !seen.has(w.id) && seen.add(w.id));
+  }
+  return starterCache[lang];
+}
+
+// Vorlagen-Inseln bekommen feste IDs, damit sie sich zwischen Geräten nicht verdoppeln.
+function starterIslands(lang) {
+  return window.STARTER[lang].islands.map((isl, i) => ({
+    id: `st-${lang}-${i}`,
+    title: isl.title,
+    ts: 0,
+    sentences: parseLines(isl.sentences).map(([t, d], j) => ({ id: `s:st-${lang}-${i}-${j}`, t, d, ts: 0 })),
+  }));
+}
+function stateKey(lang) { return 'sl.data.' + lang; }
+function emptyState() {
+  return { words: [], islands: [], srs: {}, notes: {}, noteTs: {}, overrides: {}, log: {}, deleted: {}, builderVerbs: [], resetAt: 0 };
+}
+function loadState(lang) {
+  let s = load(stateKey(lang), null);
+  if (!s) {
+    s = emptyState();
+    s.islands = starterIslands(lang);
+    save(stateKey(lang), s);
+    return s;
+  }
+  s = Object.assign(emptyState(), s);
+  // Alte Version: Vorlagen-Inseln hatten zufällige IDs -> auf feste IDs umstellen
+  starterIslands(lang).forEach((st, i) => {
+    const isl = s.islands[i];
+    if (!isl || isl.id === st.id || isl.title !== st.title || s.islands.some(x => x.id === st.id)) return;
+    isl.id = st.id;
+    isl.sentences.forEach((sen, j) => {
+      const ref = st.sentences[j];
+      if (!ref || sen.t !== ref.t || sen.id === ref.id) return;
+      if (s.srs[sen.id]) { s.srs[ref.id] = s.srs[sen.id]; delete s.srs[sen.id]; }
+      sen.id = ref.id;
+    });
+  });
+  return s;
+}
+let state = loadState(settings.lang);
+function persist() { save(stateKey(settings.lang), state); }
+
+function dayLog() {
+  const k = today();
+  if (!state.log[k]) state.log[k] = { sec: {}, newWords: 0, newSent: 0, reviews: 0, extraNew: 0 };
+  return state.log[k];
+}
+function minutesToday(step) {
+  const l = state.log[today()];
+  if (!l) return 0;
+  const sec = step ? (l.sec[step] || 0) : Object.values(l.sec).reduce((a, b) => a + b, 0);
+  return Math.floor(sec / 60);
+}
+function streak() {
+  const minsOf = day => {
+    const l = state.log[day];
+    return l ? Object.values(l.sec).reduce((a, b) => a + b, 0) / 60 : 0;
+  };
+  let d = today();
+  if (minsOf(d) < DAILY_GOAL_MIN) d--; // heute zählt erst, wenn das Ziel erreicht ist
+  let n = 0;
+  while (minsOf(d) >= DAILY_GOAL_MIN) { n++; d--; }
+  return n;
+}
+
+// ---------- Inhalte ----------
+function allWords() {
+  return starterWords(settings.lang).concat(state.words).map(w => {
+    const o = state.overrides[w.id];
+    return o ? Object.assign({}, w, { t: o.t || w.t, d: o.d || w.d, fixed: true }) : w;
+  });
+}
+function markDeleted(id) { state.deleted[id] = Date.now(); }
+function setNote(id, text) {
+  if ((state.notes[id] || '') === text) return;
+  if (text) state.notes[id] = text; else delete state.notes[id];
+  state.noteTs[id] = Date.now();
+}
+// Übersetzung eines Worts korrigieren (auch mitgelieferte Wörter)
+function correctWord(id, done) {
+  const w = wordById(id);
+  if (!w) return;
+  const t = prompt(LANGS[settings.lang].name + ':', w.t);
+  if (t === null) return;
+  const d = prompt('Deutsch:', w.d);
+  if (d === null) return;
+  if (id.startsWith('u:')) {
+    const own = state.words.find(x => x.id === id);
+    own.t = t.trim() || own.t; own.d = d.trim() || own.d; own.ts = Date.now();
+  } else {
+    state.overrides[id] = { t: t.trim(), d: d.trim(), ts: Date.now() };
+  }
+  persist();
+  toast('Korrigiert');
+  done && done();
+}
+function wordById(id) { return allWords().find(w => w.id === id); }
+function allSentences() {
+  const out = [];
+  state.islands.forEach(isl => isl.sentences.forEach(s => out.push(Object.assign({ island: isl.id }, s))));
+  return out;
+}
+function isWordId(id) { return id.startsWith('w:') || id.startsWith('u:'); }
+function dueIds(filter) {
+  const t = today();
+  return Object.keys(state.srs)
+    .filter(id => filter(id) && state.srs[id].due <= t)
+    .sort((a, b) => state.srs[a].due - state.srs[b].due);
+}
+
+// Einfache Wiederholungsplanung nach SM-2 (Intervalle in Tagen).
+function grade(id, r) {
+  const t = today();
+  const isNew = !state.srs[id];
+  const c = state.srs[id] || { iv: 0, ef: 2.5, reps: 0, lapses: 0, due: t };
+  if (r === 0) {
+    c.iv = 0; c.ef = Math.max(1.3, c.ef - 0.2); c.lapses++; c.due = t;
+  } else {
+    if (r === 1) { c.iv = Math.max(1, Math.round(c.iv * 1.2)); c.ef = Math.max(1.3, c.ef - 0.15); }
+    else if (r === 2) { c.iv = c.iv < 1 ? 1 : c.iv < 3 ? 3 : Math.round(c.iv * c.ef); }
+    else { c.iv = c.iv < 1 ? 3 : Math.round(Math.max(c.iv, 3) * c.ef * 1.3); c.ef += 0.15; }
+    c.reps++; c.due = t + c.iv;
+  }
+  c.ts = Date.now();
+  state.srs[id] = c;
+  const l = dayLog();
+  l.reviews++;
+  if (isNew && id.startsWith('s:')) l.newSent++;
+  persist();
+}
+
+// ---------- Zeitmessung ----------
+let activeStep = null;
+let lastInput = Date.now();
+let listening = false;
+['pointerdown', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, () => { lastInput = Date.now(); }, { passive: true }));
+let tick = 0;
+setInterval(() => {
+  if (!activeStep) return;
+  const busy = listening || (!document.hidden && Date.now() - lastInput < IDLE_MS);
+  if (!busy) return;
+  const l = dayLog();
+  l.sec[activeStep] = (l.sec[activeStep] || 0) + 1;
+  if (++tick % 10 === 0) persist();
+}, 1000);
+document.addEventListener('visibilitychange', () => { if (document.hidden) persist(); });
+
+// ---------- Sprachausgabe ----------
+let voices = [];
+function refreshVoices() { voices = window.speechSynthesis ? speechSynthesis.getVoices() : []; }
+if (window.speechSynthesis) {
+  refreshVoices();
+  speechSynthesis.onvoiceschanged = () => { refreshVoices(); if (location.hash.startsWith('#settings') || location.hash === '#home' || !location.hash) route(); };
+}
+function langCode(lang = settings.lang) { return lang === 'it' ? 'it-IT' : settings.enVariant; }
+function voicesFor(prefix) { return voices.filter(v => v.lang.toLowerCase().replace('_', '-').startsWith(prefix)); }
+function pickVoice(lang) {
+  const chosen = voices.find(v => v.name === settings.voices[lang]);
+  if (chosen) return chosen;
+  const code = langCode(lang).toLowerCase();
+  return voices.find(v => v.lang.toLowerCase().replace('_', '-') === code) || voicesFor(lang)[0] || null;
+}
+let currentUtterance = null; // Referenz halten, sonst feuert onend in Chrome manchmal nicht
+function speak(text, opts = {}) {
+  if (!window.speechSynthesis) { opts.onend && opts.onend(); return; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text.replace(/\(.*?\)/g, '').trim());
+  if (opts.lang === 'de') {
+    u.lang = 'de-DE';
+    const v = voicesFor('de')[0];
+    if (v) u.voice = v;
+  } else {
+    u.lang = langCode();
+    const v = pickVoice(settings.lang);
+    if (v) u.voice = v;
+  }
+  u.rate = opts.rate || settings.rate;
+  let finished = false;
+  const done = () => { if (!finished) { finished = true; opts.onend && opts.onend(); } };
+  u.onend = done;
+  u.onerror = done;
+  currentUtterance = u;
+  speechSynthesis.speak(u);
+  // Fallback, falls der Browser onend nicht meldet
+  setTimeout(done, 4000 + text.length * 150 / u.rate);
+}
+function speakP(text, opts = {}) { return new Promise(res => speak(text, Object.assign({}, opts, { onend: res }))); }
+function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
+
+// ---------- Spracherkennung & Vergleich ----------
+function recognize() {
+  return new Promise((resolve, reject) => {
+    const r = new SR();
+    r.lang = langCode();
+    r.interimResults = false;
+    r.maxAlternatives = 1;
+    r.onresult = e => resolve(e.results[0][0].transcript);
+    r.onerror = e => reject(e.error);
+    r.onend = () => resolve('');
+    r.start();
+  });
+}
+function normWords(s) {
+  return s.toLowerCase().replace(/[’`]/g, "'").replace(/[.,!?;:¿¡"«»()…—–-]/g, ' ').split(/\s+/).filter(Boolean);
+}
+// Wortweiser Abgleich über die längste gemeinsame Teilfolge
+function compareWords(target, attempt) {
+  const T = target.split(/\s+/).filter(Boolean);
+  const Tn = T.map(w => normWords(w).join(' '));
+  const A = normWords(attempt);
+  const dp = Array.from({ length: T.length + 1 }, () => new Array(A.length + 1).fill(0));
+  for (let i = T.length - 1; i >= 0; i--) {
+    for (let j = A.length - 1; j >= 0; j--) {
+      dp[i][j] = Tn[i] === A[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const hit = new Array(T.length).fill(false);
+  let i = 0, j = 0;
+  while (i < T.length && j < A.length) {
+    if (Tn[i] === A[j]) { hit[i] = true; i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+    else j++;
+  }
+  const counted = Tn.filter(Boolean).length || 1;
+  const score = Math.round(100 * hit.filter(Boolean).length / counted);
+  const html = T.map((w, k) => `<span class="${hit[k] ? 'word-ok' : 'word-miss'}">${esc(w)}</span>`).join(' ');
+  return { html, score };
+}
+
+// ---------- UI-Helfer ----------
+function toast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2200);
+}
+function voiceNotice() {
+  if (!window.speechSynthesis) return `<div class="notice warn">Dieser Browser unterstützt keine Sprachausgabe.</div>`;
+  if (voices.length && !voicesFor(settings.lang).length) {
+    return `<div class="notice warn">Auf diesem Gerät ist keine ${LANGS[settings.lang].name.toLowerCase()}e Stimme installiert.
+      Android: Einstellungen → Text-in-Sprache-Ausgabe. iPhone: Einstellungen → Bedienungshilfen → Gesprochene Inhalte → Stimmen.</div>`;
+  }
+  return '';
+}
+function islandSelect(id, selected, withAll) {
+  return `<select id="${id}">
+    ${withAll ? `<option value="all">Alle Inseln</option>` : ''}
+    ${state.islands.map(i => `<option value="${i.id}" ${i.id === selected ? 'selected' : ''}>${esc(i.title)} (${i.sentences.length})</option>`).join('')}
+  </select>`;
+}
+let keyHandler = null;
+document.addEventListener('keydown', e => { if (keyHandler) keyHandler(e); });
+
+// ---------- Abfrage (Active Recall) ----------
+// Zeigt die deutsche Seite, der Nutzer produziert die Antwort (sprechen/tippen/denken), deckt auf und bewertet.
+function recallSession(root, ids, cfg) {
+  const queue = ids.slice();
+  let done = 0;
+  function show() {
+    keyHandler = null;
+    if (!queue.length) {
+      root.innerHTML = `<div class="card flash"><div class="target">🎉</div>
+        <p>${done ? `Fertig – ${done} Abfragen.` : cfg.emptyText}</p></div>${cfg.doneExtra || ''}`;
+      cfg.onDone && cfg.onDone(root);
+      return;
+    }
+    const id = queue[0];
+    const it = cfg.get(id);
+    if (!it) { queue.shift(); show(); return; }
+    root.innerHTML = `
+      <div class="row between muted small"><span>${queue.length} übrig</span>${it.isNew ? '<span class="pill">neu</span>' : ''}</div>
+      <div class="card flash">
+        <div class="native">${esc(it.d)}</div>
+        ${it.note ? `<button class="btn small" id="hint" style="margin-top:8px">💡 Eselsbrücke</button><div class="hint" id="hint-t" hidden>${esc(it.note)}</div>` : ''}
+        <div id="answer" hidden><div class="${cfg.big}">${esc(it.t)}</div><div id="cmp" class="small"></div></div>
+      </div>
+      ${cfg.typing ? `<input type="text" id="typed" placeholder="Antwort tippen (optional)" autocomplete="off" autocapitalize="off" spellcheck="false">` : ''}
+      <div class="row" id="pre" style="margin-top:8px">
+        ${SR ? '<button class="btn" id="say">🎙 Sprechen</button>' : ''}
+        <button class="btn primary grow" id="reveal">Aufdecken</button>
+      </div>
+      <div id="post" hidden class="stack">
+        <div class="row"><button class="btn grow" id="replay">🔊 Nochmal hören</button>${cfg.correct ? '<button class="btn" id="fix">✎ Korrigieren</button>' : ''}</div>
+        <div class="rate">
+          <button class="btn again" data-r="0">Nochmal</button>
+          <button class="btn hard" data-r="1">Schwer</button>
+          <button class="btn good" data-r="2">Gut</button>
+          <button class="btn easy" data-r="3">Leicht</button>
+        </div>
+        <p class="muted small">Laut nachsprechen, dann ehrlich bewerten. Tasten 1–4 gehen auch.</p>
+      </div>`;
+    let said = '';
+    let revealed = false;
+    const reveal = () => {
+      if (revealed) return;
+      revealed = true;
+      $('#answer', root).hidden = false;
+      $('#pre', root).hidden = true;
+      $('#post', root).hidden = false;
+      const typed = cfg.typing ? $('#typed', root).value.trim() : '';
+      const attempt = said || typed;
+      if (attempt) {
+        const c = compareWords(it.t, attempt);
+        $('#cmp', root).innerHTML = `<p>${said ? 'Gesagt' : 'Getippt'}: „${esc(attempt)}“</p><p>${c.html} <b>${c.score}%</b></p>`;
+      }
+      speak(it.t);
+    };
+    const rate = r => {
+      grade(id, r);
+      done++;
+      queue.shift();
+      if (r === 0) queue.push(id);
+      show();
+    };
+    $('#reveal', root).onclick = reveal;
+    $('#replay', root).onclick = () => speak(it.t);
+    if (cfg.correct) $('#fix', root).onclick = () => cfg.correct(id, () => { const n = cfg.get(id); if (n) { it.t = n.t; it.d = n.d; $('#answer .' + cfg.big, root).textContent = n.t; $('.native', root).textContent = n.d; } });
+    $$('.rate .btn', root).forEach(b => { b.onclick = () => rate(Number(b.dataset.r)); });
+    if ($('#hint', root)) $('#hint', root).onclick = () => { $('#hint-t', root).hidden = false; };
+    if ($('#say', root)) {
+      $('#say', root).onclick = async () => {
+        const b = $('#say', root);
+        b.textContent = '… hört zu';
+        b.disabled = true;
+        try { said = await recognize(); } catch (e) { toast('Spracherkennung: ' + e); }
+        if (!said) { b.textContent = '🎙 Sprechen'; b.disabled = false; toast('Nichts erkannt'); return; }
+        reveal();
+      };
+    }
+    if (cfg.typing) {
+      $('#typed', root).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); reveal(); } });
+    }
+    keyHandler = e => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (!revealed && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); reveal(); }
+      else if (revealed && ['1', '2', '3', '4'].includes(e.key)) rate(Number(e.key) - 1);
+    };
+  }
+  show();
+}
+
+// ---------- Ansichten ----------
+const views = {};
+
+views.home = function (root) {
+  const l = dayLog();
+  const total = minutesToday();
+  const learnedWords = Object.keys(state.srs).filter(isWordId).length;
+  const sentencesInTraining = Object.keys(state.srs).filter(id => id.startsWith('s:')).length;
+  const dueW = dueIds(isWordId).length;
+  const dueS = dueIds(id => id.startsWith('s:')).length;
+  const sentCount = allSentences().length;
+  const info = {
+    vocab: `${l.newWords}/${settings.newWords} neu · ${dueW} fällig`,
+    review: `${dueS} fällig · bis zu ${Math.max(0, settings.newSentences - l.newSent)} neue`,
+    listen: 'so viel wie möglich',
+    shadow: '5–15 Minuten',
+    islands: `${state.islands.length} Inseln · ${sentCount} Sätze`,
+  };
+  root.innerHTML = `
+    <h1>${LANGS[settings.lang].flag} Heute</h1>
+    ${voiceNotice()}
+    <div class="card">
+      <div class="row between"><b>${total} / ${DAILY_GOAL_MIN} Minuten</b><span class="muted small">🔥 ${streak()} Tage in Folge</span></div>
+      <div class="progress" style="margin-top:8px"><div style="width:${Math.min(100, total / DAILY_GOAL_MIN * 100)}%"></div></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>${learnedWords}</b><span>Wörter im Training</span></div>
+      <div class="stat"><b>${sentencesInTraining}</b><span>Sätze im Training</span></div>
+      <div class="stat"><b>${l.reviews}</b><span>Abfragen heute</span></div>
+    </div>
+    <a class="card step" href="#builder/${learnedWords < 300 ? 'modal' : 'drill'}">
+      <div class="num">🧱</div>
+      <div class="grow"><b>Satzbaukasten</b><div class="meta">${learnedWords < 300 ? 'Für den Start: mit wenigen Mustern erste Gespräche führen' : 'Drill: zufällige Sätze laut bilden'} · heute ${l.drill || 0} Sätze</div></div>
+      <div>›</div></a>
+    <h2>Tagesablauf (~30 Min.)</h2>
+    ${STEPS.map((s, i) => {
+      const m = minutesToday(s.key);
+      return `<a class="card step ${m >= s.goal ? 'done' : ''}" href="#${s.key}">
+        <div class="num">${m >= s.goal ? '✓' : i + 1}</div>
+        <div class="grow"><div><b>${s.title}</b></div><div class="meta">${m}/${s.goal} Min. · ${info[s.key]}</div></div>
+        <div>›</div></a>`;
+    }).join('')}
+    <div class="card">
+      <div class="row between"><b>Jahresziel: 10.000 Wörter</b><span class="muted small">${learnedWords} / 10.000</span></div>
+      <div class="progress" style="margin-top:8px"><div style="width:${Math.min(100, learnedWords / 100)}%"></div></div>
+      <p class="muted small">Mitgeliefert: ${starterWords(settings.lang).length} Wörter, nach Häufigkeit sortiert. Übersetzungen ungeprüft – Fehler mit ✎ korrigieren. Mehr unter „Wörter → Eigene“ importieren.</p>
+    </div>
+    <div class="row"><a class="btn grow" href="#settings">⚙️ Einstellungen & Backup</a><a class="btn grow" href="#method">📖 Methode</a></div>`;
+};
+
+views.method = function (root) {
+  root.innerHTML = `
+    <h1>Die Methode</h1>
+    <div class="card stack">
+      <p><b>Start: Satzbaukasten.</b> Für die ersten Wochen: wenige feste Muster über dich selbst – „Voglio / Posso / Devo / Cerco di + Infinitiv“, „Sono …“, „Mi piace …“ und Grundfragen mit Rückfrage („E tu?“). Jedes neue Verb im Infinitiv passt sofort in jedes Muster. So entstehen hunderte einfache Sätze, mit denen du erste Gespräche führen kannst.</p>
+      <p><b>1. Vokabeln zuerst.</b> 30+ neue Wörter pro Tag. Zu jedem Wort ein eigenes, möglichst absurdes Bild ausdenken, das Klang und Bedeutung verbindet, und als Eselsbrücke notieren.</p>
+      <p><b>2. Active Recall.</b> Du siehst Deutsch und produzierst die Fremdsprache selbst – laut, getippt oder im Kopf. Erst dann aufdecken. Die Anstrengung beim Erinnern ist der Lerneffekt.</p>
+      <p><b>3. Hören.</b> Die eigenen Sprachinseln in Schleife hören, dazu echte Inhalte (Podcasts, Serien) – Zeit dafür unter „Hören“ eintragen.</p>
+      <p><b>4. Shadowing.</b> Satz anhören und sofort laut nachsprechen, Rhythmus und Betonung kopieren. Aufnehmen und mit dem Original vergleichen.</p>
+      <p><b>5. Sprachinseln.</b> 10–20 Sätze pro Thema, die du wirklich sagen wirst: wer du bist, was du machst, was du magst. Keine Grammatikübungen – Grammatik kommt über korrekte Sätze.</p>
+    </div>
+    <p class="muted small">Wichtig: Die Aussprache kommt aus der Sprachausgabe deines Geräts (keine Muttersprachler-Aufnahmen). Selbst übersetzte Sätze vor dem Lernen prüfen lassen – Fehler lernt man sonst mit.</p>`;
+};
+
+views.vocab = function (root, arg) {
+  const mode = arg || 'new';
+  root.innerHTML = `
+    <h1>🧠 Wörter</h1>
+    ${voiceNotice()}
+    <div class="seg">
+      <button data-m="new" class="${mode === 'new' ? 'on' : ''}">Neu</button>
+      <button data-m="recall" class="${mode === 'recall' ? 'on' : ''}">Abfragen (${dueIds(isWordId).length})</button>
+      <button data-m="own" class="${mode === 'own' ? 'on' : ''}">Eigene</button>
+    </div>
+    <div id="pane"></div>`;
+  $$('.seg button', root).forEach(b => { b.onclick = () => { location.hash = '#vocab/' + b.dataset.m; }; });
+  const pane = $('#pane', root);
+  if (mode === 'recall') {
+    recallSession(pane, dueIds(isWordId), {
+      big: 'target',
+      emptyText: 'Keine Wörter fällig.',
+      correct: correctWord,
+      get: id => { const w = wordById(id); return w && { t: w.t, d: w.d, note: state.notes[id] }; },
+    });
+  } else if (mode === 'own') {
+    vocabOwn(pane);
+  } else {
+    vocabNew(pane);
+  }
+};
+
+function vocabNew(pane) {
+  const l = dayLog();
+  const limit = settings.newWords + (l.extraNew || 0);
+  const recallTab = $('.seg [data-m="recall"]');
+  if (recallTab) recallTab.textContent = `Abfragen (${dueIds(isWordId).length})`;
+  const pool = allWords().filter(w => !state.srs[w.id]);
+  if (!pool.length) {
+    pane.innerHTML = `<div class="card">Alle Wörter sind im Training. Importiere weitere unter „Eigene“.</div>`;
+    return;
+  }
+  if (l.newWords >= limit) {
+    pane.innerHTML = `<div class="card flash"><div class="target">✅</div><p>Tagesziel erreicht: ${l.newWords} neue Wörter.</p>
+      <div class="row" style="justify-content:center"><a class="btn primary" href="#vocab/recall">Jetzt abfragen</a><button class="btn" id="more">+10 weitere</button></div></div>`;
+    $('#more', pane).onclick = () => { l.extraNew = (l.extraNew || 0) + 10; persist(); vocabNew(pane); };
+    return;
+  }
+  const w = pool[0];
+  const nudge = l.newWords > 0 && l.newWords % 10 === 0;
+  pane.innerHTML = `
+    <div class="row between muted small"><span>Heute ${l.newWords}/${limit}</span><span>${pool.length} noch nicht gelernt</span></div>
+    <div class="progress" style="margin:6px 0 12px"><div style="width:${l.newWords / limit * 100}%"></div></div>
+    ${nudge ? `<div class="notice">${l.newWords} neue Wörter – kurz <a href="#vocab/recall">abfragen</a>, bevor es weitergeht?</div>` : ''}
+    <div class="card flash">
+      <div class="target">${esc(w.t)}</div>
+      <div class="native">${esc(w.d)}</div>
+      <div class="row" style="justify-content:center;margin-top:10px">
+        <button class="btn small" id="play">🔊 Anhören</button>
+        <button class="btn small" id="fix" title="Übersetzung korrigieren">✎ Korrigieren</button>
+      </div>
+    </div>
+    <label for="note">Eselsbrücke: Welches Bild verbindet Klang und Bedeutung?</label>
+    <textarea id="note" placeholder="z. B. ein absurdes Bild, das du dir vorstellst">${esc(state.notes[w.id] || '')}</textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="known">Kenne ich schon</button>
+      <button class="btn primary grow" id="learned">Gelernt ✓</button>
+    </div>
+    <p class="muted small">Wort 2–3× laut nachsprechen. Gelernte Wörter kommen heute noch in die Abfrage.</p>`;
+  const saveNote = () => setNote(w.id, $('#note', pane).value.trim());
+  speak(w.t);
+  $('#play', pane).onclick = () => speak(w.t);
+  $('#fix', pane).onclick = () => { saveNote(); correctWord(w.id, () => vocabNew(pane)); };
+  $('#known', pane).onclick = () => {
+    saveNote();
+    const t = today();
+    state.srs[w.id] = { iv: 21, ef: 2.5, reps: 1, lapses: 0, due: t + 21, ts: Date.now() };
+    persist();
+    vocabNew(pane);
+  };
+  $('#learned', pane).onclick = () => {
+    saveNote();
+    state.srs[w.id] = { iv: 0, ef: 2.5, reps: 0, lapses: 0, due: today(), ts: Date.now() };
+    l.newWords++;
+    persist();
+    vocabNew(pane);
+  };
+}
+
+function vocabOwn(pane) {
+  const code = settings.lang === 'it' ? 'Italienisch' : 'Englisch';
+  pane.innerHTML = `
+    <div class="card">
+      <b>Wort hinzufügen</b>
+      <label for="w-t">${code}</label><input type="text" id="w-t" autocapitalize="off">
+      <label for="w-d">Deutsch</label><input type="text" id="w-d">
+      <button class="btn primary" id="w-add" style="margin-top:10px">Hinzufügen</button>
+    </div>
+    <div class="card">
+      <b>Liste importieren</b>
+      <p class="muted small">Eine Zeile pro Wort: <code>${code} | Deutsch</code> (auch <code>;</code> oder Tab als Trenner). Z. B. aus einer Häufigkeitsliste oder Tabelle kopieren.</p>
+      <textarea id="w-bulk" placeholder="${settings.lang === 'it' ? 'la forchetta | die Gabel' : 'the fork | die Gabel'}"></textarea>
+      <button class="btn" id="w-import" style="margin-top:8px">Importieren</button>
+    </div>
+    <h2>Eigene Wörter (${state.words.length})</h2>
+    <ul class="list card" id="w-list">
+      ${state.words.length ? state.words.slice().reverse().map(w => `
+        <li><div class="grow"><div class="t">${esc(w.t)}</div><div class="d">${esc(w.d)}</div></div>
+        <button class="btn small danger" data-del="${esc(w.id)}">✕</button></li>`).join('') : '<li class="muted">Noch keine.</li>'}
+    </ul>`;
+  const exists = t => allWords().some(w => w.t.toLowerCase() === t.toLowerCase());
+  $('#w-add', pane).onclick = () => {
+    const t = $('#w-t', pane).value.trim(), d = $('#w-d', pane).value.trim();
+    if (!t || !d) { toast('Beide Felder ausfüllen'); return; }
+    if (exists(t)) { toast('Gibt es schon'); return; }
+    state.words.push({ id: 'u:' + uid(), t, d, ts: Date.now() });
+    persist();
+    vocabOwn(pane);
+  };
+  $('#w-import', pane).onclick = () => {
+    const pairs = parseLines($('#w-bulk', pane).value);
+    let n = 0;
+    pairs.forEach(([t, d]) => { if (!exists(t)) { state.words.push({ id: 'u:' + uid(), t, d, ts: Date.now() }); n++; } });
+    persist();
+    toast(`${n} Wörter importiert` + (pairs.length - n ? `, ${pairs.length - n} übersprungen` : ''));
+    vocabOwn(pane);
+  };
+  $$('[data-del]', pane).forEach(b => {
+    b.onclick = () => {
+      const id = b.dataset.del;
+      state.words = state.words.filter(w => w.id !== id);
+      delete state.srs[id];
+      delete state.notes[id];
+      markDeleted(id);
+      persist();
+      vocabOwn(pane);
+    };
+  });
+}
+
+views.review = function (root) {
+  const l = dayLog();
+  const sentences = allSentences();
+  const byId = Object.fromEntries(sentences.map(s => [s.id, s]));
+  const due = dueIds(id => id.startsWith('s:') && byId[id]);
+  const newOnes = sentences.filter(s => !state.srs[s.id]).slice(0, Math.max(0, settings.newSentences - l.newSent)).map(s => s.id);
+  root.innerHTML = `
+    <h1>🔁 Sätze wiederholen</h1>
+    ${voiceNotice()}
+    <p class="muted small">Deutschen Satz sehen → selbst auf ${LANGS[settings.lang].name} sagen → aufdecken → laut nachsprechen.</p>
+    <div id="pane"></div>`;
+  recallSession($('#pane', root), due.concat(newOnes), {
+    big: 'sentence',
+    typing: true,
+    emptyText: 'Nichts fällig. Neue Sätze kommen aus deinen Sprachinseln.',
+    doneExtra: `<a class="btn big" href="#shadow">Weiter zum Shadowing</a>`,
+    get: id => { const s = byId[id]; return s && { t: s.t, d: s.d, isNew: !state.srs[id] }; },
+  });
+};
+
+let listenToken = null;
+function stopAudio() {
+  if (listenToken) listenToken.stop = true;
+  listenToken = null;
+  listening = false;
+  if (window.speechSynthesis) speechSynthesis.cancel();
+}
+
+views.listen = function (root) {
+  const opts = Object.assign({ island: 'all', de: false, repeat: 2, pause: 2, loop: false }, load('sl.listen', {}));
+  root.innerHTML = `
+    <h1>🎧 Hören</h1>
+    ${voiceNotice()}
+    <div class="card">
+      <label for="l-isl">Sprachinsel</label>${islandSelect('l-isl', opts.island, true)}
+      <div class="row" style="margin-top:6px">
+        <div class="grow"><label for="l-rep">Wiederholungen</label><select id="l-rep">${[1, 2, 3].map(n => `<option ${n === opts.repeat ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+        <div class="grow"><label for="l-pause">Pause (Sek.)</label><select id="l-pause">${[1, 2, 3, 5].map(n => `<option ${n === opts.pause ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+      </div>
+      <label class="inline"><input type="checkbox" id="l-de" ${opts.de ? 'checked' : ''}> Deutsch vorher sprechen</label>
+      <label class="inline"><input type="checkbox" id="l-loop" ${opts.loop ? 'checked' : ''}> Endlosschleife</label>
+      <button class="btn primary big" id="l-play" style="margin-top:12px">▶ Abspielen</button>
+      <p class="muted small">Bildschirm anlassen – manche Handys stoppen die Sprachausgabe sonst.</p>
+    </div>
+    <ul class="list card" id="l-list"></ul>
+    <div class="card">
+      <b>Echte Inhalte gehört?</b>
+      <p class="muted small">Podcast, Serie, Radio auf ${LANGS[settings.lang].name}: Zeit hier eintragen.</p>
+      <div class="row">${[5, 10, 15, 30].map(m => `<button class="btn" data-add="${m}">+${m} Min.</button>`).join('')}</div>
+    </div>`;
+  const items = () => {
+    const v = $('#l-isl', root).value;
+    return v === 'all' ? allSentences() : (state.islands.find(i => i.id === v) || { sentences: [] }).sentences;
+  };
+  const renderList = (now = -1) => {
+    $('#l-list', root).innerHTML = items().map((s, i) => `<li class="${i === now ? 'now' : ''}"><div><div class="t">${esc(s.t)}</div><div class="d">${esc(s.d)}</div></div></li>`).join('') || '<li class="muted">Keine Sätze.</li>';
+  };
+  const readOpts = () => {
+    opts.island = $('#l-isl', root).value;
+    opts.repeat = Number($('#l-rep', root).value);
+    opts.pause = Number($('#l-pause', root).value);
+    opts.de = $('#l-de', root).checked;
+    opts.loop = $('#l-loop', root).checked;
+    save('sl.listen', opts);
+  };
+  $$('select, input', root).forEach(el => { el.onchange = () => { readOpts(); renderList(); }; });
+  renderList();
+  const btn = $('#l-play', root);
+  btn.onclick = async () => {
+    if (listenToken) { stopAudio(); btn.textContent = '▶ Abspielen'; renderList(); return; }
+    readOpts();
+    const list = items();
+    if (!list.length) return;
+    const token = { stop: false };
+    listenToken = token;
+    listening = true;
+    btn.textContent = '■ Stopp';
+    do {
+      for (let i = 0; i < list.length && !token.stop; i++) {
+        renderList(i);
+        const li = $('#l-list .now', root);
+        if (li) li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        if (opts.de) { await speakP(list[i].d, { lang: 'de' }); if (token.stop) break; await wait(opts.pause * 1000); }
+        for (let r = 0; r < opts.repeat && !token.stop; r++) {
+          await speakP(list[i].t);
+          if (!token.stop) await wait(opts.pause * 1000);
+        }
+      }
+    } while (opts.loop && !token.stop);
+    if (listenToken === token) { listenToken = null; listening = false; btn.textContent = '▶ Abspielen'; renderList(); }
+  };
+  $$('[data-add]', root).forEach(b => {
+    b.onclick = () => {
+      const l = dayLog();
+      l.sec.listen = (l.sec.listen || 0) + Number(b.dataset.add) * 60;
+      persist();
+      toast(`+${b.dataset.add} Min. Hören eingetragen`);
+    };
+  });
+};
+
+let recorder = null;
+views.shadow = function (root) {
+  const saved = load('sl.shadow.' + settings.lang, {});
+  let islandId = state.islands.some(i => i.id === saved.island) ? saved.island : (state.islands[0] && state.islands[0].id);
+  let idx = saved.idx || 0;
+  let ownUrl = null;
+  root.innerHTML = `
+    <h1>🗣️ Shadowing</h1>
+    ${voiceNotice()}
+    <p class="muted small">Anhören → sofort laut mitsprechen. Rhythmus, Betonung und Melodie kopieren, nicht nur die Wörter.</p>
+    ${state.islands.length ? islandSelect('s-isl', islandId, false) : ''}
+    <div id="s-pane" style="margin-top:12px"></div>`;
+  const pane = $('#s-pane', root);
+  if (!state.islands.length) { pane.innerHTML = '<div class="card">Erst eine Sprachinsel anlegen.</div>'; return; }
+  $('#s-isl', root).onchange = e => { islandId = e.target.value; idx = 0; render(); };
+  function render() {
+    const isl = state.islands.find(i => i.id === islandId);
+    const list = isl ? isl.sentences : [];
+    if (!list.length) { pane.innerHTML = '<div class="card">Diese Insel hat noch keine Sätze.</div>'; return; }
+    if (idx >= list.length) idx = 0;
+    save('sl.shadow.' + settings.lang, { island: islandId, idx });
+    const s = list[idx];
+    if (ownUrl) { URL.revokeObjectURL(ownUrl); ownUrl = null; }
+    pane.innerHTML = `
+      <div class="row between muted small"><span>Satz ${idx + 1}/${list.length}</span></div>
+      <div class="card flash">
+        <div class="sentence">${esc(s.t)}</div>
+        <div class="native">${esc(s.d)}</div>
+        <div id="s-cmp" class="small" style="margin-top:8px"></div>
+      </div>
+      <div class="row">
+        <button class="btn grow" id="s-play">▶ Anhören</button>
+        <button class="btn grow" id="s-slow">🐢 Langsam</button>
+        <button class="btn grow" id="s-loop">🔁 3×</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        ${window.MediaRecorder ? '<button class="btn grow" id="s-rec">🎙 Aufnehmen</button>' : ''}
+        ${SR ? '<button class="btn grow" id="s-check">✅ Aussprache prüfen</button>' : ''}
+      </div>
+      <div id="s-own" style="margin-top:8px"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn grow" id="s-prev">‹ Zurück</button>
+        <button class="btn primary grow" id="s-next">Weiter ›</button>
+      </div>
+      <p class="muted small">„Aussprache prüfen“ nutzt die Spracherkennung des Browsers – ein grober Hinweis, kein Urteil über den Akzent.</p>`;
+    speak(s.t);
+    $('#s-play', pane).onclick = () => speak(s.t);
+    $('#s-slow', pane).onclick = () => speak(s.t, { rate: 0.6 });
+    $('#s-loop', pane).onclick = async () => {
+      for (let i = 0; i < 3; i++) { await speakP(s.t); await wait(Math.max(1500, s.t.length * 80)); }
+    };
+    $('#s-prev', pane).onclick = () => { idx = (idx - 1 + list.length) % list.length; render(); };
+    $('#s-next', pane).onclick = () => { idx = (idx + 1) % list.length; render(); };
+    if ($('#s-check', pane)) {
+      $('#s-check', pane).onclick = async () => {
+        const b = $('#s-check', pane);
+        b.textContent = '… sprich jetzt';
+        b.disabled = true;
+        let said = '';
+        try { said = await recognize(); } catch (e) { toast('Spracherkennung: ' + e); }
+        b.textContent = '✅ Aussprache prüfen';
+        b.disabled = false;
+        if (!said) { toast('Nichts erkannt'); return; }
+        const c = compareWords(s.t, said);
+        $('#s-cmp', pane).innerHTML = `<p>Erkannt: „${esc(said)}“</p><p>${c.html} <b>${c.score}%</b></p>`;
+      };
+    }
+    if ($('#s-rec', pane)) {
+      $('#s-rec', pane).onclick = async () => {
+        const b = $('#s-rec', pane);
+        if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
+        let stream;
+        try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { toast('Kein Mikrofonzugriff'); return; }
+        const chunks = [];
+        recorder = new MediaRecorder(stream);
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = () => {
+          stream.getTracks().forEach(t => t.stop());
+          b.textContent = '🎙 Aufnehmen';
+          b.classList.remove('rec');
+          if (ownUrl) URL.revokeObjectURL(ownUrl);
+          ownUrl = URL.createObjectURL(new Blob(chunks, { type: recorder.mimeType }));
+          $('#s-own', pane).innerHTML = `<div class="card"><b>Deine Aufnahme</b><audio controls src="${ownUrl}" style="width:100%;margin-top:6px"></audio>
+            <button class="btn" id="s-cmpplay" style="width:100%;margin-top:6px">Original → Aufnahme vergleichen</button></div>`;
+          $('#s-cmpplay', pane).onclick = async () => { await speakP(s.t); await wait(400); $('#s-own audio', pane).play(); };
+        };
+        recorder.start();
+        b.textContent = '■ Stopp';
+        b.classList.add('rec');
+      };
+    }
+  }
+  render();
+};
+
+// ---------- Satzbaukasten ----------
+function builderData() { return window.BUILDER[settings.lang]; }
+function builderVerbs() { return builderData().verbs.concat(state.builderVerbs); }
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function fillProfile(s, german) {
+  const b = builderData(), p = settings.profile;
+  const o = b.origins[p.origin] || b.origins.de;
+  const city = p.city || (german || settings.lang === 'en' ? 'Berlin' : 'Berlino');
+  const name = p.name || (settings.lang === 'it' ? 'Luca' : 'Alex');
+  return s.replace('{name}', name).replace('{city}', city).replace('{originDe}', o.de).replace('{origin}', o.t);
+}
+// „ein Buch lesen“ -> „kein Buch lesen“, sonst „nicht …“
+function negateDe(v) {
+  if (v.deNeg) return v.deNeg;
+  const m = v.de.match(/^(ein|eine|einen|einem)\s(.*)$/);
+  return m ? `k${m[1]} ${m[2]}` : 'nicht ' + v.de;
+}
+function buildModal(m, v, time, neg) {
+  const n = neg && m.tNeg;
+  const tm = time ? ' ' + time.t : '';
+  const dm = time ? time.de + ' ' : '';
+  return {
+    t: `${n ? m.tNeg : m.t} ${v.t}${tm}.`,
+    d: m.zu ? `${m.de} ${dm}${v.deZu}.` : `${m.de} ${dm}${n ? negateDe(v) : v.de}.`,
+  };
+}
+function buildBe(a, level, gender) {
+  const adj = gender === 'f' ? a.f : a.m;
+  const deAdj = gender === 'f' && a.deF ? a.deF : a.de;
+  const lv = a.noIntens && level === 'molto' ? '' : level;
+  const it = settings.lang === 'it';
+  const t = lv === 'non' ? (it ? `Non sono ${adj}.` : `I'm not ${adj}.`)
+    : lv === 'molto' ? (it ? `Sono molto ${adj}.` : `I'm very ${adj}.`)
+    : (it ? `Sono ${adj}.` : `I'm ${adj}.`);
+  let d;
+  if (lv === 'non') d = a.deF ? `Ich bin ${gender === 'f' ? 'keine' : 'kein'} ${deAdj}.` : `Ich bin nicht ${deAdj}.`;
+  else d = lv === 'molto' ? `Ich bin sehr ${deAdj}.` : `Ich bin ${deAdj}.`;
+  return { t, d };
+}
+function buildLike(x, level) {
+  let t;
+  if (settings.lang === 'it') {
+    const v = x.pl ? 'piacciono' : 'piace';
+    t = level === 'non' ? `Non mi ${v} ${x.t}.` : level === 'molto' ? `Mi ${v} molto ${x.t}.` : `Mi ${v} ${x.t}.`;
+  } else {
+    t = level === 'non' ? `I don't like ${x.t}.` : level === 'molto' ? `I really like ${x.t}.` : `I like ${x.t}.`;
+  }
+  const d = x.verb
+    ? x.de.replace('{g}', level === 'molto' ? 'sehr gern' : level === 'non' ? 'nicht gern' : 'gern') + '.'
+    : `Ich mag ${x.de}${level === 'molto' ? ' sehr' : level === 'non' ? ' nicht' : ''}.`;
+  return { t, d };
+}
+function dialogItems() {
+  return builderData().dialog.map(p => ({ q: p.q, qd: p.qd, t: fillProfile(p.a), d: fillProfile(p.ad, true) }));
+}
+function randomSentence() {
+  const b = builderData();
+  const r = Math.random();
+  if (r < 0.45) {
+    const m = pick(b.modals);
+    return buildModal(m, pick(builderVerbs()), Math.random() < 0.5 ? pick(b.times) : null, !!m.tNeg && Math.random() < 0.25);
+  }
+  if (r < 0.65) return buildBe(pick(b.adjectives), pick(['', '', 'molto', 'non']), settings.profile.gender);
+  if (r < 0.85) return buildLike(pick(b.likes), pick(['', '', 'molto', 'non']));
+  return pick(dialogItems());
+}
+function addToBuilderIsland(sent, quiet) {
+  const id = 'bk-' + settings.lang;
+  let isl = state.islands.find(i => i.id === id);
+  if (!isl) {
+    isl = { id, title: 'Satzbaukasten', sentences: [], ts: Date.now() };
+    state.islands.push(isl);
+  }
+  if (isl.sentences.some(s => s.t === sent.t)) { if (!quiet) toast('Schon in der Insel'); return false; }
+  isl.sentences.push({ id: 's:' + uid(), t: sent.t, d: sent.d, ts: Date.now() });
+  persist();
+  if (!quiet) toast('In Insel „Satzbaukasten“ – kommt in Wiederholung & Shadowing');
+  return true;
+}
+function islandsSeg(active) {
+  return `<div class="seg">
+    <button data-go="#islands" class="${active === 'islands' ? 'on' : ''}">🏝️ Sprachinseln</button>
+    <button data-go="#builder" class="${active === 'builder' ? 'on' : ''}">🧱 Satzbaukasten</button>
+  </div>`;
+}
+function bindGo(root) { $$('[data-go]', root).forEach(b => { b.onclick = () => { location.hash = b.dataset.go; }; }); }
+function chips(name, items, selected, label, extra = '') {
+  return `<div class="chips" data-name="${name}">${items.map((x, i) =>
+    `<button class="chip ${i === selected ? 'on' : ''}" data-i="${i}">${esc(label(x))}</button>`).join('')}${extra}</div>`;
+}
+function sentenceCard(sent, lead) {
+  return `<div class="card flash">
+    ${lead ? `<div class="muted small">${lead}</div>` : ''}
+    <div class="sentence">${esc(sent.t)}</div>
+    <div class="native">${esc(sent.d)}</div>
+    <div id="b-cmp" class="small"></div>
+    <div class="row" style="justify-content:center;margin-top:10px">
+      <button class="btn small" id="b-play">🔊 Anhören</button>
+      ${SR ? '<button class="btn small" id="b-say">🎙 Nachsprechen</button>' : ''}
+      <button class="btn small" id="b-add">➕ In Insel</button>
+    </div>
+  </div>`;
+}
+function bindSentenceCard(pane, sent) {
+  $('#b-play', pane).onclick = () => speak(sent.t);
+  $('#b-add', pane).onclick = () => addToBuilderIsland(sent);
+  if ($('#b-say', pane)) {
+    $('#b-say', pane).onclick = async () => {
+      const b = $('#b-say', pane);
+      b.textContent = '… sprich jetzt';
+      b.disabled = true;
+      let said = '';
+      try { said = await recognize(); } catch (e) { toast('Spracherkennung: ' + e); }
+      b.textContent = '🎙 Nachsprechen';
+      b.disabled = false;
+      if (!said) { toast('Nichts erkannt'); return; }
+      const c = compareWords(sent.t, said);
+      $('#b-cmp', pane).innerHTML = `<p>Erkannt: „${esc(said)}“</p><p>${c.html} <b>${c.score}%</b></p>`;
+    };
+  }
+}
+
+views.builder = function (root, arg) {
+  const b = builderData();
+  const it = settings.lang === 'it';
+  const mode = ['modal', 'be', 'like', 'dialog', 'drill'].includes(arg) ? arg : 'modal';
+  const selKey = 'sl.builder.' + settings.lang;
+  const sel = Object.assign({ m: 0, v: 0, time: -1, neg: false, a: 2, bl: 0, l: 0, ll: 0 }, load(selKey, {}));
+  const labels = { modal: it ? 'Voglio …' : 'I want to …', be: it ? 'Sono …' : "I'm …", like: it ? 'Mi piace …' : 'I like …', dialog: 'Fragen', drill: '🎲 Drill' };
+  root.innerHTML = `
+    ${islandsSeg('builder')}
+    <p class="muted small">Wenige feste Satzmuster über dich selbst, dazu austauschbare Wörter – so entstehen hunderte einfache Sätze. Damit kannst du nach wenigen Wochen erste kleine Gespräche führen.</p>
+    <div class="seg">${Object.keys(labels).map(k => `<button data-m="${k}" class="${k === mode ? 'on' : ''}">${labels[k]}</button>`).join('')}</div>
+    <div id="pane"></div>`;
+  bindGo(root);
+  $$('.seg [data-m]', root).forEach(x => { x.onclick = () => { location.hash = '#builder/' + x.dataset.m; }; });
+  const pane = $('#pane', root);
+  const store = () => save(selKey, sel);
+  let profileOpen = !settings.profile.name;
+  const onChips = (name, fn) => $$(`.chips[data-name="${name}"] .chip`, pane).forEach(c => { c.onclick = () => { fn(Number(c.dataset.i)); store(); render(); }; });
+
+  function render() {
+    if (mode === 'modal') renderModal();
+    else if (mode === 'be') renderBe();
+    else if (mode === 'like') renderLike();
+    else if (mode === 'dialog') renderDialog();
+    else renderDrill();
+  }
+
+  function renderModal() {
+    const verbs = builderVerbs();
+    if (sel.m >= b.modals.length) sel.m = 0;
+    if (sel.v >= verbs.length) sel.v = 0;
+    const m = b.modals[sel.m];
+    const sent = buildModal(m, verbs[sel.v], sel.time >= 0 ? b.times[sel.time] : null, sel.neg);
+    pane.innerHTML = `
+      ${sentenceCard(sent)}
+      <label>1. Hilfsverb</label>${chips('m', b.modals, sel.m, x => x.t)}
+      <label class="inline"><input type="checkbox" id="b-neg" ${m.tNeg ? '' : 'disabled'} ${sel.neg && m.tNeg ? 'checked' : ''}> verneinen ${m.tNeg ? `(${esc(m.tNeg)})` : '(hier nicht üblich)'}</label>
+      <label>2. Verb im Infinitiv</label>${chips('v', verbs, sel.v, x => x.t)}
+      <label>3. Wann? (optional)</label>${chips('time', [{ t: '—' }].concat(b.times), sel.time + 1, x => x.t)}
+      <details class="card" style="margin-top:12px">
+        <summary><b>Eigenes Verb einsetzen</b></summary>
+        <p class="muted small">Neues Verb im Wörterbuch oder Übersetzer nachschlagen und im Infinitiv eintragen – es passt in jedes Muster.</p>
+        <label for="bv-t">${LANGS[settings.lang].name} (Infinitiv${it ? '' : ' ohne „to“'})</label><input type="text" id="bv-t" autocapitalize="off" placeholder="${it ? 'nuotare' : 'swim'}">
+        <label for="bv-d">Deutsch (Infinitiv)</label><input type="text" id="bv-d" placeholder="schwimmen">
+        <label for="bv-z">Deutsch mit „zu“ (optional – nötig bei trennbaren Verben: anzurufen)</label><input type="text" id="bv-z" placeholder="zu schwimmen">
+        <button class="btn primary" id="bv-add" style="margin-top:8px">Hinzufügen</button>
+        ${state.builderVerbs.length ? `<ul class="list">${state.builderVerbs.map(v => `<li><div class="grow"><div class="t">${esc(v.t)}</div><div class="d">${esc(v.de)}</div></div><button class="btn small danger" data-delv="${v.id}">✕</button></li>`).join('')}</ul>` : ''}
+      </details>`;
+    bindSentenceCard(pane, sent);
+    onChips('m', i => { sel.m = i; });
+    onChips('v', i => { sel.v = i; });
+    onChips('time', i => { sel.time = i - 1; });
+    $('#b-neg', pane).onchange = e => { sel.neg = e.target.checked; store(); render(); };
+    $('#bv-add', pane).onclick = () => {
+      const t = $('#bv-t', pane).value.trim(), de = $('#bv-d', pane).value.trim();
+      if (!t || !de) { toast('Verb und Deutsch ausfüllen'); return; }
+      let deZu = $('#bv-z', pane).value.trim();
+      if (!deZu) { const w = de.split(/\s+/); const last = w.pop(); deZu = w.concat('zu', last).join(' '); }
+      state.builderVerbs.push({ id: 'bv:' + uid(), t, de, deZu, ts: Date.now() });
+      persist();
+      sel.v = builderVerbs().length - 1;
+      store();
+      render();
+    };
+    $$('[data-delv]', pane).forEach(x => {
+      x.onclick = () => {
+        state.builderVerbs = state.builderVerbs.filter(v => v.id !== x.dataset.delv);
+        markDeleted(x.dataset.delv);
+        persist();
+        sel.v = 0;
+        store();
+        render();
+      };
+    });
+  }
+
+  function renderBe() {
+    const g = settings.profile.gender;
+    const levels = it ? ['Sono …', 'Sono molto …', 'Non sono …'] : ["I'm …", "I'm very …", "I'm not …"];
+    const lv = ['', 'molto', 'non'];
+    if (sel.a >= b.adjectives.length) sel.a = 0;
+    const sent = buildBe(b.adjectives[sel.a], lv[sel.bl], g);
+    pane.innerHTML = `
+      ${sentenceCard(sent)}
+      ${it ? `<label>Ich bin …</label>${chips('g', ['männlich (-o)', 'weiblich (-a)'], g === 'f' ? 1 : 0, x => x)}
+        <p class="muted small">Adjektive richten sich nach dir: stanco → stanca. Endet es auf -e (felice), bleibt es gleich.</p>` : ''}
+      <label>Form</label>${chips('bl', levels, sel.bl, x => x)}
+      <label>Eigenschaft</label>${chips('a', b.adjectives, sel.a, x => (g === 'f' ? x.f : x.m))}`;
+    bindSentenceCard(pane, sent);
+    if (it) onChips('g', i => { settings.profile.gender = i ? 'f' : 'm'; settings.profile.ts = Date.now(); saveSettings(); });
+    onChips('bl', i => { sel.bl = i; });
+    onChips('a', i => { sel.a = i; });
+  }
+
+  function renderLike() {
+    const levels = it ? ['Mi piace …', 'Mi piace molto …', 'Non mi piace …'] : ['I like …', 'I really like …', "I don't like …"];
+    const lv = ['', 'molto', 'non'];
+    if (sel.l >= b.likes.length) sel.l = 0;
+    const sent = buildLike(b.likes[sel.l], lv[sel.ll]);
+    pane.innerHTML = `
+      ${sentenceCard(sent)}
+      <label>Form</label>${chips('ll', levels, sel.ll, x => x)}
+      <label>Was? (Nomen oder Verb im ${it ? 'Infinitiv' : '-ing'})</label>${chips('l', b.likes, sel.l, x => x.t)}
+      <p class="muted small">${it ? 'Wörtlich „mir gefällt“ – bei Mehrzahl „mi piacciono“ (i gatti). Verneinung: „non“ ganz nach vorn.' : 'Nach „like“ steht bei Tätigkeiten die -ing-Form: I like cooking.'}</p>`;
+    bindSentenceCard(pane, sent);
+    onChips('ll', i => { sel.ll = i; });
+    onChips('l', i => { sel.l = i; });
+  }
+
+  function renderDialog() {
+    const p = settings.profile;
+    const items = dialogItems();
+    pane.innerHTML = `
+      <div class="notice">${esc(b.backTip)}</div>
+      <details class="card" id="p-box" ${profileOpen ? 'open' : ''}>
+        <summary><b>Deine Angaben</b> <span class="muted small">(für die Antworten)</span></summary>
+        <label for="p-name">Vorname</label><input type="text" id="p-name" value="${esc(p.name)}">
+        <label for="p-city">Wohnort</label><input type="text" id="p-city" value="${esc(p.city)}" placeholder="${it ? 'z. B. Monaco di Baviera' : 'z. B. Munich'}">
+        <label for="p-origin">Herkunft</label>
+        <select id="p-origin">${Object.entries({ de: 'Deutschland', at: 'Österreich', ch: 'Schweiz' }).map(([k, v]) => `<option value="${k}" ${p.origin === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
+      </details>
+      ${items.map((x, i) => `
+        <div class="card">
+          <div class="row between"><div class="grow"><div class="t">${esc(x.q)}</div><div class="d muted small">${esc(x.qd)}</div></div><button class="btn small" data-sq="${i}">🔊</button></div>
+          <div class="row between" style="margin-top:8px"><div class="grow"><div class="t">↳ ${esc(x.t)}</div><div class="d muted small">${esc(x.d)}</div></div><button class="btn small" data-sa="${i}">🔊</button></div>
+        </div>`).join('')}
+      <button class="btn primary big" id="d-all">➕ Alle Antworten in die Insel</button>
+      <p class="muted small">Tipp: Im Drill kommen die Fragen per Audio – du antwortest laut.</p>`;
+    const saveP = () => {
+      p.name = $('#p-name', pane).value.trim();
+      p.city = $('#p-city', pane).value.trim();
+      p.origin = $('#p-origin', pane).value;
+      p.ts = Date.now();
+      saveSettings();
+      render();
+    };
+    ['#p-name', '#p-city', '#p-origin'].forEach(s => { $(s, pane).onchange = saveP; });
+    $('#p-box', pane).ontoggle = e => { profileOpen = e.target.open; };
+    $$('[data-sq]', pane).forEach(x => { x.onclick = () => speak(items[x.dataset.sq].q); });
+    $$('[data-sa]', pane).forEach(x => { x.onclick = () => speak(items[x.dataset.sa].t); });
+    $('#d-all', pane).onclick = () => {
+      const n = items.filter(x => addToBuilderIsland({ t: x.q + ' – ' + x.t, d: x.qd + ' – ' + x.d }, true)).length;
+      toast(n ? `${n} Dialogzeilen in Insel „Satzbaukasten“` : 'Schon alle in der Insel');
+    };
+  }
+
+  function renderDrill() {
+    const l = dayLog();
+    const sent = randomSentence();
+    pane.innerHTML = `
+      <div class="row between muted small"><span>Heute ${l.drill || 0} Sätze gebildet</span><span>laut sprechen!</span></div>
+      <div class="card flash">
+        ${sent.q ? `<div class="muted small">Jemand fragt:</div><div class="sentence">${esc(sent.q)}</div><div class="muted small" style="margin-top:8px">Antworte:</div>` : `<div class="muted small">Sag auf ${LANGS[settings.lang].name}:</div>`}
+        <div class="native">${esc(sent.d)}</div>
+        <div id="answer" hidden><div class="sentence" style="margin-top:10px">${esc(sent.t)}</div><div id="cmp" class="small"></div></div>
+      </div>
+      <div class="row" id="pre">
+        ${SR ? '<button class="btn" id="say">🎙 Sprechen</button>' : ''}
+        <button class="btn primary grow" id="reveal">Aufdecken</button>
+      </div>
+      <div class="row" id="post" hidden>
+        <button class="btn" id="again">🔊</button>
+        <button class="btn" id="add">➕ Insel</button>
+        <button class="btn primary grow" id="next">Nächster Satz ›</button>
+      </div>`;
+    if (sent.q) speak(sent.q);
+    let said = '';
+    const reveal = () => {
+      $('#answer', pane).hidden = false;
+      $('#pre', pane).hidden = true;
+      $('#post', pane).hidden = false;
+      if (said) {
+        const c = compareWords(sent.t, said);
+        $('#cmp', pane).innerHTML = `<p>Gesagt: „${esc(said)}“</p><p>${c.html} <b>${c.score}%</b></p>`;
+      }
+      speak(sent.t);
+    };
+    $('#reveal', pane).onclick = reveal;
+    $('#again', pane).onclick = () => speak(sent.t);
+    $('#add', pane).onclick = () => addToBuilderIsland({ t: sent.q ? sent.q + ' – ' + sent.t : sent.t, d: sent.q ? sent.qd + ' – ' + sent.d : sent.d });
+    $('#next', pane).onclick = () => { l.drill = (l.drill || 0) + 1; persist(); renderDrill(); };
+    if ($('#say', pane)) {
+      $('#say', pane).onclick = async () => {
+        const x = $('#say', pane);
+        x.textContent = '… hört zu';
+        x.disabled = true;
+        try { said = await recognize(); } catch (e) { toast('Spracherkennung: ' + e); }
+        if (!said) { x.textContent = '🎙 Sprechen'; x.disabled = false; toast('Nichts erkannt'); return; }
+        reveal();
+      };
+    }
+    keyHandler = e => {
+      if (e.target.tagName === 'INPUT') return;
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if ($('#pre', pane).hidden) $('#next', pane).click(); else reveal(); }
+    };
+  }
+
+  render();
+};
+
+views.islands = function (root, id) {
+  const isl = id && state.islands.find(i => i.id === id);
+  if (isl) { islandDetail(root, isl); return; }
+  root.innerHTML = `
+    ${islandsSeg('islands')}
+    <p class="muted small">10–20 Sätze pro Thema, die du im echten Leben sagen wirst. Die mitgelieferten Inseln sind Vorlagen – Namen, Orte und Details an dich anpassen.</p>
+    ${state.islands.map(i => `
+      <a class="card step" href="#islands/${i.id}">
+        <div class="num">${i.sentences.length}</div>
+        <div class="grow"><b>${esc(i.title)}</b><div class="meta">${i.sentences.length} Sätze</div></div><div>›</div>
+      </a>`).join('')}
+    <div class="card">
+      <b>Neue Insel</b>
+      <p class="muted small">Ideen: Arbeit, Hobbys, Familie, Wohnung, Wochenende, Arztbesuch, Einkaufen, Meinungen.</p>
+      <div class="row"><input type="text" id="i-title" class="grow" placeholder="Thema"><button class="btn primary" id="i-add">Anlegen</button></div>
+    </div>`;
+  bindGo(root);
+  $('#i-add', root).onclick = () => {
+    const title = $('#i-title', root).value.trim();
+    if (!title) return;
+    const n = { id: uid(), title, sentences: [], ts: Date.now() };
+    state.islands.push(n);
+    persist();
+    location.hash = '#islands/' + n.id;
+  };
+};
+
+function islandDetail(root, isl) {
+  const code = LANGS[settings.lang].name;
+  root.innerHTML = `
+    <a href="#islands" class="small">‹ Alle Inseln</a>
+    <input type="text" id="i-name" value="${esc(isl.title)}" style="font-size:20px;font-weight:700;margin:8px 0 12px">
+    <div class="card">
+      <b>Satz hinzufügen</b>
+      <label for="s-d">Deutsch – was willst du sagen?</label><input type="text" id="s-d">
+      <label for="s-t">${code}</label><input type="text" id="s-t" autocapitalize="sentences">
+      <p class="muted small">Übersetzung selbst schreiben oder aus DeepL/Google kopieren – bei Unsicherheit von einer Muttersprachlerin prüfen lassen.</p>
+      <button class="btn primary" id="s-add">Hinzufügen</button>
+    </div>
+    <ul class="list card">
+      ${isl.sentences.map(s => `
+        <li><button class="btn small" data-play="${s.id}">🔊</button>
+          <div class="grow"><div class="t">${esc(s.t)}</div><div class="d">${esc(s.d)}</div></div>
+          <button class="btn small" data-edit="${s.id}">✎</button>
+          <button class="btn small danger" data-del="${s.id}">✕</button></li>`).join('') || '<li class="muted">Noch keine Sätze.</li>'}
+    </ul>
+    <details class="card">
+      <summary><b>Mehrere Sätze einfügen</b></summary>
+      <p class="muted small">Eine Zeile pro Satz: <code>${code} | Deutsch</code></p>
+      <textarea id="s-bulk"></textarea>
+      <button class="btn" id="s-import" style="margin-top:8px">Einfügen</button>
+    </details>
+    <button class="btn danger" id="i-del" style="width:100%">Insel löschen</button>`;
+  const find = id => isl.sentences.find(s => s.id === id);
+  $('#i-name', root).onchange = e => { isl.title = e.target.value.trim() || isl.title; isl.ts = Date.now(); persist(); };
+  $('#s-add', root).onclick = () => {
+    const d = $('#s-d', root).value.trim(), t = $('#s-t', root).value.trim();
+    if (!d || !t) { toast('Beide Felder ausfüllen'); return; }
+    isl.sentences.push({ id: 's:' + uid(), t, d, ts: Date.now() });
+    persist();
+    islandDetail(root, isl);
+    $('#s-d', root).focus();
+  };
+  $('#s-import', root).onclick = () => {
+    const pairs = parseLines($('#s-bulk', root).value);
+    pairs.forEach(([t, d]) => isl.sentences.push({ id: 's:' + uid(), t, d, ts: Date.now() }));
+    persist();
+    toast(`${pairs.length} Sätze eingefügt`);
+    islandDetail(root, isl);
+  };
+  $$('[data-play]', root).forEach(b => { b.onclick = () => speak(find(b.dataset.play).t); });
+  $$('[data-edit]', root).forEach(b => {
+    b.onclick = () => {
+      const s = find(b.dataset.edit);
+      const t = prompt(code + ':', s.t);
+      if (t === null) return;
+      const d = prompt('Deutsch:', s.d);
+      if (d === null) return;
+      if (t.trim()) s.t = t.trim();
+      if (d.trim()) s.d = d.trim();
+      s.ts = Date.now();
+      persist();
+      islandDetail(root, isl);
+    };
+  });
+  $$('[data-del]', root).forEach(b => {
+    b.onclick = () => {
+      isl.sentences = isl.sentences.filter(s => s.id !== b.dataset.del);
+      delete state.srs[b.dataset.del];
+      markDeleted(b.dataset.del);
+      persist();
+      islandDetail(root, isl);
+    };
+  });
+  $('#i-del', root).onclick = () => {
+    if (!confirm(`Insel „${isl.title}“ mit ${isl.sentences.length} Sätzen löschen?`)) return;
+    isl.sentences.forEach(s => { delete state.srs[s.id]; markDeleted(s.id); });
+    markDeleted(isl.id);
+    state.islands = state.islands.filter(i => i !== isl);
+    persist();
+    location.hash = '#islands';
+  };
+}
+
+views.settings = function (root) {
+  const voiceOpts = lang => {
+    const list = voicesFor(lang);
+    if (!list.length) return '<option value="">(keine Stimme gefunden)</option>';
+    return `<option value="">Automatisch</option>` + list.map(v => `<option ${settings.voices[lang] === v.name ? 'selected' : ''} value="${esc(v.name)}">${esc(v.name)} (${esc(v.lang)})</option>`).join('');
+  };
+  root.innerHTML = `
+    <h1>⚙️ Einstellungen</h1>
+    <div class="card">
+      <label for="o-new">Neue Wörter pro Tag</label><input type="number" id="o-new" min="5" max="200" value="${settings.newWords}">
+      <label for="o-sent">Neue Sätze pro Tag (Wiederholung)</label><input type="number" id="o-sent" min="0" max="100" value="${settings.newSentences}">
+      <label for="o-rate">Sprechtempo: <span id="o-rate-v">${settings.rate}</span></label><input type="range" id="o-rate" min="0.5" max="1.2" step="0.05" value="${settings.rate}" style="width:100%">
+      <label for="o-var">Englisch-Variante</label>
+      <select id="o-var"><option value="en-GB" ${settings.enVariant === 'en-GB' ? 'selected' : ''}>Britisch (en-GB)</option><option value="en-US" ${settings.enVariant === 'en-US' ? 'selected' : ''}>Amerikanisch (en-US)</option></select>
+      <label for="o-vit">Stimme Italienisch</label><select id="o-vit">${voiceOpts('it')}</select>
+      <label for="o-ven">Stimme Englisch</label><select id="o-ven">${voiceOpts('en')}</select>
+      <button class="btn" id="o-test" style="margin-top:10px">🔊 Stimme testen</button>
+    </div>
+    <div class="card">
+      <b>Über dich</b> <span class="muted small">(für Satzbaukasten & Dialoge)</span>
+      <label for="p-name">Vorname</label><input type="text" id="p-name" value="${esc(settings.profile.name)}">
+      <label for="p-gender">Ich bin</label>
+      <select id="p-gender"><option value="m" ${settings.profile.gender === 'm' ? 'selected' : ''}>männlich (sono stanco)</option><option value="f" ${settings.profile.gender === 'f' ? 'selected' : ''}>weiblich (sono stanca)</option></select>
+    </div>
+    <div class="card">
+      <b>Sync zwischen Geräten (GitHub Gist)</b>
+      ${syncCfg.token ? `
+        <p class="small">Verbunden${syncCfg.last ? ' · zuletzt ' + new Date(syncCfg.last).toLocaleString('de-DE') : ''}${syncCfg.error ? `<br><span style="color:var(--bad)">Fehler: ${esc(syncCfg.error)}</span>` : ''}</p>
+        <div class="row"><button class="btn primary grow" id="y-now">🔄 Jetzt synchronisieren</button><button class="btn danger" id="y-off">Trennen</button></div>
+        <p class="muted small">Synchronisiert automatisch beim Start, beim Verlassen der App und alle 10 Minuten.</p>` : `
+        <p class="muted small">Dein Fortschritt wird als privates Gist in deinem GitHub-Konto gespeichert. Einmalig: auf github.com → Settings → Developer settings → Personal access tokens → <b>Tokens (classic)</b> → „Generate new token“, nur Haken bei <b>gist</b>, Ablaufdatum wählen. Token auf jedem Gerät hier einfügen.</p>
+        <input type="password" id="y-token" placeholder="ghp_…" autocomplete="off">
+        <button class="btn primary" id="y-connect" style="margin-top:8px">Verbinden</button>
+        <p class="muted small">Das Token liegt im Browserspeicher dieses Geräts und erlaubt nur Zugriff auf deine Gists. Nicht weitergeben.</p>`}
+    </div>
+    <div class="card">
+      <b>Backup</b>
+      <p class="muted small">Ohne Sync liegen alle Daten nur in diesem Browser. Browserdaten löschen = Fortschritt weg. Die Backup-Datei enthält kein Token.</p>
+      <div class="row"><button class="btn grow" id="o-export">⬇ Exportieren</button><label class="btn grow" style="margin:0;color:var(--text);font-size:16px">⬆ Importieren<input type="file" id="o-import" accept=".json,application/json" hidden></label></div>
+    </div>
+    <div class="card">
+      <b>Zurücksetzen</b>
+      <p class="muted small">Löscht Fortschritt, eigene Wörter und Inseln für ${LANGS[settings.lang].name}.</p>
+      <button class="btn danger" id="o-reset">${LANGS[settings.lang].name} zurücksetzen</button>
+    </div>`;
+  const num = (el, min, max, fallback) => { const v = parseInt(el.value, 10); return isNaN(v) ? fallback : Math.min(max, Math.max(min, v)); };
+  $('#o-new', root).onchange = e => { settings.newWords = num(e.target, 5, 200, 30); saveSettings(); };
+  $('#o-sent', root).onchange = e => { settings.newSentences = num(e.target, 0, 100, 10); saveSettings(); };
+  $('#o-rate', root).oninput = e => { settings.rate = Number(e.target.value); $('#o-rate-v', root).textContent = settings.rate; saveSettings(); };
+  $('#o-var', root).onchange = e => { settings.enVariant = e.target.value; saveSettings(); };
+  $('#o-vit', root).onchange = e => { settings.voices.it = e.target.value; saveSettings(); };
+  $('#o-ven', root).onchange = e => { settings.voices.en = e.target.value; saveSettings(); };
+  const saveProfile = () => {
+    settings.profile.name = $('#p-name', root).value.trim();
+    settings.profile.gender = $('#p-gender', root).value;
+    settings.profile.ts = Date.now();
+    saveSettings();
+  };
+  $('#p-name', root).onchange = saveProfile;
+  $('#p-gender', root).onchange = saveProfile;
+  if ($('#y-connect', root)) {
+    $('#y-connect', root).onclick = async () => {
+      const token = $('#y-token', root).value.trim();
+      if (!token) return;
+      syncCfg.token = token;
+      syncCfg.gistId = '';
+      $('#y-connect', root).textContent = 'Verbinde …';
+      await syncNow({ manual: true });
+      if (syncCfg.error) { syncCfg.token = ''; saveSync(); } else toast('Sync eingerichtet');
+      route();
+    };
+  } else {
+    $('#y-now', root).onclick = async () => {
+      $('#y-now', root).textContent = 'Synchronisiere …';
+      await syncNow({ manual: true });
+      if (!syncCfg.error) toast('Synchronisiert');
+      route();
+    };
+    $('#y-off', root).onclick = () => {
+      if (!confirm('Sync auf diesem Gerät trennen? Die Daten im Gist bleiben erhalten.')) return;
+      syncCfg.token = ''; syncCfg.gistId = ''; syncCfg.error = '';
+      saveSync();
+      route();
+    };
+  }
+  $('#o-test', root).onclick = () => speak(settings.lang === 'it' ? 'Ciao! Come stai oggi?' : 'Hello! How are you today?');
+  $('#o-export', root).onclick = () => {
+    persist();
+    const data = { app: 'sprachtraining', version: 1, exported: new Date().toISOString(), settings, data: {} };
+    Object.keys(LANGS).forEach(l => { data.data[l] = load(stateKey(l), null); });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+    a.download = `sprachtraining-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  $('#o-import', root).onchange = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (data.app !== 'sprachtraining') throw new Error('falsches Format');
+      if (!confirm('Aktuelle Daten durch das Backup ersetzen?')) return;
+      Object.keys(LANGS).forEach(l => { if (data.data[l]) save(stateKey(l), data.data[l]); });
+      Object.assign(settings, data.settings);
+      saveSettings();
+      state = loadState(settings.lang);
+      toast('Backup importiert');
+      renderLangSwitch();
+      route();
+    } catch (err) { toast('Import fehlgeschlagen: ' + err.message); }
+  };
+  $('#o-reset', root).onclick = () => {
+    if (!confirm(`Wirklich alle ${LANGS[settings.lang].name}-Daten löschen?`)) return;
+    localStorage.removeItem(stateKey(settings.lang));
+    state = loadState(settings.lang);
+    state.resetAt = Date.now();
+    persist();
+    // Mit Sync: zurückgesetzten Stand hochladen, statt ihn wieder mit dem alten zusammenzuführen
+    if (syncCfg.token) syncNow({ overwriteLang: settings.lang, manual: true });
+    toast('Zurückgesetzt');
+    location.hash = '#home';
+  };
+};
+
+// ---------- Sync über ein privates GitHub-Gist ----------
+const SYNC_FILE = 'sprachtraining.json';
+const SYNC_DESC = 'Sprachtraining Sync (nicht löschen)';
+const syncCfg = Object.assign({ token: '', gistId: '', last: 0, error: '' }, load('sl.sync', {}));
+function saveSync() { save('sl.sync', syncCfg); }
+let syncing = false;
+
+// Zwei Stände zusammenführen: pro Eintrag gewinnt der neuere Zeitstempel, Gelöschtes bleibt gelöscht.
+function mergeState(a, b) {
+  a = Object.assign(emptyState(), a);
+  b = Object.assign(emptyState(), b);
+  // Wurde eine Seite zurückgesetzt, zählt von der anderen nur, was danach entstanden ist.
+  if (a.resetAt !== b.resetAt) {
+    const [nw, old] = a.resetAt > b.resetAt ? [a, b] : [b, a];
+    const keep = x => (x.ts || 0) > nw.resetAt;
+    const keepObj = o => Object.fromEntries(Object.entries(o).filter(([, v]) => keep(v)));
+    a = nw;
+    b = Object.assign(emptyState(), {
+      words: old.words.filter(keep),
+      builderVerbs: old.builderVerbs.filter(keep),
+      islands: old.islands.filter(keep).map(i => Object.assign({}, i, { sentences: i.sentences.filter(keep) })),
+      srs: keepObj(old.srs), overrides: keepObj(old.overrides), log: old.log, deleted: old.deleted, resetAt: nw.resetAt,
+    });
+  }
+  const deleted = {};
+  [a.deleted, b.deleted].forEach(d => Object.entries(d).forEach(([k, v]) => { deleted[k] = Math.max(deleted[k] || 0, v); }));
+  const alive = (id, ts) => !(deleted[id] && deleted[id] >= (ts || 0));
+  const newer = (x, y) => ((y.ts || 0) > (x.ts || 0) ? y : x);
+  const mergeList = (la, lb) => {
+    const m = new Map();
+    la.concat(lb).forEach(x => m.set(x.id, m.has(x.id) ? newer(m.get(x.id), x) : x));
+    return [...m.values()].filter(x => alive(x.id, x.ts));
+  };
+  const im = new Map();
+  a.islands.concat(b.islands).forEach(isl => {
+    const prev = im.get(isl.id);
+    if (!prev) { im.set(isl.id, Object.assign({}, isl)); return; }
+    im.set(isl.id, Object.assign({}, newer(prev, isl), { sentences: mergeList(prev.sentences, isl.sentences) }));
+  });
+  const islands = [...im.values()].filter(i => alive(i.id, i.ts))
+    .map(i => Object.assign(i, { sentences: i.sentences.filter(s => alive(s.id, s.ts)) }));
+  const srs = {};
+  new Set(Object.keys(a.srs).concat(Object.keys(b.srs))).forEach(id => {
+    if (!alive(id, 0)) return;
+    const x = a.srs[id], y = b.srs[id];
+    srs[id] = !x ? y : !y ? x : (y.ts || 0) > (x.ts || 0) ? y : x;
+  });
+  const notes = {}, noteTs = {};
+  new Set(Object.keys(a.notes).concat(Object.keys(b.notes), Object.keys(a.noteTs), Object.keys(b.noteTs))).forEach(id => {
+    const useB = (b.noteTs[id] || 0) > (a.noteTs[id] || 0);
+    const v = useB ? b.notes[id] : a.notes[id];
+    if (v) notes[id] = v;
+    noteTs[id] = Math.max(a.noteTs[id] || 0, b.noteTs[id] || 0);
+  });
+  const overrides = Object.assign({}, a.overrides);
+  Object.entries(b.overrides).forEach(([k, v]) => { if (!overrides[k] || (v.ts || 0) > (overrides[k].ts || 0)) overrides[k] = v; });
+  const log = {};
+  new Set(Object.keys(a.log).concat(Object.keys(b.log))).forEach(day => {
+    const x = a.log[day] || { sec: {} }, y = b.log[day] || { sec: {} };
+    const out = { sec: {} };
+    new Set(Object.keys(x.sec || {}).concat(Object.keys(y.sec || {}))).forEach(k => { out.sec[k] = Math.max((x.sec || {})[k] || 0, (y.sec || {})[k] || 0); });
+    new Set(Object.keys(x).concat(Object.keys(y))).forEach(k => { if (k !== 'sec') out[k] = Math.max(x[k] || 0, y[k] || 0); });
+    log[day] = out;
+  });
+  return {
+    words: mergeList(a.words, b.words), islands, srs, notes, noteTs, overrides, log, deleted, resetAt: a.resetAt,
+    builderVerbs: mergeList(a.builderVerbs, b.builderVerbs),
+  };
+}
+
+async function gh(path, opts = {}) {
+  const res = await fetch('https://api.github.com' + path, Object.assign({}, opts, {
+    headers: { Authorization: 'Bearer ' + syncCfg.token, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+  }));
+  if (res.status === 401) throw new Error('Token ungültig oder abgelaufen');
+  if (res.status === 403) throw new Error('Keine Berechtigung – Token braucht „gist“');
+  if (res.status === 404) throw new Error('Gist nicht gefunden');
+  if (!res.ok) throw new Error('GitHub-Fehler ' + res.status);
+  return res.json();
+}
+function syncPayload() {
+  const data = {};
+  Object.keys(LANGS).forEach(l => { data[l] = load(stateKey(l), null); });
+  return { app: 'sprachtraining', version: 2, updated: new Date().toISOString(), profile: settings.profile, data };
+}
+async function findOrCreateGist() {
+  for (let page = 1; page <= 5; page++) {
+    const list = await gh(`/gists?per_page=100&page=${page}`);
+    const hit = list.find(g => g.description === SYNC_DESC && g.files[SYNC_FILE]);
+    if (hit) return hit.id;
+    if (list.length < 100) break;
+  }
+  const g = await gh('/gists', { method: 'POST', body: JSON.stringify({ description: SYNC_DESC, public: false, files: { [SYNC_FILE]: { content: JSON.stringify(syncPayload()) } } }) });
+  return g.id;
+}
+// overwriteLang: diese Sprache nicht zusammenführen, sondern lokalen Stand hochladen (nach Zurücksetzen)
+async function syncNow(opts = {}) {
+  if (!syncCfg.token || syncing) return false;
+  syncing = true;
+  persist();
+  const before = JSON.stringify(state);
+  try {
+    if (!syncCfg.gistId) syncCfg.gistId = await findOrCreateGist();
+    const g = await gh('/gists/' + syncCfg.gistId);
+    const f = g.files[SYNC_FILE];
+    let remote = null;
+    if (f) {
+      const text = f.truncated ? await (await fetch(f.raw_url)).text() : f.content;
+      remote = JSON.parse(text);
+    }
+    if (remote && remote.data) {
+      Object.keys(LANGS).forEach(l => {
+        if (l === opts.overwriteLang) return;
+        const loc = load(stateKey(l), null), rem = remote.data[l];
+        if (rem) save(stateKey(l), loc ? mergeState(loc, rem) : rem);
+      });
+      if (remote.profile && (remote.profile.ts || 0) > (settings.profile.ts || 0)) { settings.profile = remote.profile; saveSettings(); }
+    }
+    state = loadState(settings.lang);
+    await gh('/gists/' + syncCfg.gistId, { method: 'PATCH', body: JSON.stringify({ files: { [SYNC_FILE]: { content: JSON.stringify(syncPayload()) } } }) });
+    syncCfg.last = Date.now();
+    syncCfg.error = '';
+    saveSync();
+    return JSON.stringify(state) !== before;
+  } catch (e) {
+    syncCfg.error = e.message;
+    saveSync();
+    if (opts.manual) toast('Sync fehlgeschlagen: ' + e.message);
+    return false;
+  } finally {
+    syncing = false;
+  }
+}
+// Nach einem Sync, der Daten geändert hat, die Ansicht neu aufbauen (sonst arbeitet sie mit altem Stand).
+async function autoSync() {
+  if (await syncNow()) route();
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) autoSync(); });
+setInterval(() => { if (!document.hidden && Date.now() - syncCfg.last > 10 * 60000) autoSync(); }, 60000);
+
+// ---------- Router ----------
+function renderLangSwitch() {
+  $$('#lang-switch button').forEach(b => b.classList.toggle('on', b.dataset.lang === settings.lang));
+}
+function route() {
+  stopAudio();
+  if (recorder && recorder.state === 'recording') recorder.stop();
+  keyHandler = null;
+  persist();
+  const [name, arg] = location.hash.slice(1).split('/');
+  const view = views[name] ? name : 'home';
+  activeStep = view === 'builder' ? 'islands' : STEPS.some(s => s.key === view) ? view : null;
+  const tab = view === 'builder' ? 'islands' : view;
+  $$('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
+  const root = $('#view');
+  views[view](root, arg);
+  window.scrollTo(0, 0);
+}
+$$('#lang-switch button').forEach(b => {
+  b.onclick = () => {
+    if (b.dataset.lang === settings.lang) return;
+    persist();
+    settings.lang = b.dataset.lang;
+    saveSettings();
+    state = loadState(settings.lang);
+    renderLangSwitch();
+    // Insel-IDs gehören zur Sprache – Detailansicht verlassen
+    if (location.hash.startsWith('#islands/')) location.hash = '#islands'; else route();
+  };
+});
+window.addEventListener('hashchange', route);
+renderLangSwitch();
+route();
+if (syncCfg.token) autoSync();
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}

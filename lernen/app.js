@@ -1461,8 +1461,14 @@ const TALK_SCHEMA = {
       items: { type: 'object', additionalProperties: false, required: ['t', 'd'], properties: { t: { type: 'string' }, d: { type: 'string' } } },
     },
     suggestion: {
-      type: 'object', additionalProperties: false, required: ['idea_de', 'answer'],
-      properties: { idea_de: { type: 'string' }, answer: { type: 'string' } },
+      type: 'object', additionalProperties: false, required: ['answer', 'words'],
+      properties: {
+        answer: { type: 'string' },
+        words: {
+          type: 'array',
+          items: { type: 'object', additionalProperties: false, required: ['t', 'de'], properties: { t: { type: 'string' }, de: { type: 'string' } } },
+        },
+      },
     },
   },
 };
@@ -1533,7 +1539,7 @@ How to reply:
 - "correction": needed=true only for a real grammar or vocabulary mistake in the learner's last message; "corrected" = the natural full sentence in ${lang}; "explanation" = one short sentence in German. Otherwise needed=false with empty strings.
 - "translation": German translation of your reply.
 - "new_words": up to 3 words from your reply the learner probably does not know yet, in base form, with the German meaning.
-- "suggestion": a model answer the learner could give to your reply – hidden and only shown if they get stuck. "answer": one natural, short ${lang} answer at the learner's level, mostly with words they know, true to what you know about them (otherwise plausible). "idea_de": what that answer says, as a short German hint without any ${lang} words (e.g. "Sag, dass du einen Espresso möchtest.").
+- "suggestion": a model answer the learner could give to your reply – hidden and only shown if they get stuck. "answer": one natural, short ${lang} answer at the learner's level, mostly with words they know, true to what you know about them (otherwise plausible). "words": that answer split into its words in their original order (punctuation stays attached), each with a literal word-for-word German gloss in "de" – keep the ${lang} word order, do not make it natural German; join several German words with hyphens when one word needs them (e.g. ${settings.lang === 'it' ? 'Vorrei → "ich-hätte-gern", un → "einen", per → "für", favore → "Gefallen"' : 'I\'d → "ich-würde", like → "mögen", a → "einen", coffee → "Kaffee"'}).
 - A note in square brackets from the learner, such as [einfacher] or [schwieriger], means: adjust your difficulty from now on.`;
 }
 function loadTalk() { return load('sl.talk.' + settings.lang, null); }
@@ -1684,31 +1690,38 @@ function listenAndSend() {
   if (btn && !talkBusy && !activeDictation) btn.click();
 }
 
-// Antworthilfe in Stufen – nur auf Wunsch: Idee (Deutsch) → Einstieg → Lückensatz → ganze Antwort
+// Antworthilfe in Stufen – nur auf Wunsch: Wort für Wort (Deutsch) → Einstieg → Lückensatz → ganze Antwort
 const HINT_STEPS = ['💡 Hilfe', '💡 Mehr Hilfe', '💡 Noch mehr', '💡 Ganze Antwort'];
-function hintGaps(answer) {
-  const words = answer.split(/\s+/);
-  return words.map((w, i) => (i === 0 ? w : w.replace(/(\p{L})(\p{L}*)/gu, (m, a, b) => a + '_'.repeat(b.length)))).join(' ');
-}
+function gapWord(w) { return w.replace(/(\p{L})(\p{L}*)/gu, (m, a, b) => a + '_'.repeat(b.length)); }
 function hintStart(answer) {
   const words = answer.split(/\s+/);
-  const n = words.length > 4 ? 2 : 1;
-  return words.slice(0, n).join(' ') + ' …';
+  return words.slice(0, words.length > 4 ? 2 : 1).join(' ') + ' …';
 }
 function lastAiTurn(t) {
   const x = t.turns[t.turns.length - 1];
   return x && x.role === 'ai' ? x : null;
 }
+// Wortpaare untereinander: oben Fremdsprache (ggf. mit Lücken), unten die deutsche Wort-für-Wort-Bedeutung
+function glossRow(words, gaps) {
+  return `<div class="gloss">${words.map((w, i) => `<span><b>${esc(gaps && i > 0 ? gapWord(w.t) : w.t)}</b><small>${esc(w.de)}</small></span>`).join('')}</div>`;
+}
 function talkHintBox(t) {
   const ai = lastAiTurn(t);
-  if (!ai || talkBusy) return '';
-  if (!ai.sug) return '';
+  if (!ai || talkBusy || !ai.sug) return '';
   const lvl = ai.hint || 0;
+  const words = Array.isArray(ai.sug.words) && ai.sug.words.length ? ai.sug.words : null;
   const lines = [];
-  if (lvl >= 1) lines.push(`<div><span class="muted">Idee:</span> ${esc(ai.sug.idea_de)}</div>`);
+  if (lvl === 1 || lvl === 2) {
+    lines.push(words
+      ? `<div><span class="muted">Wort für Wort:</span> ${esc(words.map(w => w.de).join(' '))}</div>`
+      : `<div><span class="muted">Idee:</span> ${esc(ai.sug.idea_de || '')}</div>`);
+  }
   if (lvl === 2) lines.push(`<div><span class="muted">Einstieg:</span> <b>${esc(hintStart(ai.sug.answer))}</b></div>`);
-  if (lvl === 3) lines.push(`<div><span class="muted">Lücken:</span> <b style="letter-spacing:.5px">${esc(hintGaps(ai.sug.answer))}</b></div>`);
-  if (lvl >= 4) lines.push(`<div><span class="muted">Zum Beispiel:</span> <b>${esc(ai.sug.answer)}</b> <button class="btn small" id="t-hint-say">🔊</button></div><div class="muted small">Sag es jetzt selbst – gern mit eigenen Änderungen.</div>`);
+  if (lvl === 3) lines.push(words ? glossRow(words, true) : `<div><b>${esc(ai.sug.answer.split(/\s+/).map((w, i) => (i ? gapWord(w) : w)).join(' '))}</b></div>`);
+  if (lvl >= 4) {
+    lines.push(words ? glossRow(words, false) : `<div><b>${esc(ai.sug.answer)}</b></div>`);
+    lines.push(`<div class="row" style="margin-top:4px"><button class="btn small" id="t-hint-say">🔊 Anhören</button><span class="muted small">Sag es jetzt selbst – gern mit eigenen Änderungen.</span></div>`);
+  }
   return `<div class="card small" id="t-hintbox" style="margin-bottom:6px;padding:10px 12px"${lvl ? '' : ' hidden'}>${lines.join('')}</div>
     ${lvl < 4 ? `<button class="btn small" id="t-help" style="margin-bottom:6px">${HINT_STEPS[lvl]}</button>` : ''}`;
 }

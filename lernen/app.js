@@ -1448,7 +1448,7 @@ const SCENARIOS = {
   weekend: { label: 'Wochenende', it: 'You are a friend. Talk about what the learner did last weekend and plans for the next one.' },
 };
 const TALK_SCHEMA = {
-  type: 'object', additionalProperties: false, required: ['reply', 'translation', 'correction', 'new_words'],
+  type: 'object', additionalProperties: false, required: ['reply', 'translation', 'correction', 'new_words', 'suggestion'],
   properties: {
     reply: { type: 'string' },
     translation: { type: 'string' },
@@ -1459,6 +1459,10 @@ const TALK_SCHEMA = {
     new_words: {
       type: 'array',
       items: { type: 'object', additionalProperties: false, required: ['t', 'd'], properties: { t: { type: 'string' }, d: { type: 'string' } } },
+    },
+    suggestion: {
+      type: 'object', additionalProperties: false, required: ['idea_de', 'answer'],
+      properties: { idea_de: { type: 'string' }, answer: { type: 'string' } },
     },
   },
 };
@@ -1529,6 +1533,7 @@ How to reply:
 - "correction": needed=true only for a real grammar or vocabulary mistake in the learner's last message; "corrected" = the natural full sentence in ${lang}; "explanation" = one short sentence in German. Otherwise needed=false with empty strings.
 - "translation": German translation of your reply.
 - "new_words": up to 3 words from your reply the learner probably does not know yet, in base form, with the German meaning.
+- "suggestion": a model answer the learner could give to your reply – hidden and only shown if they get stuck. "answer": one natural, short ${lang} answer at the learner's level, mostly with words they know, true to what you know about them (otherwise plausible). "idea_de": what that answer says, as a short German hint without any ${lang} words (e.g. "Sag, dass du einen Espresso möchtest.").
 - A note in square brackets from the learner, such as [einfacher] or [schwieriger], means: adjust your difficulty from now on.`;
 }
 function loadTalk() { return load('sl.talk.' + settings.lang, null); }
@@ -1649,7 +1654,7 @@ async function talkSend(t, text, hidden, note) {
     t.cost += cost;
     const lastMe = [...t.turns].reverse().find(x => x.role === 'me');
     if (lastMe && data.correction && data.correction.needed && !hidden) lastMe.fix = data.correction;
-    t.turns.push({ role: 'ai', text: data.reply, tr: data.translation, words: data.new_words || [] });
+    t.turns.push({ role: 'ai', text: data.reply, tr: data.translation, words: data.new_words || [], sug: data.suggestion || null, hint: 0 });
     saveTalk(t);
     talkBusy = false;
     renderTalkIfOpen();
@@ -1679,6 +1684,35 @@ function listenAndSend() {
   if (btn && !talkBusy && !activeDictation) btn.click();
 }
 
+// Antworthilfe in Stufen – nur auf Wunsch: Idee (Deutsch) → Einstieg → Lückensatz → ganze Antwort
+const HINT_STEPS = ['💡 Hilfe', '💡 Mehr Hilfe', '💡 Noch mehr', '💡 Ganze Antwort'];
+function hintGaps(answer) {
+  const words = answer.split(/\s+/);
+  return words.map((w, i) => (i === 0 ? w : w.replace(/(\p{L})(\p{L}*)/gu, (m, a, b) => a + '_'.repeat(b.length)))).join(' ');
+}
+function hintStart(answer) {
+  const words = answer.split(/\s+/);
+  const n = words.length > 4 ? 2 : 1;
+  return words.slice(0, n).join(' ') + ' …';
+}
+function lastAiTurn(t) {
+  const x = t.turns[t.turns.length - 1];
+  return x && x.role === 'ai' ? x : null;
+}
+function talkHintBox(t) {
+  const ai = lastAiTurn(t);
+  if (!ai || talkBusy) return '';
+  if (!ai.sug) return '';
+  const lvl = ai.hint || 0;
+  const lines = [];
+  if (lvl >= 1) lines.push(`<div><span class="muted">Idee:</span> ${esc(ai.sug.idea_de)}</div>`);
+  if (lvl === 2) lines.push(`<div><span class="muted">Einstieg:</span> <b>${esc(hintStart(ai.sug.answer))}</b></div>`);
+  if (lvl === 3) lines.push(`<div><span class="muted">Lücken:</span> <b style="letter-spacing:.5px">${esc(hintGaps(ai.sug.answer))}</b></div>`);
+  if (lvl >= 4) lines.push(`<div><span class="muted">Zum Beispiel:</span> <b>${esc(ai.sug.answer)}</b> <button class="btn small" id="t-hint-say">🔊</button></div><div class="muted small">Sag es jetzt selbst – gern mit eigenen Änderungen.</div>`);
+  return `<div class="card small" id="t-hintbox" style="margin-bottom:6px;padding:10px 12px"${lvl ? '' : ' hidden'}>${lines.join('')}</div>
+    ${lvl < 4 ? `<button class="btn small" id="t-help" style="margin-bottom:6px">${HINT_STEPS[lvl]}</button>` : ''}`;
+}
+
 function talkChat(root, t) {
   const scen = t.scenario === 'custom' ? t.custom : SCENARIOS[t.scenario].label;
   root.innerHTML = `
@@ -1699,6 +1733,7 @@ function talkChat(root, t) {
       ${talkBusy ? '<div class="typing">… schreibt</div>' : ''}
     </div>
     <div class="talkbar">
+      <div id="t-hintwrap">${talkHintBox(t)}</div>
       <div class="row">
         ${SR ? '<button class="btn primary grow" id="t-mic" style="padding:14px">🎙 Sprechen</button>' : ''}
       </div>
@@ -1726,6 +1761,22 @@ function talkChat(root, t) {
       b.disabled = true;
     };
   });
+  // Hilfe nur im Hilfe-Bereich aktualisieren – ein laufendes Diktat bleibt erhalten
+  const bindHint = () => {
+    if ($('#t-help', root)) {
+      $('#t-help', root).onclick = () => {
+        const ai = lastAiTurn(t);
+        if (!ai) return;
+        ai.hint = Math.min(4, (ai.hint || 0) + 1);
+        t.hintsUsed = (t.hintsUsed || 0) + 1;
+        saveTalk(t);
+        $('#t-hintwrap', root).innerHTML = talkHintBox(t);
+        bindHint();
+      };
+    }
+    if ($('#t-hint-say', root)) $('#t-hint-say', root).onclick = () => speak(lastAiTurn(t).sug.answer);
+  };
+  bindHint();
   if ($('#t-mic', root)) {
     micToggle($('#t-mic', root), '🎙 Sprechen', text => talkSendText(text), live => { $('#t-text', root).value = live; });
     const hint = $('#t-hint', root);

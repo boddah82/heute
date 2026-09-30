@@ -296,17 +296,80 @@ function speakP(text, opts = {}) { return new Promise(res => speak(text, Object.
 function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 
 // ---------- Spracherkennung & Vergleich ----------
-function recognize() {
-  return new Promise((resolve, reject) => {
-    const r = new SR();
-    r.lang = langCode();
-    r.interimResults = false;
-    r.maxAlternatives = 1;
-    r.onresult = e => resolve(e.results[0][0].transcript);
-    r.onerror = e => reject(e.error);
-    r.onend = () => resolve('');
-    r.start();
-  });
+// Diktat ohne automatisches Ende: Pausen zum Nachdenken sind erlaubt. Die Browser-Erkennung
+// beendet sich bei Stille oft selbst – dann wird sie neu gestartet, bis der Nutzer „Fertig“ tippt.
+const DICTATION_MAX_MS = 180000;
+function dictation(onUpdate) {
+  let done = [];          // Text aus bereits beendeten Erkennungs-Sitzungen
+  let parts = [];         // endgültige Teile der laufenden Sitzung
+  let stopped = false, cancelled = false, rec = null, resolveFn, rejectFn;
+  const promise = new Promise((res, rej) => { resolveFn = res; rejectFn = rej; });
+  const text = (interim = '') => done.concat(parts, interim ? [interim] : []).join(' ').replace(/\s+/g, ' ').trim();
+  const finish = () => resolveFn(cancelled ? '' : text());
+  const start = () => {
+    parts = [];
+    rec = new SR();
+    rec.lang = langCode();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onresult = e => {
+      // Aus allen Ergebnissen neu aufbauen; manche Android-Versionen liefern kumulative Ergebnisse doppelt
+      const fin = [];
+      let interim = '';
+      for (let i = 0; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript.trim();
+        if (!t) continue;
+        if (e.results[i].isFinal) {
+          const last = fin[fin.length - 1];
+          if (last && t.toLowerCase().startsWith(last.toLowerCase())) fin[fin.length - 1] = t; else fin.push(t);
+        } else interim += (interim ? ' ' : '') + t;
+      }
+      parts = fin;
+      onUpdate && onUpdate(text(interim));
+    };
+    rec.onerror = e => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { stopped = true; rejectFn(new Error('Mikrofon nicht erlaubt')); }
+      else if (e.error === 'network') { stopped = true; rejectFn(new Error('Spracherkennung braucht Internet')); }
+      // no-speech / aborted: einfach weitermachen (onend startet neu)
+    };
+    rec.onend = () => {
+      done = done.concat(parts);
+      parts = [];
+      if (stopped) { finish(); return; }
+      try { start(); } catch (err) { stopped = true; finish(); }
+    };
+    rec.start();
+  };
+  try { start(); } catch (err) { rejectFn(err); }
+  const timer = setTimeout(() => ctl.stop(), DICTATION_MAX_MS);
+  const ctl = {
+    done: promise,
+    stop() { if (stopped) return; stopped = true; clearTimeout(timer); try { rec.stop(); } catch (err) { finish(); } },
+    cancel() { cancelled = true; this.cancelledByUser = true; this.stop(); },
+  };
+  return ctl;
+}
+let activeDictation = null;
+function cancelDictation() { if (activeDictation) { activeDictation.cancel(); activeDictation = null; } }
+// Mikrofon-Knopf: 1. Tippen startet, 2. Tippen („✓ Fertig“) beendet und liefert den Text
+function micToggle(btn, idleLabel, onText, onLive) {
+  btn.onclick = async () => {
+    if (activeDictation && activeDictation.btn === btn) { activeDictation.stop(); return; }
+    cancelDictation();
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    const d = dictation(onLive);
+    d.btn = btn;
+    activeDictation = d;
+    btn.textContent = '✓ Fertig';
+    btn.classList.add('rec');
+    let text = '';
+    try { text = await d.done; } catch (e) { toast(e.message); }
+    if (activeDictation === d) activeDictation = null;
+    btn.textContent = idleLabel;
+    btn.classList.remove('rec');
+    if (!text) { if (!d.cancelledByUser) toast('Nichts erkannt'); return; }
+    onText(text);
+  };
 }
 function normWords(s) {
   return s.toLowerCase().replace(/[’`]/g, "'").replace(/[.,!?;:¿¡"«»()…—–-]/g, ' ').split(/\s+/).filter(Boolean);
@@ -426,16 +489,7 @@ function recallSession(root, ids, cfg) {
     if (cfg.correct) $('#fix', root).onclick = () => cfg.correct(id, () => { const n = cfg.get(id); if (n) { it.t = n.t; it.d = n.d; $('#answer .' + cfg.big, root).textContent = n.t; $('.native', root).textContent = n.d; } });
     $$('.rate .btn', root).forEach(b => { b.onclick = () => rate(Number(b.dataset.r)); });
     if ($('#hint', root)) $('#hint', root).onclick = () => { $('#hint-t', root).hidden = false; };
-    if ($('#say', root)) {
-      $('#say', root).onclick = async () => {
-        const b = $('#say', root);
-        b.textContent = '… hört zu';
-        b.disabled = true;
-        try { said = await recognize(); } catch (e) { toast('Spracherkennung: ' + e); }
-        if (!said) { b.textContent = '🎙 Sprechen'; b.disabled = false; toast('Nichts erkannt'); return; }
-        reveal();
-      };
-    }
+    if ($('#say', root)) micToggle($('#say', root), '🎙 Sprechen', t => { said = t; reveal(); }, t => { if (cfg.typing) $('#typed', root).value = t; });
     if (cfg.typing) {
       $('#typed', root).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); reveal(); } });
     }
@@ -812,18 +866,10 @@ views.shadow = function (root) {
     $('#s-prev', pane).onclick = () => { idx = (idx - 1 + list.length) % list.length; render(); };
     $('#s-next', pane).onclick = () => { idx = (idx + 1) % list.length; render(); };
     if ($('#s-check', pane)) {
-      $('#s-check', pane).onclick = async () => {
-        const b = $('#s-check', pane);
-        b.textContent = '… sprich jetzt';
-        b.disabled = true;
-        let said = '';
-        try { said = await recognize(); } catch (e) { toast('Spracherkennung: ' + e); }
-        b.textContent = '✅ Aussprache prüfen';
-        b.disabled = false;
-        if (!said) { toast('Nichts erkannt'); return; }
+      micToggle($('#s-check', pane), '✅ Aussprache prüfen', said => {
         const c = compareWords(s.t, said);
         $('#s-cmp', pane).innerHTML = `<p>Erkannt: „${esc(said)}“</p><p>${c.html} <b>${c.score}%</b></p>`;
-      };
+      }, live => { $('#s-cmp', pane).innerHTML = `<p class="muted">${esc(live)}</p>`; });
     }
     if ($('#s-rec', pane)) {
       $('#s-rec', pane).onclick = async () => {
@@ -960,18 +1006,10 @@ function bindSentenceCard(pane, sent) {
   $('#b-play', pane).onclick = () => speak(sent.t);
   $('#b-add', pane).onclick = () => addToBuilderIsland(sent);
   if ($('#b-say', pane)) {
-    $('#b-say', pane).onclick = async () => {
-      const b = $('#b-say', pane);
-      b.textContent = '… sprich jetzt';
-      b.disabled = true;
-      let said = '';
-      try { said = await recognize(); } catch (e) { toast('Spracherkennung: ' + e); }
-      b.textContent = '🎙 Nachsprechen';
-      b.disabled = false;
-      if (!said) { toast('Nichts erkannt'); return; }
+    micToggle($('#b-say', pane), '🎙 Nachsprechen', said => {
       const c = compareWords(sent.t, said);
       $('#b-cmp', pane).innerHTML = `<p>Erkannt: „${esc(said)}“</p><p>${c.html} <b>${c.score}%</b></p>`;
-    };
+    }, live => { $('#b-cmp', pane).innerHTML = `<p class="muted">${esc(live)}</p>`; });
   }
 }
 
@@ -1156,16 +1194,7 @@ views.builder = function (root, arg) {
     $('#again', pane).onclick = () => speak(sent.t);
     $('#add', pane).onclick = () => addToBuilderIsland({ t: sent.q ? sent.q + ' – ' + sent.t : sent.t, d: sent.q ? sent.qd + ' – ' + sent.d : sent.d });
     $('#next', pane).onclick = () => { l.drill = (l.drill || 0) + 1; persist(); renderDrill(); };
-    if ($('#say', pane)) {
-      $('#say', pane).onclick = async () => {
-        const x = $('#say', pane);
-        x.textContent = '… hört zu';
-        x.disabled = true;
-        try { said = await recognize(); } catch (e) { toast('Spracherkennung: ' + e); }
-        if (!said) { x.textContent = '🎙 Sprechen'; x.disabled = false; toast('Nichts erkannt'); return; }
-        reveal();
-      };
-    }
+    if ($('#say', pane)) micToggle($('#say', pane), '🎙 Sprechen', t => { said = t; reveal(); }, live => { $('#cmp', pane).innerHTML = `<p class="muted">${esc(live)}</p>`; $('#answer', pane).hidden = true; });
     keyHandler = e => {
       if (e.target.tagName === 'INPUT') return;
       if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if ($('#pre', pane).hidden) $('#next', pane).click(); else reveal(); }
@@ -1637,16 +1666,17 @@ async function talkSend(t, text, hidden, note) {
 }
 let talkHandsFree = false;
 function renderTalkIfOpen() { if (location.hash.startsWith('#talk')) views.talk($('#view')); }
-async function listenAndSend(note) {
+let talkNote = null; // „einfacher“ / „schwieriger“ – wird an die nächste Nachricht gehängt
+function talkSendText(text) {
   const t = loadTalk();
-  if (!t || talkBusy) return;
+  if (!t || talkBusy || !text) return;
+  const note = talkNote;
+  talkNote = null;
+  talkSend(t, text, false, note);
+}
+function listenAndSend() {
   const btn = $('#t-mic');
-  if (btn) { btn.textContent = '… ich höre zu'; btn.disabled = true; }
-  let said = '';
-  try { said = await recognize(); } catch (e) { toast('Spracherkennung: ' + e); }
-  if (btn) { btn.textContent = '🎙 Sprechen'; btn.disabled = false; }
-  if (!said) { toast('Nichts erkannt'); return; }
-  talkSend(t, said, false, note);
+  if (btn && !talkBusy && !activeDictation) btn.click();
 }
 
 function talkChat(root, t) {
@@ -1672,9 +1702,10 @@ function talkChat(root, t) {
       <div class="row">
         ${SR ? '<button class="btn primary grow" id="t-mic" style="padding:14px">🎙 Sprechen</button>' : ''}
       </div>
+      ${SR ? '<p class="muted small" id="t-hint" hidden style="margin:4px 0 0">Nimm dir Zeit – Pausen sind okay. Tippe auf „✓ Fertig“, wenn du fertig bist.</p>' : ''}
       <div class="row" style="margin-top:6px"><input type="text" id="t-text" class="grow" placeholder="oder tippen …"><button class="btn" id="t-send">➤</button></div>
       <div class="row" style="margin-top:6px">
-        ${SR ? `<label class="inline small" style="margin:0"><input type="checkbox" id="t-hf" ${talkHandsFree ? 'checked' : ''}> freihändig</label>` : ''}
+        ${SR ? `<label class="inline small" style="margin:0"><input type="checkbox" id="t-hf" ${talkHandsFree ? 'checked' : ''}> Mikro automatisch</label>` : ''}
         <button class="btn small" id="t-easy">Zu schwer</button>
         <button class="btn small" id="t-hard">Zu leicht</button>
         <button class="btn small" id="t-end">Beenden</button>
@@ -1695,25 +1726,26 @@ function talkChat(root, t) {
       b.disabled = true;
     };
   });
-  if ($('#t-mic', root)) $('#t-mic', root).onclick = () => { if (!talkBusy) listenAndSend(); };
-  const sendText = () => { const v = $('#t-text', root).value.trim(); if (v && !talkBusy) talkSend(t, v, false); };
+  if ($('#t-mic', root)) {
+    micToggle($('#t-mic', root), '🎙 Sprechen', text => talkSendText(text), live => { $('#t-text', root).value = live; });
+    const hint = $('#t-hint', root);
+    $('#t-mic', root).addEventListener('click', () => { if (hint) hint.hidden = !activeDictation; });
+  }
+  const sendText = () => { const v = $('#t-text', root).value.trim(); if (v && !talkBusy) { cancelDictation(); talkSendText(v); } };
   $('#t-send', root).onclick = sendText;
   $('#t-text', root).addEventListener('keydown', e => { if (e.key === 'Enter') sendText(); });
   if ($('#t-hf', root)) $('#t-hf', root).onchange = e => { talkHandsFree = e.target.checked; };
   // Schwierigkeit gilt fürs Gespräch sofort und künftig: Hinweis an die nächste Nachricht hängen
-  let pendingNote = null;
   const adjust = (d, note) => {
     state.talkAdjust = Math.max(-2, Math.min(2, (state.talkAdjust || 0) + d));
     state.talkAdjustTs = Date.now();
     persist();
-    pendingNote = note;
+    talkNote = note;
     toast(d < 0 ? 'Wird einfacher – gilt ab deiner nächsten Antwort' : 'Wird anspruchsvoller – gilt ab deiner nächsten Antwort');
-    if ($('#t-mic', root)) $('#t-mic', root).onclick = () => { if (!talkBusy) listenAndSend(pendingNote); };
-    $('#t-send', root).onclick = () => { const v = $('#t-text', root).value.trim(); if (v && !talkBusy) talkSend(t, v, false, pendingNote); };
   };
   $('#t-easy', root).onclick = () => adjust(-1, 'einfacher');
   $('#t-hard', root).onclick = () => adjust(1, 'schwieriger');
-  $('#t-end', root).onclick = () => { stopAudio(); talkHandsFree = false; location.hash = '#talk/feedback'; };
+  $('#t-end', root).onclick = () => { cancelDictation(); stopAudio(); talkHandsFree = false; location.hash = '#talk/feedback'; };
 }
 
 async function talkFeedback(root, t) {
@@ -2033,6 +2065,7 @@ function renderLangSwitch() {
   $$('#lang-switch button').forEach(b => b.classList.toggle('on', b.dataset.lang === settings.lang));
 }
 function route() {
+  cancelDictation();
   stopAudio();
   if (recorder && recorder.state === 'recording') recorder.stop();
   keyHandler = null;

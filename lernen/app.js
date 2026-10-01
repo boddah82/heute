@@ -299,7 +299,7 @@ function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 // Diktat ohne automatisches Ende: Pausen zum Nachdenken sind erlaubt. Die Browser-Erkennung
 // beendet sich bei Stille oft selbst – dann wird sie neu gestartet, bis der Nutzer „Fertig“ tippt.
 const DICTATION_MAX_MS = 180000;
-function dictation(onUpdate) {
+function dictation(onUpdate, lang) {
   let done = [];          // Text aus bereits beendeten Erkennungs-Sitzungen
   let parts = [];         // endgültige Teile der laufenden Sitzung
   let stopped = false, cancelled = false, rec = null, resolveFn, rejectFn;
@@ -309,7 +309,7 @@ function dictation(onUpdate) {
   const start = () => {
     parts = [];
     rec = new SR();
-    rec.lang = langCode();
+    rec.lang = lang || langCode();
     rec.continuous = true;
     rec.interimResults = true;
     rec.onresult = e => {
@@ -352,12 +352,12 @@ function dictation(onUpdate) {
 let activeDictation = null;
 function cancelDictation() { if (activeDictation) { activeDictation.cancel(); activeDictation = null; } }
 // Mikrofon-Knopf: 1. Tippen startet, 2. Tippen („✓ Fertig“) beendet und liefert den Text
-function micToggle(btn, idleLabel, onText, onLive) {
+function micToggle(btn, idleLabel, onText, onLive, lang) {
   btn.onclick = async () => {
     if (activeDictation && activeDictation.btn === btn) { activeDictation.stop(); return; }
     cancelDictation();
     if (window.speechSynthesis) speechSynthesis.cancel();
-    const d = dictation(onLive);
+    const d = dictation(onLive, lang);
     d.btn = btn;
     activeDictation = d;
     btn.textContent = '✓ Fertig';
@@ -371,6 +371,91 @@ function micToggle(btn, idleLabel, onText, onLive) {
     onText(text);
   };
 }
+// ---------- Eigene Fotos (nur auf diesem Gerät, IndexedDB) ----------
+const photoDB = (() => {
+  let dbp = null;
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    const r = indexedDB.open('sl-photos', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('p');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  }));
+  const run = async (mode, fn) => {
+    const db = await open();
+    return new Promise((res, rej) => {
+      const tx = db.transaction('p', mode);
+      const req = fn(tx.objectStore('p'));
+      tx.oncomplete = () => res(req ? req.result : undefined);
+      tx.onerror = () => rej(tx.error);
+    });
+  };
+  return {
+    get: k => run('readonly', st => st.get(k)),
+    put: (k, v) => run('readwrite', st => st.put(v, k)),
+    del: k => run('readwrite', st => st.delete(k)),
+  };
+})();
+function photoKey(id) { return settings.lang + '|' + id; }
+// Foto verkleinern (max. 720 px) und als JPEG-Daten-URL speichern
+function resizeImage(file, max = 720) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const f = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * f);
+      c.height = Math.round(img.height * f);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg', 0.75));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Bild nicht lesbar')); };
+    img.src = url;
+  });
+}
+// Platzhalter <img data-photo="id"> mit gespeicherten Fotos füllen
+async function fillPhotos(root) {
+  for (const img of $$('img[data-photo]', root)) {
+    try {
+      const src = await photoDB.get(photoKey(img.dataset.photo));
+      if (src) { img.src = src; img.hidden = false; }
+      const del = $(`[data-photo-del="${CSS.escape(img.dataset.photo)}"]`, root);
+      if (del) del.hidden = !src;
+    } catch (e) { /* IndexedDB nicht verfügbar – ohne Foto weiter */ }
+  }
+}
+function photoEditor(id) {
+  return `<div class="photo-edit">
+    <img data-photo="${esc(id)}" class="photo" hidden alt="">
+    <div class="row" style="justify-content:center">
+      <label class="btn small" style="margin:0;color:var(--text);font-size:14px">📷 Foto<input type="file" accept="image/*" data-photo-in="${esc(id)}" hidden></label>
+      <button class="btn small danger" data-photo-del="${esc(id)}" hidden>✕ Foto</button>
+    </div>
+  </div>`;
+}
+function bindPhotoEditors(root) {
+  $$('[data-photo-in]', root).forEach(inp => {
+    inp.onchange = async () => {
+      const file = inp.files[0];
+      if (!file) return;
+      try {
+        await photoDB.put(photoKey(inp.dataset.photoIn), await resizeImage(file));
+        fillPhotos(root);
+      } catch (e) { toast('Foto konnte nicht gespeichert werden: ' + e.message); }
+    };
+  });
+  $$('[data-photo-del]', root).forEach(b => {
+    b.onclick = async () => {
+      await photoDB.del(photoKey(b.dataset.photoDel)).catch(() => {});
+      const img = $(`img[data-photo="${CSS.escape(b.dataset.photoDel)}"]`, root);
+      if (img) { img.hidden = true; img.removeAttribute('src'); }
+      b.hidden = true;
+    };
+  });
+  fillPhotos(root);
+}
+
 function normWords(s) {
   return s.toLowerCase().replace(/[’`]/g, "'").replace(/[.,!?;:¿¡"«»()…—–-]/g, ' ').split(/\s+/).filter(Boolean);
 }
@@ -442,6 +527,7 @@ function recallSession(root, ids, cfg) {
     root.innerHTML = `
       <div class="row between muted small"><span>${queue.length} übrig</span>${it.isNew ? '<span class="pill">neu</span>' : ''}</div>
       <div class="card flash">
+        <img data-photo="${esc(id)}" class="photo" hidden alt="">
         <div class="native">${esc(it.d)}</div>
         ${it.note ? `<button class="btn small" id="hint" style="margin-top:8px">💡 Eselsbrücke</button><div class="hint" id="hint-t" hidden>${esc(it.note)}</div>` : ''}
         <div id="answer" hidden><div class="${cfg.big}">${esc(it.t)}</div><div id="cmp" class="small"></div></div>
@@ -463,6 +549,7 @@ function recallSession(root, ids, cfg) {
       </div>`;
     let said = '';
     let revealed = false;
+    fillPhotos(root);
     const reveal = () => {
       if (revealed) return;
       revealed = true;
@@ -626,6 +713,7 @@ function vocabNew(pane) {
     ${tempo.reason ? `<div class="notice small">Tempo angepasst: ${tempo.n} statt ${settings.newWords} neue Wörter – ${tempo.reason}</div>` : ''}
     ${nudge ? `<div class="notice">${l.newWords} neue Wörter – kurz <a href="#vocab/recall">abfragen</a>, bevor es weitergeht?</div>` : ''}
     <div class="card flash">
+      ${photoEditor(w.id)}
       <div class="target">${esc(w.t)}</div>
       <div class="native">${esc(w.d)}</div>
       <div class="row" style="justify-content:center;margin-top:10px">
@@ -633,14 +721,27 @@ function vocabNew(pane) {
         <button class="btn small" id="fix" title="Übersetzung korrigieren">✎ Korrigieren</button>
       </div>
     </div>
-    <label for="note">Eselsbrücke: Welches Bild verbindet Klang und Bedeutung?</label>
-    <textarea id="note" placeholder="z. B. ein absurdes Bild, das du dir vorstellst">${esc(state.notes[w.id] || '')}</textarea>
+    <div class="row between" style="margin-top:10px"><label for="note" style="margin:0">Eselsbrücke: Welches Bild, welche Geschichte verbindet Klang und Bedeutung?</label>
+      ${SR ? '<button class="btn small" id="note-mic">🎙 Einsprechen</button>' : ''}</div>
+    <textarea id="note" placeholder="z. B. eine absurde Szene, die du dir vorstellst – je lustiger oder emotionaler, desto besser">${esc(state.notes[w.id] || '')}</textarea>
     <div class="row" style="margin-top:10px">
       <button class="btn" id="known">Kenne ich schon</button>
       <button class="btn primary grow" id="learned">Gelernt ✓</button>
     </div>
     <p class="muted small">Wort 2–3× laut nachsprechen. Gelernte Wörter kommen heute noch in die Abfrage.</p>`;
   const saveNote = () => setNote(w.id, $('#note', pane).value.trim());
+  bindPhotoEditors(pane);
+  // Eselsbrücke auf Deutsch diktieren – wird an den vorhandenen Text angehängt
+  if ($('#note-mic', pane)) {
+    const before = () => $('#note', pane).dataset.before ?? ($('#note', pane).dataset.before = $('#note', pane).value.trim());
+    micToggle($('#note-mic', pane), '🎙 Einsprechen', text => {
+      const b = before();
+      $('#note', pane).value = (b ? b + ' ' : '') + text;
+      delete $('#note', pane).dataset.before;
+      saveNote();
+      persist();
+    }, live => { const b = before(); $('#note', pane).value = (b ? b + ' ' : '') + live; }, 'de-DE');
+  }
   speak(w.t);
   $('#play', pane).onclick = () => speak(w.t);
   $('#fix', pane).onclick = () => { saveNote(); correctWord(w.id, () => vocabNew(pane)); };
@@ -705,6 +806,7 @@ function vocabOwn(pane) {
       delete state.srs[id];
       delete state.notes[id];
       markDeleted(id);
+      photoDB.del(photoKey(id)).catch(() => {});
       persist();
       vocabOwn(pane);
     };
@@ -838,6 +940,7 @@ views.shadow = function (root) {
     pane.innerHTML = `
       <div class="row between muted small"><span>Satz ${idx + 1}/${list.length}</span></div>
       <div class="card flash">
+        <img data-photo="${esc(s.id)}" class="photo" hidden alt="">
         <div class="sentence">${esc(s.t)}</div>
         <div class="native">${esc(s.d)}</div>
         <div id="s-cmp" class="small" style="margin-top:8px"></div>
@@ -858,6 +961,7 @@ views.shadow = function (root) {
       </div>
       <p class="muted small">„Aussprache prüfen“ nutzt die Spracherkennung des Browsers – ein grober Hinweis, kein Urteil über den Akzent.</p>`;
     speak(s.t);
+    fillPhotos(pane);
     $('#s-play', pane).onclick = () => speak(s.t);
     $('#s-slow', pane).onclick = () => speak(s.t, { rate: 0.6 });
     $('#s-loop', pane).onclick = async () => {
@@ -1246,7 +1350,7 @@ function islandDetail(root, isl) {
     <ul class="list card">
       ${isl.sentences.map(s => `
         <li><button class="btn small" data-play="${s.id}">🔊</button>
-          <div class="grow"><div class="t">${esc(s.t)}</div><div class="d">${esc(s.d)}</div></div>
+          <div class="grow"><div class="t">${esc(s.t)}</div><div class="d">${esc(s.d)}</div>${photoEditor(s.id)}</div>
           <button class="btn small" data-edit="${s.id}">✎</button>
           <button class="btn small danger" data-del="${s.id}">✕</button></li>`).join('') || '<li class="muted">Noch keine Sätze.</li>'}
     </ul>
@@ -1258,6 +1362,7 @@ function islandDetail(root, isl) {
     </details>
     <button class="btn danger" id="i-del" style="width:100%">Insel löschen</button>`;
   const find = id => isl.sentences.find(s => s.id === id);
+  bindPhotoEditors(root);
   $('#i-name', root).onchange = e => { isl.title = e.target.value.trim() || isl.title; isl.ts = Date.now(); persist(); };
   $('#s-add', root).onclick = () => {
     const d = $('#s-d', root).value.trim(), t = $('#s-t', root).value.trim();
@@ -1294,6 +1399,7 @@ function islandDetail(root, isl) {
       isl.sentences = isl.sentences.filter(s => s.id !== b.dataset.del);
       delete state.srs[b.dataset.del];
       markDeleted(b.dataset.del);
+      photoDB.del(photoKey(b.dataset.del)).catch(() => {});
       persist();
       islandDetail(root, isl);
     };
@@ -1438,6 +1544,7 @@ const TALK_MODELS = {
   'claude-haiku-4-5': { name: 'Claude Haiku 4.5 (am günstigsten)', in: 1, out: 5, fallback: false, effort: false },
 };
 const SCENARIOS = {
+  describe: { label: '🔎 Beschreiben', it: 'Description practice ("describe what you see"). Give the learner a small real-world mission: ask them to look around them or go outside and find one concrete thing that suits their level (e.g. the grass, a tree, a cup, the sky, their shoes, a car). Ask them to describe it in 2–3 short sentences: colour, where it is, size or shape, and whether they like it. After each description: react briefly and naturally, then ask ONE follow-up question about the same thing (Where exactly is it? What is next to it? Is it big or small? What is it for?). After 2–3 follow-up questions, give a new mission with a different thing. If the learner sends a photo, use it and ask about details you can actually see in it.' },
   free: { label: 'Freies Gespräch', it: 'Casual small talk as a friendly acquaintance: ask about the learner\'s day, life, work and hobbies.' },
   meet: { label: 'Kennenlernen', it: 'You meet the learner for the first time at a friend\'s party. Get to know each other.' },
   cafe: { label: 'Im Café', it: 'You work at a café in {city}. The learner is the customer and orders. Stay in role.' },
@@ -1633,7 +1740,7 @@ function talkStart(root) {
     <label>Worüber willst du reden?</label>
     ${chips('scen', Object.values(SCENARIOS), -1, x => x.label)}
     <div class="row" style="margin-top:8px"><input type="text" id="topic" class="grow" placeholder="Eigenes Thema (Deutsch geht)"><button class="btn" id="go-custom">Los</button></div>
-    <p class="muted small" style="margin-top:12px">So läuft es: Claude beginnt, liest vor, du antwortest laut (🎙). Korrekturen erscheinen unter deiner Nachricht, die Übersetzung per Tipp. Am Ende gibt es eine Auswertung.</p>
+    <p class="muted small" style="margin-top:12px">So läuft es: Claude beginnt, liest vor, du antwortest laut (🎙). Korrekturen erscheinen unter deiner Nachricht, die Übersetzung per Tipp. Am Ende gibt es eine Auswertung.<br>🔎 Beschreiben: Claude gibt dir eine Aufgabe („Such etwas Grünes …“), du beschreibst es in 2–3 Sätzen und bekommst Nachfragen. Mit 📷 kannst du ein Foto davon mitschicken – kostet etwas mehr.</p>
     <a href="#talk/setup" class="small">⚙️ Schlüssel & Modell</a>`;
   const begin = async (key, custom) => {
     if (talkBusy) return;
@@ -1648,12 +1755,16 @@ function talkStart(root) {
 }
 
 // Eine Nachricht senden und die Antwort anhängen. hidden: nicht im Chat anzeigen (Start-Anweisung)
-async function talkSend(t, text, hidden, note) {
+async function talkSend(t, text, hidden, note, img) {
   if (talkBusy) return;
   talkBusy = true;
-  const content = note ? [{ type: 'text', text }, { type: 'text', text: `[${note}]` }] : text;
+  const blocks = [];
+  if (img) blocks.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: img.split(',')[1] } });
+  blocks.push({ type: 'text', text });
+  if (note) blocks.push({ type: 'text', text: `[${note}]` });
+  const content = blocks.length === 1 ? text : blocks;
   t.messages.push({ role: 'user', content });
-  if (!hidden) t.turns.push({ role: 'me', text });
+  if (!hidden) t.turns.push({ role: 'me', text, img: img || null });
   saveTalk(t);
   renderTalkIfOpen();
   try {
@@ -1681,12 +1792,16 @@ async function talkSend(t, text, hidden, note) {
 let talkHandsFree = false;
 function renderTalkIfOpen() { if (location.hash.startsWith('#talk')) views.talk($('#view')); }
 let talkNote = null; // „einfacher“ / „schwieriger“ – wird an die nächste Nachricht gehängt
+let talkPendingImg = null; // Foto, das mit der nächsten Nachricht mitgeht (Daten-URL)
 function talkSendText(text) {
   const t = loadTalk();
-  if (!t || talkBusy || !text) return;
+  if (!t || talkBusy) return;
+  if (!text && !talkPendingImg) return;
   const note = talkNote;
+  const img = talkPendingImg;
   talkNote = null;
-  talkSend(t, text, false, note);
+  talkPendingImg = null;
+  talkSend(t, text || '(Foto)', false, note, img);
 }
 function listenAndSend() {
   const btn = $('#t-mic');
@@ -1735,7 +1850,7 @@ function talkChat(root, t) {
     <div class="row between"><b>💬 ${esc(scen)}</b><span class="muted small">≈ $${t.cost.toFixed(2)}</span></div>
     <div class="chat" id="chat" style="margin-top:10px">
       ${t.turns.map((x, i) => x.role === 'me' ? `
-        <div class="bubble me">${esc(x.text)}
+        <div class="bubble me">${x.img ? `<img class="photo" src="${x.img}" alt="">` : ''}${esc(x.text)}
           ${x.fix ? `<div class="fix">✏️ <b>${esc(x.fix.corrected)}</b><br><span class="muted">${esc(x.fix.explanation)}</span> <button class="btn small" data-say="${i}">🔊</button></div>` : ''}
         </div>` : `
         <div class="bubble">${esc(x.text)}
@@ -1754,7 +1869,8 @@ function talkChat(root, t) {
         ${SR ? '<button class="btn primary grow" id="t-mic" style="padding:14px">🎙 Sprechen</button>' : ''}
       </div>
       ${SR ? '<p class="muted small" id="t-hint" hidden style="margin:4px 0 0">Nimm dir Zeit – Pausen sind okay. Tippe auf „✓ Fertig“, wenn du fertig bist.</p>' : ''}
-      <div class="row" style="margin-top:6px"><input type="text" id="t-text" class="grow" placeholder="oder tippen …"><button class="btn" id="t-send">➤</button></div>
+      <div id="t-pimg">${talkPendingImg ? `<div class="row" style="margin-top:6px"><img class="photo" src="${talkPendingImg}" style="max-height:80px;margin:0" alt=""><span class="muted small grow">geht mit deiner nächsten Antwort mit</span><button class="btn small danger" id="t-pimg-x">✕</button></div>` : ''}</div>
+      <div class="row" style="margin-top:6px"><label class="btn" style="margin:0;color:var(--text);font-size:16px" title="Foto mitschicken">📷<input type="file" accept="image/*" id="t-photo" hidden></label><input type="text" id="t-text" class="grow" placeholder="oder tippen …"><button class="btn" id="t-send">➤</button></div>
       <div class="row" style="margin-top:6px">
         ${SR ? `<label class="inline small" style="margin:0"><input type="checkbox" id="t-hf" ${talkHandsFree ? 'checked' : ''}> Mikro automatisch</label>` : ''}
         <button class="btn small" id="t-easy">Zu schwer</button>
@@ -1800,6 +1916,18 @@ function talkChat(root, t) {
   }
   const sendText = () => { const v = $('#t-text', root).value.trim(); if (v && !talkBusy) { cancelDictation(); talkSendText(v); } };
   $('#t-send', root).onclick = sendText;
+  // Foto anhängen: verkleinert, damit es wenig Token kostet
+  const bindPimg = () => { if ($('#t-pimg-x', root)) $('#t-pimg-x', root).onclick = () => { talkPendingImg = null; $('#t-pimg', root).innerHTML = ''; }; };
+  bindPimg();
+  $('#t-photo', root).onchange = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      talkPendingImg = await resizeImage(file, 720);
+      $('#t-pimg', root).innerHTML = `<div class="row" style="margin-top:6px"><img class="photo" src="${talkPendingImg}" style="max-height:80px;margin:0" alt=""><span class="muted small grow">geht mit deiner nächsten Antwort mit</span><button class="btn small danger" id="t-pimg-x">✕</button></div>`;
+      bindPimg();
+    } catch (err) { toast(err.message); }
+  };
   $('#t-text', root).addEventListener('keydown', e => { if (e.key === 'Enter') sendText(); });
   if ($('#t-hf', root)) $('#t-hf', root).onchange = e => { talkHandsFree = e.target.checked; };
   // Schwierigkeit gilt fürs Gespräch sofort und künftig: Hinweis an die nächste Nachricht hängen

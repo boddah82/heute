@@ -11,6 +11,12 @@ Einstufungstest (~5 Min.) über sechs Häufigkeitsstufen der Wortliste; sicher g
 ## Gespräche (Claude)
 Freie Gespräche oder Rollenspiele (Café, Weg fragen, Hotel …) per Sprache. Claude antwortet auf deinem Niveau mit deinen bekannten Wörtern, liest vor, korrigiert und liefert am Ende eine Auswertung mit Sätzen für die Insel „Gespräche“. Braucht einen eigenen API-Schlüssel (console.anthropic.com, Prepaid, Limit setzen); Schlüssel bleibt nur im Browser. Kostenschätzung in der App.
 
+## Fotos & Eselsbrücken
+Zu jedem Wort und jedem Inselsatz lässt sich ein eigenes Foto speichern (Kamera oder Galerie, verkleinert, nur auf diesem Gerät – nicht im Sync/Backup). Eselsbrücken lassen sich auf Deutsch einsprechen.
+
+## Beschreiben (Claude)
+Modus „🔎 Beschreiben“ unter Reden: Claude gibt eine Aufgabe („Such etwas Grünes und beschreib es“), du beschreibst in 2–3 Sätzen, Claude korrigiert und fragt nach. Optional mit Foto (📷).
+
 ## Tagesablauf (~30 Min.)
 1. **Wörter** – neue Wörter mit eigener Eselsbrücke, danach Abfrage (Deutsch → Zielsprache) mit Wiederholungsplanung (SM-2).
 2. **Sätze** – Sätze aus den Sprachinseln aktiv abrufen (sprechen, tippen oder im Kopf), aufdecken, bewerten.

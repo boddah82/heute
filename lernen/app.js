@@ -1528,11 +1528,13 @@ function talkSystem(scenarioKey, custom) {
 
 Learner: ${p.name || 'unknown name'}${settings.lang === 'it' ? `, ${p.gender === 'f' ? 'female' : 'male'} (use matching adjective endings when you talk about them)` : ''}.
 Estimated level: ${stage.id} – vocabulary-based estimate, adapt if the learner clearly understands more or less.
-Words the learner already knows (${known.length}): ${known.length ? known.join(', ') : 'almost none – use only the most basic, common words and very short sentences'}.
+Words the learner already knows (${known.length}) – for orientation only: ${known.length ? known.join(', ') : 'almost none – keep sentences very short and simple'}.
 Scenario: ${scen}
 
+Most important rule: everything you write in ${lang} – "reply", "correction.corrected" and "suggestion.answer" – must be natural, idiomatic ${lang} exactly as a native speaker would say it in this situation. Never build an unnatural or word-by-word sentence just to use words from the list above. If the natural way needs words the learner doesn't know yet, use them and list them in "new_words". Keep it simple through short sentences and everyday phrasing, not through odd word choices.${settings.lang === 'it' ? ' Drop subject pronouns (io, tu …) unless a native speaker would use them for emphasis.' : ''}
+
 How to reply:
-- "reply": only ${lang}. Length: ${length}. Mostly use words the learner knows; introduce at most 2 new words per reply.
+- "reply": only ${lang}. Length: ${length}. Prefer words the learner knows where that stays natural; at most 2–3 new words per reply.
 - Always end with a question or a clear prompt so the learner has to speak again.
 - The learner's messages come from speech recognition: ignore missing punctuation or capitals and obvious recognition glitches.
 - If the learner answers in German or mixes languages, respond kindly and give the ${lang} version in "correction".
@@ -1564,7 +1566,8 @@ async function callClaude(system, messages, schema, maxTokens) {
     system,
     messages,
     cache_control: { type: 'ephemeral' },
-    output_config: Object.assign({ format: { type: 'json_schema', schema } }, m.effort ? { effort: 'low' } : {}),
+    // Mittlerer Denkaufwand: sorgfältigere, natürlichere Sätze (etwas teurer und langsamer als „low“)
+    output_config: Object.assign({ format: { type: 'json_schema', schema } }, m.effort ? { effort: 'medium' } : {}),
   };
   let res;
   try {
@@ -1604,7 +1607,7 @@ function talkSetup(root) {
       <input type="password" id="k" placeholder="sk-ant-…" value="${esc(talkCfg.key)}" autocomplete="off">
       <label for="m">Modell</label>
       <select id="m">${Object.entries(TALK_MODELS).map(([id, m]) => `<option value="${id}" ${settings.talkModel === id ? 'selected' : ''}>${m.name} – $${m.in}/$${m.out} pro 1 Mio. Tokens</option>`).join('')}</select>
-      <p class="muted small">Ein Gespräch mit 15–20 Wechseln kostet mit Opus 5.5 grob 20–50 Cent, mit Sonnet etwa die Hälfte, mit Haiku ein Viertel – je länger das Gespräch, desto teurer jeder weitere Wechsel. Diesen Monat geschätzt verbraucht: <b>$${spent.toFixed(2)}</b> (auf diesem Gerät).</p>
+      <p class="muted small">Ein Gespräch mit 15–20 Wechseln kostet mit Opus 5.5 grob 30–80 Cent (Schätzung, nicht gemessen), mit Sonnet etwa die Hälfte, mit Haiku ein Viertel – je länger das Gespräch, desto teurer jeder weitere Wechsel. Diesen Monat geschätzt verbraucht: <b>$${spent.toFixed(2)}</b> (auf diesem Gerät).</p>
       <p class="muted small">Der Schlüssel wird nur in diesem Browser gespeichert (nicht im Sync, nicht im Backup) und direkt an die Claude-API geschickt. Wer Zugriff auf dein entsperrtes Gerät hat, könnte ihn auslesen – deshalb ein Limit in der Console setzen.</p>
       <div class="row"><button class="btn primary grow" id="save">Speichern</button>${talkCfg.key ? '<button class="btn danger" id="del">Schlüssel löschen</button>' : ''}</div>
     </div>`;

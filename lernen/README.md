@@ -17,6 +17,9 @@ Zu jedem Wort und jedem Inselsatz lässt sich ein eigenes Foto speichern (Kamera
 ## Beschreiben (Claude)
 Modus „🔎 Beschreiben“ unter Reden: Claude gibt eine Aufgabe („Such etwas Grünes und beschreib es“), du beschreibst in 2–3 Sätzen, Claude korrigiert und fragt nach. Optional mit Foto (📷).
 
+## Eigene Texte
+Unter Inseln → „📄 Texte“: eigene Texte einfügen (z. B. Liedtexte zum Mitlesen). Claude übersetzt Zeile für Zeile, Wort für Wort und erklärt Redewendungen (einmalige Kosten pro Text). Vorlesen mit Markierung, Wörter in die Wortliste übernehmen, einzelne Zeilen per ➕ in die Insel „Texte“ (Wiederholung & Shadowing).
+
 ## Tagesablauf (~30 Min.)
 1. **Wörter** – neue Wörter mit eigener Eselsbrücke, danach Abfrage (Deutsch → Zielsprache) mit Wiederholungsplanung (SM-2).
 2. **Sätze** – Sätze aus den Sprachinseln aktiv abrufen (sprechen, tippen oder im Kopf), aufdecken, bewerten.

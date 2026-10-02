@@ -74,7 +74,7 @@ function starterIslands(lang) {
 }
 function stateKey(lang) { return 'sl.data.' + lang; }
 function emptyState() {
-  return { words: [], islands: [], srs: {}, notes: {}, noteTs: {}, overrides: {}, log: {}, deleted: {}, builderVerbs: [], resetAt: 0, level: null, talkAdjust: 0 };
+  return { words: [], islands: [], srs: {}, notes: {}, noteTs: {}, overrides: {}, log: {}, deleted: {}, builderVerbs: [], resetAt: 0, level: null, talkAdjust: 0, texts: [] };
 }
 function loadState(lang) {
   let s = load(stateKey(lang), null);
@@ -857,6 +857,7 @@ views.review = function (root) {
 
 let listenToken = null;
 function stopAudio() {
+  if (textPlayToken) { textPlayToken.stop = true; textPlayToken = null; }
   if (listenToken) listenToken.stop = true;
   listenToken = null;
   listening = false;
@@ -1108,6 +1109,7 @@ function islandsSeg(active) {
   return `<div class="seg">
     <button data-go="#islands" class="${active === 'islands' ? 'on' : ''}">🏝️ Sprachinseln</button>
     <button data-go="#builder" class="${active === 'builder' ? 'on' : ''}">🧱 Satzbaukasten</button>
+    <button data-go="#texts" class="${active === 'texts' ? 'on' : ''}">📄 Texte</button>
   </div>`;
 }
 function bindGo(root) { $$('[data-go]', root).forEach(b => { b.onclick = () => { location.hash = b.dataset.go; }; }); }
@@ -1329,6 +1331,190 @@ views.builder = function (root, arg) {
 
   render();
 };
+
+// ---------- Eigene Texte (z. B. Liedtexte) ----------
+// Text einfügen → Zeilen → Claude übersetzt Zeile für Zeile (+ Wort für Wort, Redewendungen) → mitlesen, anhören, nachsprechen.
+const TEXT_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['lines'],
+  properties: {
+    lines: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false, required: ['i', 'de', 'words', 'note'],
+        properties: {
+          i: { type: 'integer' },
+          de: { type: 'string' },
+          words: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de'], properties: { t: { type: 'string' }, de: { type: 'string' } } } },
+          note: { type: 'string' },
+        },
+      },
+    },
+  },
+};
+function splitTextLines(raw) {
+  const out = [];
+  raw.split('\n').map(l => l.trim()).filter(Boolean).forEach(l => {
+    // Lange Prosa-Zeilen in Sätze teilen, Liedzeilen bleiben, wie sie sind
+    if (l.length > 160) (l.match(/[^.!?…]+[.!?…]*["»”)]?\s*/g) || [l]).map(x => x.trim()).filter(Boolean).forEach(x => out.push(x));
+    else out.push(l);
+  });
+  return out;
+}
+function findText(id) { return (state.texts || []).find(x => x.id === id); }
+
+views.texts = function (root, id) {
+  state.texts = state.texts || [];
+  const tx = id && findText(id);
+  if (tx) { textDetail(root, tx); return; }
+  root.innerHTML = `
+    ${islandsSeg('texts')}
+    <p class="muted small">Eigene Texte verstehen lernen – z. B. Liedtexte, die du beim Hören mitliest. Claude übersetzt Zeile für Zeile, Wort für Wort und erklärt Redewendungen. Texte bleiben getrennt vom normalen Lernen; einzelne Zeilen holst du mit ➕ in die Wiederholung.</p>
+    ${state.texts.map(x => `
+      <a class="card step" href="#texts/${x.id}">
+        <div class="num">${x.lines.length}</div>
+        <div class="grow"><b>${esc(x.title)}</b><div class="meta">${x.lines.length} Zeilen · ${x.lines.every(l => l.de) ? 'übersetzt' : 'noch nicht übersetzt'}</div></div><div>›</div>
+      </a>`).join('')}
+    <div class="card">
+      <b>Neuer Text</b>
+      <label for="tx-title">Titel</label><input type="text" id="tx-title" placeholder="z. B. Liedtitel – Interpret">
+      <label for="tx-body">Text (${LANGS[settings.lang].name}) – eine Zeile pro Zeile</label>
+      <textarea id="tx-body" style="min-height:180px" placeholder="Text hier einfügen"></textarea>
+      <button class="btn primary" id="tx-save" style="margin-top:8px">Speichern</button>
+      <p class="muted small">Der Text ist nur für dich: Er liegt auf dem Gerät und – wenn eingerichtet – in deinem privaten Sync-Gist.</p>
+    </div>`;
+  bindGo(root);
+  $('#tx-save', root).onclick = () => {
+    const lines = splitTextLines($('#tx-body', root).value);
+    if (!lines.length) { toast('Bitte Text einfügen'); return; }
+    if (lines.length > 300) { toast('Höchstens 300 Zeilen pro Text'); return; }
+    const title = $('#tx-title', root).value.trim() || lines[0].slice(0, 40);
+    const n = { id: 'tx' + uid(), title, ts: Date.now(), lines: lines.map(t => ({ id: 'l' + uid(), t, de: '', words: [], note: '' })) };
+    state.texts.push(n);
+    persist();
+    location.hash = '#texts/' + n.id;
+  };
+};
+
+async function translateText(tx, onProgress) {
+  const lang = settings.lang === 'it' ? 'Italian' : 'British English';
+  const todo = tx.lines.map((l, i) => i).filter(i => !tx.lines[i].de);
+  for (let k = 0; k < todo.length; k += 40) {
+    const chunk = todo.slice(k, k + 40);
+    onProgress && onProgress(k, todo.length);
+    const listing = chunk.map(i => `${i}: ${tx.lines[i].t}`).join('\n');
+    const r = await callClaude(
+      `You help a German-speaking learner understand a ${lang} text they pasted for private study (for example song lyrics). For every numbered line, return an object with the same "i" and: "de" = a natural German translation of the line (keep the meaning and tone; for song lyrics a faithful, readable translation, not a rhyming one); "words" = the line split into its words in original order (punctuation attached) with a literal word-for-word German gloss for each, keeping the ${lang} word order, several German words joined with hyphens; "note" = a short German explanation of idioms, slang, contractions, poetic or dialect forms, or anything a learner would misunderstand in this line – empty string if nothing needs explaining. Use the surrounding lines for context. Return all lines, in order.`,
+      [{ role: 'user', content: listing }], TEXT_SCHEMA, 16000);
+    r.data.lines.forEach(x => {
+      const line = tx.lines[x.i];
+      if (!line || !chunk.includes(x.i)) return;
+      line.de = x.de; line.words = x.words || []; line.note = x.note || '';
+    });
+    tx.ts = Date.now();
+    persist();
+  }
+}
+
+let textPlayToken = null;
+function textDetail(root, tx) {
+  const done = tx.lines.every(l => l.de);
+  const islandId = 'txt-' + settings.lang;
+  const isl = state.islands.find(i => i.id === islandId);
+  const inIsland = t => !!(isl && isl.sentences.some(s => s.t === t));
+  root.innerHTML = `
+    <a href="#texts" class="small">‹ Alle Texte</a>
+    <input type="text" id="tx-name" value="${esc(tx.title)}" style="font-size:20px;font-weight:700;margin:8px 0 12px">
+    ${done ? '' : `<div class="card"><p class="small">${tx.lines.filter(l => !l.de).length} Zeilen ohne Übersetzung.</p>
+      ${talkCfg.key ? '<button class="btn primary" id="tx-tr">🌐 Mit Claude übersetzen</button><p class="muted small">Kostet einmalig ein paar Cent (Schätzung).</p>' : '<p class="muted small">Zum Übersetzen den Claude-Schlüssel unter <a href="#talk/setup">Reden → ⚙️</a> eintragen.</p>'}</div>`}
+    <div class="row" style="margin-bottom:8px">
+      <button class="btn grow" id="tx-play">▶ Alles vorlesen</button>
+      <label class="inline small" style="margin:0"><input type="checkbox" id="tx-show" ${tx.showDe ? 'checked' : ''}> Deutsch zeigen</label>
+    </div>
+    <ul class="list card" id="tx-list">
+      ${tx.lines.map((l, i) => `
+        <li data-i="${i}">
+          <div class="grow">
+            <div class="t">${esc(l.t)}</div>
+            <div class="tx-de" ${tx.showDe ? '' : 'hidden'}>
+              ${l.de ? `<div class="d">${esc(l.de)}</div>` : ''}
+              ${l.words && l.words.length ? glossRow(l.words.map(w => ({ t: w.t, de: w.de })), false) : ''}
+              ${l.note ? `<div class="d" style="margin-top:4px">💬 ${esc(l.note)}</div>` : ''}
+              ${l.words && l.words.length ? `<details style="margin-top:6px"><summary class="small">＋ Wörter übernehmen</summary><div class="tools" style="margin-top:6px">${l.words.map((w, j) => `<button class="btn small" data-tw="${i}-${j}">＋ ${esc(w.t.replace(/[.,!?;:«»"“”()…]+/g, ''))}</button>`).join('')}</div></details>` : ''}
+            </div>
+          </div>
+          <div class="stack" style="flex:none">
+            <button class="btn small" data-tp="${i}">🔊</button>
+            <button class="btn small" data-td="${i}">DE</button>
+            ${l.de ? `<button class="btn small" data-ta="${i}" ${inIsland(l.t) ? 'disabled' : ''} title="In die Wiederholung">➕</button>` : ''}
+          </div>
+        </li>`).join('')}
+    </ul>
+    <button class="btn danger" id="tx-del" style="width:100%">Text löschen</button>`;
+  $('#tx-name', root).onchange = e => { tx.title = e.target.value.trim() || tx.title; tx.ts = Date.now(); persist(); };
+  if ($('#tx-tr', root)) {
+    $('#tx-tr', root).onclick = async () => {
+      const b = $('#tx-tr', root);
+      b.disabled = true;
+      try {
+        await translateText(tx, (k, n) => { b.textContent = `Übersetze … (${k}/${n})`; });
+        toast('Übersetzt');
+      } catch (e) { toast(e.message); }
+      if (location.hash === '#texts/' + tx.id) textDetail(root, tx);
+    };
+  }
+  $('#tx-show', root).onchange = e => { tx.showDe = e.target.checked; persist(); $$('.tx-de', root).forEach(x => { x.hidden = !tx.showDe; }); };
+  $$('[data-td]', root).forEach(b => { b.onclick = () => { const el = $(`li[data-i="${b.dataset.td}"] .tx-de`, root); el.hidden = !el.hidden; }; });
+  $$('[data-tp]', root).forEach(b => { b.onclick = () => speak(tx.lines[b.dataset.tp].t); });
+  $$('[data-ta]', root).forEach(b => {
+    b.onclick = () => {
+      const l = tx.lines[b.dataset.ta];
+      let target = state.islands.find(i => i.id === islandId);
+      if (!target) { target = { id: islandId, title: 'Texte', sentences: [], ts: Date.now() }; state.islands.push(target); }
+      if (!target.sentences.some(s => s.t === l.t)) target.sentences.push({ id: 's:' + uid(), t: l.t, d: l.de, ts: Date.now() });
+      persist();
+      b.disabled = true;
+      toast('In Insel „Texte“ – kommt in Wiederholung & Shadowing');
+    };
+  });
+  $$('[data-tw]', root).forEach(b => {
+    b.onclick = () => {
+      const [i, j] = b.dataset.tw.split('-').map(Number);
+      const w = tx.lines[i].words[j];
+      const t = w.t.replace(/[.,!?;:«»"“”()…]+/g, '').trim();
+      const d = w.de.replace(/[.,!?;:]+$/g, '').replace(/-/g, ' ').trim();
+      if (!t) return;
+      if (allWords().some(x => x.t.toLowerCase() === t.toLowerCase())) { toast('Wort gibt es schon'); return; }
+      state.words.push({ id: 'u:' + uid(), t, d, ts: Date.now() });
+      persist();
+      b.disabled = true;
+      toast(`„${t}“ zu deinen Wörtern – Bedeutung ggf. mit ✎ anpassen`);
+    };
+  });
+  // Mitlesen: alle Zeilen nacheinander vorlesen, aktuelle Zeile markieren
+  $('#tx-play', root).onclick = async () => {
+    const btn = $('#tx-play', root);
+    if (textPlayToken) { textPlayToken.stop = true; textPlayToken = null; speechSynthesis.cancel(); listening = false; btn.textContent = '▶ Alles vorlesen'; $$('#tx-list li', root).forEach(x => x.classList.remove('now')); return; }
+    const token = { stop: false };
+    textPlayToken = token;
+    listening = true;
+    btn.textContent = '■ Stopp';
+    for (let i = 0; i < tx.lines.length && !token.stop; i++) {
+      $$('#tx-list li', root).forEach(x => x.classList.toggle('now', Number(x.dataset.i) === i));
+      const li = $(`#tx-list li[data-i="${i}"]`, root);
+      if (li) li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      await speakP(tx.lines[i].t);
+      if (!token.stop) await wait(700);
+    }
+    if (textPlayToken === token) { textPlayToken = null; listening = false; btn.textContent = '▶ Alles vorlesen'; }
+  };
+  $('#tx-del', root).onclick = () => {
+    if (!confirm(`Text „${tx.title}“ löschen?`)) return;
+    state.texts = state.texts.filter(x => x !== tx);
+    markDeleted(tx.id);
+    persist();
+    location.hash = '#texts';
+  };
+}
 
 views.islands = function (root, id) {
   const isl = id && state.islands.find(i => i.id === id);
@@ -2204,6 +2390,7 @@ function mergeState(a, b) {
     talkAdjust: (b.talkAdjustTs || 0) > (a.talkAdjustTs || 0) ? b.talkAdjust : a.talkAdjust,
     talkAdjustTs: Math.max(a.talkAdjustTs || 0, b.talkAdjustTs || 0),
     builderVerbs: mergeList(a.builderVerbs, b.builderVerbs),
+    texts: mergeList(a.texts || [], b.texts || []),
   };
 }
 
@@ -2289,8 +2476,8 @@ function route() {
   persist();
   const [name, arg] = location.hash.slice(1).split('/');
   const view = views[name] ? name : 'home';
-  activeStep = view === 'builder' ? 'islands' : view === 'talk' ? 'talk' : STEPS.some(s => s.key === view) ? view : null;
-  const tab = view === 'builder' ? 'islands' : view;
+  activeStep = view === 'builder' ? 'islands' : view === 'texts' ? 'listen' : view === 'talk' ? 'talk' : STEPS.some(s => s.key === view) ? view : null;
+  const tab = view === 'builder' || view === 'texts' ? 'islands' : view;
   $$('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
   const root = $('#view');
   views[view](root, arg);

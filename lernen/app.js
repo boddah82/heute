@@ -425,9 +425,9 @@ async function fillPhotos(root) {
     } catch (e) { /* IndexedDB nicht verfügbar – ohne Foto weiter */ }
   }
 }
-function photoEditor(id) {
+function photoEditor(id, withImg = true) {
   return `<div class="photo-edit">
-    <img data-photo="${esc(id)}" class="photo" hidden alt="">
+    ${withImg ? `<img data-photo="${esc(id)}" class="photo" hidden alt="">` : ''}
     <div class="row" style="justify-content:center">
       <label class="btn small" style="margin:0;color:var(--text);font-size:14px">📷 Foto<input type="file" accept="image/*" data-photo-in="${esc(id)}" hidden></label>
       <button class="btn small danger" data-photo-del="${esc(id)}" hidden>✕ Foto</button>
@@ -515,6 +515,7 @@ function recallSession(root, ids, cfg) {
   let done = 0;
   function show() {
     keyHandler = null;
+    cancelDictation();
     if (!queue.length) {
       root.innerHTML = `<div class="card flash"><div class="target">🎉</div>
         <p>${done ? `Fertig – ${done} Abfragen.` : cfg.emptyText}</p></div>${cfg.doneExtra || ''}`;
@@ -546,10 +547,31 @@ function recallSession(root, ids, cfg) {
           <button class="btn easy" data-r="3">Leicht</button>
         </div>
         <p class="muted small">Laut nachsprechen, dann ehrlich bewerten. Tasten 1–4 gehen auch.</p>
+        <details class="card" id="memo" style="margin-top:4px">
+          <summary><b>🧠 ${it.note ? 'Eselsbrücke & Foto bearbeiten' : 'Eselsbrücke & Foto hinzufügen'}</b></summary>
+          <div class="row between" style="margin-top:8px"><span class="muted small">Welches Bild, welche Geschichte verbindet Klang und Bedeutung?</span>
+            ${SR ? '<button class="btn small" id="memo-mic">🎙 Einsprechen</button>' : ''}</div>
+          <textarea id="memo-t" placeholder="z. B. eine absurde Szene – je lustiger oder emotionaler, desto besser">${esc(it.note || '')}</textarea>
+          ${photoEditor(id, false)}
+        </details>
       </div>`;
     let said = '';
     let revealed = false;
     fillPhotos(root);
+    // Eselsbrücke/Foto auch bei bekannten Karten anlegen oder ändern
+    const memo = $('#memo-t', root);
+    const saveMemo = () => { setNote(id, memo.value.trim()); it.note = memo.value.trim(); persist(); };
+    memo.onchange = saveMemo;
+    bindPhotoEditors(root);
+    if ($('#memo-mic', root)) {
+      let base = null;
+      micToggle($('#memo-mic', root), '🎙 Einsprechen', text => {
+        memo.value = ((base || '') + ' ' + text).trim();
+        base = null;
+        saveMemo();
+        toast('Eselsbrücke gespeichert');
+      }, live => { if (base === null) base = memo.value.trim(); memo.value = (base + ' ' + live).trim(); }, 'de-DE');
+    }
     const reveal = () => {
       if (revealed) return;
       revealed = true;
@@ -829,7 +851,7 @@ views.review = function (root) {
     typing: true,
     emptyText: 'Nichts fällig. Neue Sätze kommen aus deinen Sprachinseln.',
     doneExtra: `<a class="btn big" href="#shadow">Weiter zum Shadowing</a>`,
-    get: id => { const s = byId[id]; return s && { t: s.t, d: s.d, isNew: !state.srs[id] }; },
+    get: id => { const s = byId[id]; return s && { t: s.t, d: s.d, isNew: !state.srs[id], note: state.notes[id] }; },
   });
 };
 

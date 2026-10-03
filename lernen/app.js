@@ -272,7 +272,8 @@ let currentUtterance = null; // Referenz halten, sonst feuert onend in Chrome ma
 function speak(text, opts = {}) {
   if (!window.speechSynthesis) { opts.onend && opts.onend(); return; }
   speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text.replace(/\(.*?\)/g, '').trim());
+  // Klammerzusätze nicht vorlesen, „a / b“ als kurze Pause statt „Schrägstrich“
+  const u = new SpeechSynthesisUtterance(text.replace(/\(.*?\)/g, '').replace(/\s*\/\s*/g, ', ').trim());
   if (opts.lang === 'de') {
     u.lang = 'de-DE';
     const v = voicesFor('de')[0];
@@ -518,7 +519,7 @@ function recallSession(root, ids, cfg) {
     cancelDictation();
     if (!queue.length) {
       root.innerHTML = `<div class="card flash"><div class="target">🎉</div>
-        <p>${done ? `Fertig – ${done} Abfragen.` : cfg.emptyText}</p></div>${cfg.doneExtra || ''}`;
+        <p>${done ? `Fertig – ${done} Abfragen.` : cfg.emptyText}</p></div>${typeof cfg.doneExtra === 'function' ? cfg.doneExtra() : (cfg.doneExtra || '')}`;
       cfg.onDone && cfg.onDone(root);
       return;
     }
@@ -614,6 +615,62 @@ function recallSession(root, ids, cfg) {
 // ---------- Ansichten ----------
 const views = {};
 
+// ---------- „Heute zuerst“: lerngerechte Empfehlung nach festen Regeln ----------
+const REVIEW_CAP = 50; // Wort-Wiederholungen pro Runde – nach Pausen den Rückstand verteilen statt alles nachzuholen
+function daysSince(key) {
+  for (let d = today(); d >= today() - 60; d--) {
+    const l = state.log[d];
+    if (l && l.sec && (l.sec[key] || 0) >= 60) return today() - d;
+  }
+  return null; // in den letzten 60 Tagen nie (mind. 1 Min.)
+}
+function pauseDays() {
+  for (let d = today() - 1; d >= today() - 60; d--) {
+    const l = state.log[d];
+    if (l && Object.values(l.sec || {}).reduce((a, b) => a + b, 0) >= 60) return today() - d - 1;
+  }
+  return null;
+}
+function sinceText(n) { return n === null ? 'länger nicht gemacht' : n === 1 ? 'seit gestern nicht gemacht' : `seit ${n} Tagen nicht gemacht`; }
+function todayPlan() {
+  const l = dayLog();
+  const steps = [];
+  const learnedWords = Object.keys(state.srs).filter(isWordId).length;
+  if (!learnedWords && !state.level) {
+    steps.push({ href: '#level/test', title: 'Einstufungstest (5 Min.)', why: 'damit die App weiß, was du schon kannst' });
+    steps.push({ href: '#builder/modal', title: 'Satzbaukasten', why: 'erste eigene Sätze über dich' });
+    steps.push({ href: '#vocab/new', title: 'Erste neue Wörter', why: 'die häufigsten Wörter zuerst' });
+    return { steps, pause: null };
+  }
+  const dueW = dueIds(isWordId).length;
+  const dueS = dueIds(id => id.startsWith('s:')).length;
+  // Sprech-Schritte: welcher wurde am längsten nicht gemacht?
+  const output = [
+    { key: 'review', href: '#review', title: 'Sätze wiederholen', extra: dueS ? `${dueS} fällig` : '' },
+    { key: 'shadow', href: '#shadow', title: 'Shadowing', extra: '' },
+  ];
+  if (talkCfg.key) output.push({ key: 'talk', href: '#talk', title: 'Gespräch führen', extra: '' });
+  output.forEach(o => { o.days = daysSince(o.key); o.score = o.days === null ? 99 : o.days; });
+  const neglected = output.filter(o => (l.sec[o.key] || 0) < 60).sort((a, b) => b.score - a.score)[0];
+  const neglectedStep = neglected && neglected.score >= 2
+    ? { href: neglected.href, title: neglected.title, why: [sinceText(neglected.days), neglected.extra].filter(Boolean).join(' · ') + ' – Sprechen ist dein Ziel' }
+    : null;
+  const reviewStep = dueW
+    ? { href: '#vocab/recall', title: `${Math.min(dueW, REVIEW_CAP)} Wörter wiederholen`, why: dueW > REVIEW_CAP ? `${dueW} fällig – heute höchstens ${REVIEW_CAP}, der Rest verteilt sich auf die nächsten Tage` : 'fällig – jetzt wiederholen, bevor sie verblassen' }
+    : null;
+  // Lange Vernachlässigtes (≥ 3 Tage) zuerst, sonst gilt: fällige Wiederholungen vor allem anderen
+  if (neglectedStep && neglected.score >= 3) { steps.push(neglectedStep); if (reviewStep) steps.push(reviewStep); }
+  else { if (reviewStep) steps.push(reviewStep); if (neglectedStep) steps.push(neglectedStep); }
+  const tempo = newWordTempo();
+  const newLeft = Math.max(0, tempo.n + (l.extraNew || 0) - l.newWords);
+  if (newLeft && dueW <= REVIEW_CAP * 2) steps.push({ href: '#vocab/new', title: `${newLeft} neue Wörter`, why: tempo.reason ? `heute weniger: ${tempo.reason}` : 'mit Eselsbrücke oder Foto' });
+  else if (newLeft) steps.push({ href: '#vocab/new', title: 'Neue Wörter: heute auslassen', why: 'erst den Rückstand abbauen – sonst wächst er weiter' });
+  // Lücken auffüllen, falls noch nichts empfohlen ist
+  if (steps.length < 2 && dueS && !steps.some(x => x.href === '#review')) steps.push({ href: '#review', title: 'Sätze wiederholen', why: `${dueS} fällig` });
+  if (steps.length < 2 && (l.sec.listen || 0) < 300) steps.push({ href: '#listen/words', title: 'Gelernte Wörter anhören', why: 'nebenbei, ohne Bildschirm' });
+  return { steps: steps.slice(0, 3), pause: pauseDays() };
+}
+
 views.home = function (root) {
   const l = dayLog();
   const total = minutesToday();
@@ -636,6 +693,15 @@ views.home = function (root) {
       <div class="row between"><b>${total} / ${DAILY_GOAL_MIN} Minuten</b><span class="muted small">🔥 ${streak()} Tage in Folge</span></div>
       <div class="progress" style="margin-top:8px"><div style="width:${Math.min(100, total / DAILY_GOAL_MIN * 100)}%"></div></div>
     </div>
+    ${(() => {
+      const plan = todayPlan();
+      if (!plan.steps.length) return '<div class="card"><b>✅ Heute ist alles Wichtige erledigt.</b><p class="muted small">Wenn du magst: ein Gespräch, Hören oder neue Texte.</p></div>';
+      return `<div class="card plan">
+        <b>Heute zuerst</b>
+        ${plan.pause >= 2 ? `<p class="small" style="margin:4px 0 0">Willkommen zurück nach ${plan.pause} Tagen Pause – nichts nachholen, einfach hier weitermachen.</p>` : ''}
+        ${plan.steps.map((st, i) => `<a class="plan-step" href="${st.href}"><span class="num">${'①②③'[i]}</span><span class="grow"><b>${esc(st.title)}</b><span class="meta">${esc(st.why)}</span></span><span>›</span></a>`).join('')}
+      </div>`;
+    })()}
     <div class="stats">
       <div class="stat"><b>${learnedWords}</b><span>Wörter im Training</span></div>
       <div class="stat"><b>${sentencesInTraining}</b><span>Sätze im Training</span></div>
@@ -697,9 +763,14 @@ views.vocab = function (root, arg) {
   $$('.seg button', root).forEach(b => { b.onclick = () => { location.hash = '#vocab/' + b.dataset.m; }; });
   const pane = $('#pane', root);
   if (mode === 'recall') {
-    recallSession(pane, dueIds(isWordId), {
+    const due = dueIds(isWordId);
+    recallSession(pane, due.slice(0, REVIEW_CAP), {
       big: 'target',
       emptyText: 'Keine Wörter fällig.',
+      doneExtra: () => {
+        const rest = dueIds(isWordId).length;
+        return rest ? `<div class="card"><p class="small">Noch ${rest} fällig. Für heute reicht das – der Rest verteilt sich auf die nächsten Tage.</p><button class="btn" onclick="views.vocab($('#view'), 'recall')">Trotzdem weitere ${Math.min(rest, REVIEW_CAP)}</button></div>` : '';
+      },
       correct: correctWord,
       get: id => { const w = wordById(id); return w && { t: w.t, d: w.d, note: state.notes[id] }; },
     });
@@ -864,10 +935,98 @@ function stopAudio() {
   if (window.speechSynthesis) speechSynthesis.cancel();
 }
 
-views.listen = function (root) {
+function listenSeg(active) {
+  return `<div class="seg">
+    <button data-go="#listen" class="${active === 'sent' ? 'on' : ''}">🏝️ Sätze</button>
+    <button data-go="#listen/words" class="${active === 'words' ? 'on' : ''}">🧠 Gelernte Wörter</button>
+  </div>`;
+}
+
+// Gelernte Wörter anhören: Hör-Abfrage (Deutsch → Pause → Zielsprache) oder Nachsprechen
+function listenWords(root) {
+  const opts = Object.assign({ mode: 'recall', pick: 'hard', count: 20, pause: 3, loop: false }, load('sl.listenw', {}));
+  const learned = Object.entries(state.srs).filter(([id]) => isWordId(id)).map(([id, c]) => ({ w: wordById(id), c })).filter(x => x.w);
+  root.innerHTML = `
+    <h1>🎧 Hören</h1>
+    ${listenSeg('words')}
+    ${voiceNotice()}
+    <div class="card">
+      <label>Art</label>
+      ${chips('lw-mode', [{ k: 'recall', l: 'Hör-Abfrage: Deutsch → selbst sagen → Lösung' }, { k: 'repeat', l: 'Anhören & nachsprechen' }], opts.mode === 'recall' ? 0 : 1, x => x.l)}
+      <label>Welche Wörter?</label>
+      ${chips('lw-pick', [{ k: 'hard', l: 'Schwierige zuerst' }, { k: 'recent', l: 'Zuletzt geübt' }, { k: 'all', l: 'Alle gemischt' }], ['hard', 'recent', 'all'].indexOf(opts.pick), x => x.l)}
+      <div class="row" style="margin-top:6px">
+        <div class="grow"><label for="lw-count">Anzahl</label><select id="lw-count">${[10, 20, 50, 0].map(n => `<option value="${n}" ${n === opts.count ? 'selected' : ''}>${n || 'alle'}</option>`).join('')}</select></div>
+        <div class="grow"><label for="lw-pause">Pause (Sek.)</label><select id="lw-pause">${[2, 3, 4, 6].map(n => `<option ${n === opts.pause ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+      </div>
+      <label class="inline"><input type="checkbox" id="lw-loop" ${opts.loop ? 'checked' : ''}> Endlosschleife</label>
+      <button class="btn primary big" id="lw-play" style="margin-top:12px" ${learned.length ? '' : 'disabled'}>▶ Abspielen</button>
+      <p class="muted small">${learned.length ? `${learned.length} Wörter im Training. Gut nebenbei – beim Gehen, Kochen, Autofahren. Bildschirm anlassen.` : 'Noch keine gelernten Wörter – erst unter „Wörter“ lernen.'}</p>
+    </div>
+    <ul class="list card" id="lw-list"></ul>`;
+  bindGo(root);
+  const store = () => save('sl.listenw', opts);
+  const pickList = () => {
+    let list = learned.slice();
+    if (opts.pick === 'hard') list.sort((a, b) => (b.c.lapses || 0) - (a.c.lapses || 0) || a.c.ef - b.c.ef || a.c.iv - b.c.iv);
+    else if (opts.pick === 'recent') list.sort((a, b) => (b.c.ts || 0) - (a.c.ts || 0));
+    else for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+    return (opts.count ? list.slice(0, opts.count) : list).map(x => x.w);
+  };
+  let list = pickList();
+  // In der Hör-Abfrage bleibt die Lösung verdeckt, bis sie gesprochen wurde
+  const renderList = (now = -1, shownUpTo = -1) => {
+    $('#lw-list', root).innerHTML = list.map((w, i) => `<li class="${i === now ? 'now' : ''}"><div><div class="t">${opts.mode === 'recall' && i > shownUpTo ? '…' : esc(w.t)}</div><div class="d">${esc(w.d)}</div></div></li>`).join('') || '<li class="muted">Keine Wörter.</li>';
+  };
+  renderList(-1, opts.mode === 'recall' ? -1 : list.length);
+  $$('.chips[data-name="lw-mode"] .chip', root).forEach(c => { c.onclick = () => { stopAudio(); opts.mode = ['recall', 'repeat'][c.dataset.i]; store(); listenWords(root); }; });
+  $$('.chips[data-name="lw-pick"] .chip', root).forEach(c => { c.onclick = () => { stopAudio(); opts.pick = ['hard', 'recent', 'all'][c.dataset.i]; store(); listenWords(root); }; });
+  $('#lw-count', root).onchange = e => { stopAudio(); opts.count = Number(e.target.value); store(); listenWords(root); };
+  $('#lw-pause', root).onchange = e => { opts.pause = Number(e.target.value); store(); };
+  $('#lw-loop', root).onchange = e => { opts.loop = e.target.checked; store(); };
+  const btn = $('#lw-play', root);
+  btn.onclick = async () => {
+    if (listenToken) { stopAudio(); btn.textContent = '▶ Abspielen'; renderList(-1, opts.mode === 'recall' ? -1 : list.length); return; }
+    if (!list.length) return;
+    const token = { stop: false };
+    listenToken = token;
+    listening = true;
+    btn.textContent = '■ Stopp';
+    const ms = opts.pause * 1000;
+    do {
+      for (let i = 0; i < list.length && !token.stop; i++) {
+        const w = list[i];
+        renderList(i, opts.mode === 'recall' ? i - 1 : list.length);
+        const li = $('#lw-list .now', root);
+        if (li) li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        if (opts.mode === 'recall') {
+          await speakP(w.d, { lang: 'de' });            // Deutsch
+          if (!token.stop) await wait(ms);               // selbst sagen
+          if (token.stop) break;
+          renderList(i, i);
+          await speakP(w.t);                             // Lösung
+          if (!token.stop) await wait(Math.max(1500, ms / 2));
+          if (!token.stop) await speakP(w.t);            // nochmal zum Nachsprechen
+          if (!token.stop) await wait(ms);
+        } else {
+          for (let r = 0; r < 2 && !token.stop; r++) {
+            await speakP(w.t);
+            if (!token.stop) await wait(ms);             // nachsprechen
+          }
+        }
+      }
+      if (opts.loop && !token.stop && opts.pick === 'all') list = pickList();
+    } while (opts.loop && !token.stop);
+    if (listenToken === token) { listenToken = null; listening = false; btn.textContent = '▶ Abspielen'; renderList(-1, opts.mode === 'recall' ? -1 : list.length); }
+  };
+}
+
+views.listen = function (root, arg) {
+  if (arg === 'words') { listenWords(root); return; }
   const opts = Object.assign({ island: 'all', de: false, repeat: 2, pause: 2, loop: false }, load('sl.listen', {}));
   root.innerHTML = `
     <h1>🎧 Hören</h1>
+    ${listenSeg('sent')}
     ${voiceNotice()}
     <div class="card">
       <label for="l-isl">Sprachinsel</label>${islandSelect('l-isl', opts.island, true)}
@@ -886,6 +1045,7 @@ views.listen = function (root) {
       <p class="muted small">Podcast, Serie, Radio auf ${LANGS[settings.lang].name}: Zeit hier eintragen.</p>
       <div class="row">${[5, 10, 15, 30].map(m => `<button class="btn" data-add="${m}">+${m} Min.</button>`).join('')}</div>
     </div>`;
+  bindGo(root);
   const items = () => {
     const v = $('#l-isl', root).value;
     return v === 'all' ? allSentences() : (state.islands.find(i => i.id === v) || { sentences: [] }).sentences;

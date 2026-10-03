@@ -20,7 +20,7 @@ Reine statische PWA ohne Build-Schritt, Vanilla-JS, kein Framework.
 | `lernen/vendor/anthropic-sdk.js` | offizielles `@anthropic-ai/sdk`, per esbuild als ESM-Browser-Bundle; wird per `import()` erst bei Bedarf geladen |
 | `lernen/sw.js` | Service Worker, Netzwerk zuerst; nur same-origin. **`VERSION` bei jeder Änderung hochzählen** |
 
-Views in `app.js` (`views.<name>`): `home`, `method`, `vocab` (neu/abfragen/eigene), `review` (Sätze), `listen`, `shadow`, `builder` (Satzbaukasten + Drill), `texts` (eigene Texte), `islands`, `level` (Einstufungstest), `talk` (Gespräche mit Claude), `settings`.
+Views in `app.js` (`views.<name>`): `home` (mit „Heute zuerst“ aus `todayPlan()`, Regeln dort kommentiert), `method`, `vocab` (neu/abfragen/eigene), `review` (Sätze), `listen` (Sätze oder `#listen/words` gelernte Wörter), `shadow`, `builder` (Satzbaukasten + Drill), `texts` (eigene Texte), `islands`, `level` (Einstufungstest), `talk` (Gespräche mit Claude), `settings`.
 
 ### Daten
 - `localStorage`: `sl.settings`, `sl.data.<lang>` (Zustand pro Sprache), `sl.sync`, `sl.talkcfg` (API-Schlüssel), `sl.talk.<lang>` (laufendes Gespräch), `sl.usage`.

@@ -20,6 +20,12 @@ Modus „🔎 Beschreiben“ unter Reden: Claude gibt eine Aufgabe („Such etwa
 ## Eigene Texte
 Unter Inseln → „📄 Texte“: eigene Texte einfügen (z. B. Liedtexte zum Mitlesen). Claude übersetzt Zeile für Zeile, Wort für Wort und erklärt Redewendungen (einmalige Kosten pro Text). Vorlesen mit Markierung, Wörter in die Wortliste übernehmen, einzelne Zeilen per ➕ in die Insel „Texte“ (Wiederholung & Shadowing).
 
+## Heute zuerst
+Karte oben auf „Heute“: 2–3 empfohlene Schritte in lerngerechter Reihenfolge, nach festen Regeln (keine KI): fällige Wiederholungen vor Neuem, höchstens 50 Wort-Wiederholungen pro Runde (Rückstand nach Pausen verteilen statt nachholen), lange vernachlässigte Sprech-Schritte (Sätze, Shadowing, Gespräch) nach vorn, neue Wörter bei großem Rückstand aussetzen.
+
+## Gelernte Wörter anhören
+Hören → „🧠 Gelernte Wörter“: Hör-Abfrage (Deutsch → Pause zum Selbst-Sagen → Lösung, zweimal) oder Anhören & Nachsprechen; schwierige Wörter zuerst, zuletzt geübte oder alle gemischt.
+
 ## Tagesablauf (~30 Min.)
 1. **Wörter** – neue Wörter mit eigener Eselsbrücke, danach Abfrage (Deutsch → Zielsprache) mit Wiederholungsplanung (SM-2).
 2. **Sätze** – Sätze aus den Sprachinseln aktiv abrufen (sprechen, tippen oder im Kopf), aufdecken, bewerten.

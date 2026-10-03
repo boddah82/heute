@@ -173,3 +173,8 @@ details summary { cursor: pointer; }
 .photo-edit { margin-bottom: 6px; }
 .list .photo-edit .row { justify-content: flex-start !important; margin-top: 4px; }
 .bubble img.photo { max-height: 160px; margin: 0 0 6px; }
+.plan { border-color: var(--accent); }
+.plan-step { display: flex; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); text-decoration: none; color: var(--text); }
+.plan-step:first-of-type { margin-top: 8px; }
+.plan-step .num { font-size: 20px; color: var(--accent); }
+.plan-step .meta { display: block; font-size: 13px; color: var(--muted); }

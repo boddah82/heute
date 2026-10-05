@@ -288,6 +288,8 @@ function speak(text, opts = {}) {
   const done = () => { if (!finished) { finished = true; opts.onend && opts.onend(); } };
   u.onend = done;
   u.onerror = done;
+  if (opts.onstart) u.onstart = opts.onstart;
+  if (opts.onboundary) u.onboundary = opts.onboundary;
   currentUtterance = u;
   speechSynthesis.speak(u);
   // Fallback, falls der Browser onend nicht meldet
@@ -928,6 +930,7 @@ views.review = function (root) {
 
 let listenToken = null;
 function stopAudio() {
+  if (shadowToken) { shadowToken.stop = true; shadowToken = null; }
   if (textPlayToken) { textPlayToken.stop = true; textPlayToken = null; }
   if (listenToken) listenToken.stop = true;
   listenToken = null;
@@ -1098,6 +1101,79 @@ views.listen = function (root, arg) {
 };
 
 let recorder = null;
+// Shadowing-Takt: Einzählen (Balken + 3·2·1) → Wort-Markierung beim Sprechen → Pause „Jetzt du“
+let shadowToken = null;
+function shadowCue(pane, text) {
+  const box = $('#s-cue', pane);
+  const bar = $('.cue-bar', box);
+  const label = $('.cue-label', box);
+  const spans = $$('#s-sent .w', pane);
+  // Startposition jedes Worts im Text, um Wortgrenzen-Ereignisse zuzuordnen
+  const starts = [];
+  let pos = 0;
+  spans.forEach(sp => { const i = text.indexOf(sp.textContent, pos); starts.push(i < 0 ? pos : i); pos = (i < 0 ? pos : i) + sp.textContent.length; });
+  const mark = n => spans.forEach((sp, i) => { sp.classList.toggle('on', i === n); sp.classList.toggle('past', i < n); });
+  const setBar = (from, to, ms, cls) => {
+    box.className = 'cue ' + cls;
+    bar.style.transition = 'none';
+    bar.style.width = from + '%';
+    void bar.offsetWidth; // Neustart der Animation erzwingen
+    bar.style.transition = `width ${ms}ms linear`;
+    bar.style.width = to + '%';
+  };
+  const reset = () => { mark(-1); box.className = 'cue'; bar.style.transition = 'none'; bar.style.width = '0%'; label.textContent = 'Tippe ▶ – die App zählt ein'; };
+  async function once(token, rate) {
+    // 1. Einzählen
+    setBar(0, 100, 1200, 'count');
+    for (const n of ['3', '2', '1']) { if (token.stop) return; label.textContent = `Gleich geht's los … ${n}`; await wait(400); }
+    if (token.stop) return;
+    // 2. Sprechen mit Wort-Markierung
+    const est = Math.max(1200, text.length * 70 / rate); // geschätzte Sprechdauer
+    let gotBoundary = false, fallback = null;
+    label.textContent = '▶ Jetzt mitsprechen';
+    await speakP(text, {
+      rate,
+      onstart: () => {
+        setBar(0, 100, est, 'speak');
+        const t0 = performance.now();
+        // Ohne Wortgrenzen-Ereignisse: Markierung zeitlich schätzen
+        fallback = setInterval(() => {
+          if (gotBoundary) return;
+          const c = Math.min(text.length, ((performance.now() - t0) / est) * text.length);
+          let n = 0;
+          while (n + 1 < starts.length && starts[n + 1] <= c) n++;
+          mark(n);
+        }, 80);
+      },
+      onboundary: e => {
+        if (e.name && e.name !== 'word') return;
+        gotBoundary = true;
+        let n = 0;
+        while (n + 1 < starts.length && starts[n + 1] <= e.charIndex) n++;
+        mark(n);
+      },
+    });
+    clearInterval(fallback);
+    mark(spans.length);
+  }
+  return {
+    async run(times, rate) {
+      if (shadowToken) { shadowToken.stop = true; shadowToken = null; speechSynthesis.cancel(); reset(); return; }
+      const token = { stop: false };
+      shadowToken = token;
+      const pause = Math.max(1500, text.length * 80 / rate);
+      for (let i = 0; i < times && !token.stop; i++) {
+        await once(token, rate);
+        if (token.stop) break;
+        // 3. Pause zum Selbersprechen
+        label.textContent = times > 1 ? `Jetzt du (${i + 1}/${times})` : 'Jetzt du';
+        setBar(100, 0, pause, 'you');
+        await wait(pause);
+      }
+      if (shadowToken === token) { shadowToken = null; reset(); }
+    },
+  };
+}
 views.shadow = function (root) {
   const saved = load('sl.shadow.' + settings.lang, {});
   let islandId = state.islands.some(i => i.id === saved.island) ? saved.island : (state.islands[0] && state.islands[0].id);
@@ -1124,8 +1200,9 @@ views.shadow = function (root) {
       <div class="row between muted small"><span>Satz ${idx + 1}/${list.length}</span></div>
       <div class="card flash">
         <img data-photo="${esc(s.id)}" class="photo" hidden alt="">
-        <div class="sentence">${esc(s.t)}</div>
+        <div class="sentence" id="s-sent">${s.t.split(/(\s+)/).map(w => /^\s+$/.test(w) ? w : `<span class="w">${esc(w)}</span>`).join('')}</div>
         <div class="native">${esc(s.d)}</div>
+        <div class="cue" id="s-cue"><div class="cue-bar"></div><span class="cue-label">Tippe ▶ – die App zählt ein</span></div>
         <div id="s-cmp" class="small" style="margin-top:8px"></div>
       </div>
       <div class="row">
@@ -1143,13 +1220,13 @@ views.shadow = function (root) {
         <button class="btn primary grow" id="s-next">Weiter ›</button>
       </div>
       <p class="muted small">„Aussprache prüfen“ nutzt die Spracherkennung des Browsers – ein grober Hinweis, kein Urteil über den Akzent.</p>`;
-    speak(s.t);
     fillPhotos(pane);
-    $('#s-play', pane).onclick = () => speak(s.t);
-    $('#s-slow', pane).onclick = () => speak(s.t, { rate: 0.6 });
-    $('#s-loop', pane).onclick = async () => {
-      for (let i = 0; i < 3; i++) { await speakP(s.t); await wait(Math.max(1500, s.t.length * 80)); }
-    };
+    if (shadowToken) { shadowToken.stop = true; shadowToken = null; speechSynthesis.cancel(); }
+    const cue = shadowCue(pane, s.t);
+    cue.run(1, settings.rate);
+    $('#s-play', pane).onclick = () => cue.run(1, settings.rate);
+    $('#s-slow', pane).onclick = () => cue.run(1, 0.6);
+    $('#s-loop', pane).onclick = () => cue.run(3, settings.rate);
     $('#s-prev', pane).onclick = () => { idx = (idx - 1 + list.length) % list.length; render(); };
     $('#s-next', pane).onclick = () => { idx = (idx + 1) % list.length; render(); };
     if ($('#s-check', pane)) {

@@ -502,9 +502,24 @@ function voiceNotice() {
   }
   return '';
 }
-function islandSelect(id, selected, withAll) {
+// Sätze, die in der Satz-Abfrage noch nicht sitzen – schlechteste zuerst (für Hören & Shadowing)
+function sentenceWeakness(c) {
+  return (c.lapses || 0) * 2 + Math.max(0, 2.5 - c.ef) * 6 + (c.iv < 3 ? 2 : c.iv < 7 ? 1 : 0) + (c.due <= today() ? 1 : 0);
+}
+function weakSentences() {
+  return allSentences()
+    .filter(s => state.srs[s.id])
+    .map(s => ({ s, c: state.srs[s.id] }))
+    .filter(x => x.c.iv < 21) // sicher Gekonntes (≥ 3 Wochen Abstand) bleibt draußen
+    .map(x => ({ s: x.s, w: sentenceWeakness(x.c) }))
+    .filter(x => x.w > 0)
+    .sort((a, b) => b.w - a.w)
+    .map(x => x.s);
+}
+function islandSelect(id, selected, withAll, weakCount) {
   return `<select id="${id}">
-    ${withAll ? `<option value="all">Alle Inseln</option>` : ''}
+    ${weakCount !== undefined ? `<option value="weak" ${selected === 'weak' ? 'selected' : ''}>⭐ Schwierige Sätze (${weakCount})</option>` : ''}
+    ${withAll ? `<option value="all" ${selected === 'all' ? 'selected' : ''}>Alle Inseln</option>` : ''}
     ${state.islands.map(i => `<option value="${i.id}" ${i.id === selected ? 'selected' : ''}>${esc(i.title)} (${i.sentences.length})</option>`).join('')}
   </select>`;
 }
@@ -1026,13 +1041,14 @@ function listenWords(root) {
 
 views.listen = function (root, arg) {
   if (arg === 'words') { listenWords(root); return; }
-  const opts = Object.assign({ island: 'all', de: false, repeat: 2, pause: 2, loop: false }, load('sl.listen', {}));
+  const opts = Object.assign({ island: 'weak', de: false, repeat: 2, pause: 2, loop: false }, load('sl.listen', {}));
+  const weak = weakSentences();
   root.innerHTML = `
     <h1>🎧 Hören</h1>
     ${listenSeg('sent')}
     ${voiceNotice()}
     <div class="card">
-      <label for="l-isl">Sprachinsel</label>${islandSelect('l-isl', opts.island, true)}
+      <label for="l-isl">Welche Sätze?</label>${islandSelect('l-isl', opts.island, true, weak.length)}
       <div class="row" style="margin-top:6px">
         <div class="grow"><label for="l-rep">Wiederholungen</label><select id="l-rep">${[1, 2, 3].map(n => `<option ${n === opts.repeat ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
         <div class="grow"><label for="l-pause">Pause (Sek.)</label><select id="l-pause">${[1, 2, 3, 5].map(n => `<option ${n === opts.pause ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
@@ -1051,10 +1067,11 @@ views.listen = function (root, arg) {
   bindGo(root);
   const items = () => {
     const v = $('#l-isl', root).value;
+    if (v === 'weak') return weak;
     return v === 'all' ? allSentences() : (state.islands.find(i => i.id === v) || { sentences: [] }).sentences;
   };
   const renderList = (now = -1) => {
-    $('#l-list', root).innerHTML = items().map((s, i) => `<li class="${i === now ? 'now' : ''}"><div><div class="t">${esc(s.t)}</div><div class="d">${esc(s.d)}</div></div></li>`).join('') || '<li class="muted">Keine Sätze.</li>';
+    $('#l-list', root).innerHTML = items().map((s, i) => `<li class="${i === now ? 'now' : ''}"><div><div class="t">${esc(s.t)}</div><div class="d">${esc(s.d)}</div></div></li>`).join('') || `<li class="muted">${$('#l-isl', root).value === 'weak' ? 'Noch keine schwierigen Sätze – erst unter „Sätze“ abfragen oder oben eine Insel wählen.' : 'Keine Sätze.'}</li>`;
   };
   const readOpts = () => {
     opts.island = $('#l-isl', root).value;
@@ -1176,21 +1193,25 @@ function shadowCue(pane, text) {
 }
 views.shadow = function (root) {
   const saved = load('sl.shadow.' + settings.lang, {});
-  let islandId = state.islands.some(i => i.id === saved.island) ? saved.island : (state.islands[0] && state.islands[0].id);
-  let idx = saved.idx || 0;
+  const weak = weakSentences(); // einmal beim Öffnen berechnen, damit die Reihenfolge während der Übung stabil bleibt
+  let islandId = saved.island === 'weak' || state.islands.some(i => i.id === saved.island) ? saved.island : (weak.length ? 'weak' : state.islands[0] && state.islands[0].id);
+  if (!saved.island && weak.length) islandId = 'weak';
+  let idx = islandId === 'weak' ? 0 : (saved.idx || 0);
   let ownUrl = null;
   root.innerHTML = `
     <h1>🗣️ Shadowing</h1>
     ${voiceNotice()}
     <p class="muted small">Anhören → sofort laut mitsprechen. Rhythmus, Betonung und Melodie kopieren, nicht nur die Wörter.</p>
-    ${state.islands.length ? islandSelect('s-isl', islandId, false) : ''}
+    ${state.islands.length ? islandSelect('s-isl', islandId, false, weak.length) : ''}
+    <p class="muted small" id="s-weakinfo" ${islandId === 'weak' ? '' : 'hidden'}>Aus deinen Bewertungen in der Satz-Abfrage – was am wenigsten sitzt, kommt zuerst. Sicher gekonnte Sätze fehlen hier.</p>
     <div id="s-pane" style="margin-top:12px"></div>`;
   const pane = $('#s-pane', root);
   if (!state.islands.length) { pane.innerHTML = '<div class="card">Erst eine Sprachinsel anlegen.</div>'; return; }
-  $('#s-isl', root).onchange = e => { islandId = e.target.value; idx = 0; render(); };
+  $('#s-isl', root).onchange = e => { islandId = e.target.value; idx = 0; $('#s-weakinfo', root).hidden = islandId !== 'weak'; render(); };
   function render() {
+    if (islandId === 'weak' && !weak.length) { pane.innerHTML = '<div class="card">Noch keine schwierigen Sätze – entweder noch nichts unter „Sätze“ abgefragt oder alles sitzt. Wähle oben eine Insel.</div>'; return; }
     const isl = state.islands.find(i => i.id === islandId);
-    const list = isl ? isl.sentences : [];
+    const list = islandId === 'weak' ? weak : isl ? isl.sentences : [];
     if (!list.length) { pane.innerHTML = '<div class="card">Diese Insel hat noch keine Sätze.</div>'; return; }
     if (idx >= list.length) idx = 0;
     save('sl.shadow.' + settings.lang, { island: islandId, idx });

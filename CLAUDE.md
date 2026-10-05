@@ -1,6 +1,7 @@
 # Repo „heute“
 
 - `index.html` (Root): kleines WhatsApp-artiges Widget „Was machen wir heute?“ – unabhängig von der Lern-App, nicht anfassen ohne Auftrag.
+- `VERLAUF.md`: bisheriger Verlauf, Wünsche und Arbeitsweise des Nutzers – **vor größeren Änderungen lesen**.
 - `lernen/`: **Sprachtraining-App** (Italienisch + Englisch britisch) für den Repo-Besitzer. Deutschsprachige Oberfläche.
 
 Live: GitHub Pages von `main` → https://boddah82.github.io/heute/lernen/
@@ -41,5 +42,5 @@ Views in `app.js` (`views.<name>`): `home` (mit „Heute zuerst“ aus `todayPla
 - UI-Texte auf Deutsch, kurz. Code-Kommentare deutsch, sparsam.
 - Ehrlich bleiben: keine erfundenen Inhalte; Übersetzungen der Wortlisten sind ungeprüft (Korrektur in der App per ✎).
 - Keine Liedtexte o. ä. urheberrechtlich geschützte Texte ins Repo legen; Nutzer fügen eigene Texte selbst ein.
-- Nach Änderungen: `node --check lernen/app.js`, App lokal testen (`cd lernen && python3 -m http.server 8765`, dann http://localhost:8765/), `sw.js`-VERSION erhöhen.
+- Nach Änderungen: `node --check lernen/app.js`, Tests `lernen/tests/run-all.sh`, App lokal testen (`cd lernen && python3 -m http.server 8765`, dann http://localhost:8765/), `sw.js`-VERSION erhöhen.
 - Veröffentlichen = nach `main` mergen (GitHub Pages baut automatisch).

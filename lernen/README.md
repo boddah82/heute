@@ -26,6 +26,9 @@ Karte oben auf „Heute“: 2–3 empfohlene Schritte in lerngerechter Reihenfol
 ## Gelernte Wörter anhören
 Hören → „🧠 Gelernte Wörter“: Hör-Abfrage (Deutsch → Pause zum Selbst-Sagen → Lösung, zweimal) oder Anhören & Nachsprechen; schwierige Wörter zuerst, zuletzt geübte oder alle gemischt.
 
+## Schwierige Sätze hören & shadowen
+In Hören und Shadowing ist „⭐ Schwierige Sätze“ der Standard: Sätze, die in der Satz-Abfrage noch nicht sitzen (oft „Nochmal“/„Schwer“, kurze Abstände), schlechteste zuerst; sicher gekonnte (≥ 3 Wochen Abstand) fehlen. Bewertet wird nur in der Satz-Abfrage.
+
 ## Tagesablauf (~30 Min.)
 1. **Wörter** – neue Wörter mit eigener Eselsbrücke, danach Abfrage (Deutsch → Zielsprache) mit Wiederholungsplanung (SM-2).
 2. **Sätze** – Sätze aus den Sprachinseln aktiv abrufen (sprechen, tippen oder im Kopf), aufdecken, bewerten.

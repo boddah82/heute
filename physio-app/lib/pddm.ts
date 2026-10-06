@@ -29,6 +29,7 @@ export interface PDDMQuestion {
   reversed?: boolean; // erste Stufe ist die auffällige (z. B. wenig Aktivität)
   placeholder?: string; // für type "text"
   optional?: boolean; // nicht Pflicht zum Absenden (Freitextfelder)
+  hint?: string; // kurze Ausfüllhilfe bei Fragen, die leicht missverstanden werden
 }
 
 // Fragen nach dem vom Nutzer bereitgestellten PDDM-Patienten-Anamnesebogen,
@@ -40,12 +41,14 @@ export const PDDM_QUESTIONS: PDDMQuestion[] = [
     domain: "nociceptive",
     type: "boolean",
     text: "Gibt es bestimmte Bewegungen oder Haltungen, die Ihren Schmerz sofort provozieren?",
+    hint: "Zählt schon, wenn das nur manchmal passiert – nicht nur, wenn es jedes Mal zuverlässig so ist.",
   },
   {
     id: "nociceptive.relief",
     domain: "nociceptive",
     type: "boolean",
     text: "Können Sie eine Position finden, die den Schmerz spürbar lindert?",
+    hint: "Zählt schon, wenn das nur manchmal funktioniert – nicht nur, wenn es immer zuverlässig hilft.",
   },
   {
     id: "nociceptive.stiffness",

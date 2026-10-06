@@ -96,6 +96,7 @@ export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
           {PDDM_QUESTIONS.filter((q) => q.domain === domain).map((q) => (
             <div key={q.id} className="space-y-1.5">
               <p className="text-sm text-slate-700">{q.text}</p>
+              {q.hint && <p className="text-xs text-slate-500">{q.hint}</p>}
               {q.type === "boolean" && (
                 <div className="flex gap-2">
                   {["Ja", "Nein"].map((opt) => (

@@ -1653,6 +1653,30 @@ views.texts = function (root, id) {
   };
 };
 
+// Liedtexte: Zeilenumbrüche beim Kopieren liegen oft mitten im Satz. Claude bekommt nummerierte Wörter
+// und nennt nur die Wort-Nummern, an denen eine neue Lerneinheit beginnt – der Text selbst bleibt unverändert.
+const SEGMENT_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['starts'],
+  properties: { starts: { type: 'array', items: { type: 'integer' } } },
+};
+const LABEL_LINE = /^\s*[\[(].*[\])]\s*$/; // Abschnittsmarken wie [Ritornello] oder (x2)
+async function segmentText(tx) {
+  const lines = tx.lines.map(l => l.t).filter(t => !LABEL_LINE.test(t));
+  const words = [];
+  const listing = lines.map(line => line.split(/\s+/).filter(Boolean).map(w => { words.push(w); return `${words.length - 1}:${w}`; }).join(' ')).join('\n');
+  if (words.length < 2) return;
+  const lang = settings.lang === 'it' ? 'Italian' : 'English';
+  const r = await callClaude(
+    `A learner pasted a ${lang} text (often song lyrics) for private study. Copying breaks lines in the wrong places: a sentence often runs over several lines, and one line can hold the end of one sentence and the start of the next. Every word below is prefixed with its index; the line breaks are the pasted ones and are unreliable. Split the text into study units: each unit is one complete sentence or one meaningful clause that is understandable on its own (at most about 20 words; split long sentences at natural clause boundaries). Use meaning, grammar, punctuation and capital letters. Return "starts": the ascending word indices where each unit begins (the first is 0). Do not return any text.`,
+    [{ role: 'user', content: listing }], SEGMENT_SCHEMA, 8000);
+  const starts = [...new Set([0].concat(r.data.starts || []))].filter(i => Number.isInteger(i) && i >= 0 && i < words.length).sort((a, b) => a - b);
+  if (!tx.original) tx.original = tx.lines.map(l => l.t);
+  tx.lines = starts.map((st, k) => ({ id: 'l' + uid(), t: words.slice(st, starts[k + 1] ?? words.length).join(' '), de: '', words: [], note: '' }));
+  tx.grouped = true;
+  tx.ts = Date.now();
+  persist();
+}
+
 async function translateText(tx, onProgress) {
   const lang = settings.lang === 'it' ? 'Italian' : 'British English';
   const todo = tx.lines.map((l, i) => i).filter(i => !tx.lines[i].de);
@@ -1683,7 +1707,13 @@ function textDetail(root, tx) {
     <a href="#texts" class="small">‹ Alle Texte</a>
     <input type="text" id="tx-name" value="${esc(tx.title)}" style="font-size:20px;font-weight:700;margin:8px 0 12px">
     ${done ? '' : `<div class="card"><p class="small">${tx.lines.filter(l => !l.de).length} Zeilen ohne Übersetzung.</p>
-      ${talkCfg.key ? '<button class="btn primary" id="tx-tr">🌐 Mit Claude übersetzen</button><p class="muted small">Kostet einmalig ein paar Cent (Schätzung).</p>' : '<p class="muted small">Zum Übersetzen den Claude-Schlüssel unter <a href="#talk/setup">Reden → ⚙️</a> eintragen.</p>'}</div>`}
+      ${!talkCfg.key ? '<p class="muted small">Zum Übersetzen den Claude-Schlüssel unter <a href="#talk/setup">Reden → ⚙️</a> eintragen.</p>'
+        : !tx.grouped && !tx.lines.some(l => l.de)
+          ? `<button class="btn primary" id="tx-seg">🤖 In Sätze ordnen & übersetzen</button>
+             <button class="btn small" id="tx-tr" style="margin-top:6px">Nur übersetzen (Zeilen so lassen)</button>
+             <p class="muted small">Ordnen: Claude teilt den Text dort, wo Sätze wirklich enden – auch mitten in einer kopierten Zeile. Der Wortlaut bleibt unverändert. Kostet einmalig ein paar Cent (Schätzung).</p>`
+          : '<button class="btn primary" id="tx-tr">🌐 Mit Claude übersetzen</button><p class="muted small">Kostet einmalig ein paar Cent (Schätzung).</p>'}</div>`}
+    ${tx.original ? '<button class="btn small" id="tx-orig" style="margin-bottom:8px">↩ Ursprüngliche Zeilen wiederherstellen</button>' : ''}
     <div class="row" style="margin-bottom:8px">
       <button class="btn grow" id="tx-play">▶ Alles vorlesen</button>
       <label class="inline small" style="margin:0"><input type="checkbox" id="tx-show" ${tx.showDe ? 'checked' : ''}> Deutsch zeigen</label>
@@ -1703,12 +1733,68 @@ function textDetail(root, tx) {
           <div class="stack" style="flex:none">
             <button class="btn small" data-tp="${i}">🔊</button>
             <button class="btn small" data-td="${i}">DE</button>
+            ${i > 0 ? `<button class="btn small" data-tj="${i}" title="Mit der Zeile darüber verbinden">⤴</button>` : ''}
+            <button class="btn small" data-ts="${i}" title="Zeile teilen">✂</button>
             ${l.de ? `<button class="btn small" data-ta="${i}" ${inIsland(l.t) ? 'disabled' : ''} title="In die Wiederholung">➕</button>` : ''}
           </div>
         </li>`).join('')}
     </ul>
     <button class="btn danger" id="tx-del" style="width:100%">Text löschen</button>`;
   $('#tx-name', root).onchange = e => { tx.title = e.target.value.trim() || tx.title; tx.ts = Date.now(); persist(); };
+  const rerender = () => { if (location.hash === '#texts/' + tx.id) textDetail(root, tx); };
+  const resetLine = l => Object.assign(l, { de: '', words: [], note: '' });
+  if ($('#tx-seg', root)) {
+    $('#tx-seg', root).onclick = async () => {
+      const b = $('#tx-seg', root);
+      b.disabled = true;
+      b.textContent = 'Ordne Sätze …';
+      try {
+        await segmentText(tx);
+        b.textContent = 'Übersetze …';
+        await translateText(tx, (k, n) => { b.textContent = `Übersetze … (${k}/${n})`; });
+        toast('Geordnet und übersetzt');
+      } catch (e) { toast(e.message); }
+      rerender();
+    };
+  }
+  if ($('#tx-orig', root)) {
+    $('#tx-orig', root).onclick = () => {
+      if (!confirm('Ursprüngliche Zeilen wiederherstellen? Übersetzungen gehen dabei verloren.')) return;
+      tx.lines = tx.original.map(t => ({ id: 'l' + uid(), t, de: '', words: [], note: '' }));
+      delete tx.original;
+      tx.grouped = false;
+      tx.ts = Date.now();
+      persist();
+      rerender();
+    };
+  }
+  // Von Hand korrigieren: mit der Zeile darüber verbinden / an einer Stelle teilen
+  $$('[data-tj]', root).forEach(b => {
+    b.onclick = () => {
+      const i = Number(b.dataset.tj);
+      if (!tx.original) tx.original = tx.lines.map(l => l.t);
+      tx.lines[i - 1].t = tx.lines[i - 1].t + ' ' + tx.lines[i].t;
+      resetLine(tx.lines[i - 1]);
+      tx.lines.splice(i, 1);
+      tx.ts = Date.now();
+      persist();
+      rerender();
+    };
+  });
+  $$('[data-ts]', root).forEach(b => {
+    b.onclick = () => {
+      const i = Number(b.dataset.ts);
+      const v = prompt('Setze ein | dort, wo geteilt werden soll:', tx.lines[i].t);
+      if (v === null || !v.includes('|')) return;
+      const parts = v.split('|').map(x => x.trim()).filter(Boolean);
+      if (parts.length < 2) return;
+      if (!tx.original) tx.original = tx.lines.map(l => l.t);
+      tx.lines.splice(i, 1, ...parts.map(t => ({ id: 'l' + uid(), t, de: '', words: [], note: '' })));
+      tx.ts = Date.now();
+      persist();
+      rerender();
+    };
+  });
   if ($('#tx-tr', root)) {
     $('#tx-tr', root).onclick = async () => {
       const b = $('#tx-tr', root);

@@ -27,6 +27,8 @@ Zusammenfassung der bisherigen Arbeit (Sept./Okt. 2026, Claude Code im Web) für
 14. **Shadowing-Takt**: Einzähl-Balken 3·2·1, Wort-Markierung, „Jetzt du“-Pause.
 15. **Schwierige Sätze** in Hören/Shadowing aus den Satz-Abfrage-Bewertungen; Bewertung bleibt nur in der Satz-Abfrage.
 
+16. **Texte in Sätze ordnen**: kopierte Liedzeilen brechen mitten im Satz um; Claude liefert nur Wort-Indizes für Satzanfänge (`segmentText()`), Text bleibt unverändert; ⤴/✂/↩ von Hand.
+
 ## Bewusst nicht gemacht / abgelehnt
 - KI-Übersetzung für eigene Sprachinseln (manuell gewünscht), Emoji-Bilder, KI-Merkbild als Text, Prüfknopf „Klingt komisch?“.
 - Sprachaufnahme der eigenen Stimme als Eselsbrücke (Text-Diktat gebaut; Audio wäre möglich, nicht angefragt).

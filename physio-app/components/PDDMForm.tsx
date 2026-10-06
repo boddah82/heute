@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { PDDM_QUESTIONS, PDDM_DOMAINS, PDDM_DOMAIN_LABELS, PDDM_DOMAIN_HINTS, evaluatePDDM } from "@/lib/pddm";
 import { PDDMAssessment } from "@/lib/types";
+import { getRegion } from "@/lib/regions";
 
 interface Props {
   regionId: string;
@@ -34,6 +35,7 @@ function PainSliderRow({ label, value, onChange }: { label: string; value: numbe
 }
 
 export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
+  const region = getRegion(regionId);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [current, setCurrent] = useState(0);
   const [maxLoad, setMaxLoad] = useState(0);
@@ -61,9 +63,23 @@ export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
       </div>
 
       <div className="space-y-3 pt-3 border-t border-slate-100">
-        <p className="text-sm font-semibold text-slate-900">Schmerzintensität &amp; Schmerzverlauf</p>
+        <div>
+          <p className="text-sm font-semibold text-slate-900">Schmerzintensität &amp; Schmerzverlauf</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Bezogen nur auf {region.label} – nicht auf Deinen ganzen Körper.
+          </p>
+        </div>
         <PainSliderRow label="Schmerz aktuell" value={current} onChange={setCurrent} />
-        <PainSliderRow label="Schmerz bei maximaler Belastung" value={maxLoad} onChange={setMaxLoad} />
+        <div>
+          <PainSliderRow label="Schmerz bei maximaler Belastung" value={maxLoad} onChange={setMaxLoad} />
+          <p className="text-xs text-slate-500 mt-1">
+            Gemeint ist die stärkste Belastung, die Du in den letzten Wochen mit {region.label} probiert hast
+            {region.exampleReize.length > 0 && (
+              <> (z. B. {region.exampleReize[0]}{region.exampleReize[2] ? ` oder ${region.exampleReize[2]}` : region.exampleReize[1] ? ` oder ${region.exampleReize[1]}` : ""})</>
+            )}{" "}
+            – nicht Dein allgemeines Leistungsmaximum.
+          </p>
+        </div>
         <PainSliderRow
           label="Schmerz nach maximaler Belastung (danach/am Folgetag)"
           value={afterMaxLoad}

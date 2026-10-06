@@ -123,7 +123,7 @@ export default function Home() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold">Reiz-Reaktions-Tracker</h1>
-            {mode === "patient" && <HelpPanel />}
+            <HelpPanel audience={mode === "therapist" ? "therapist" : "patient"} />
           </div>
           <p className="text-sm text-brand-100">
             {mode === "patient" ? "Belastbarkeit verstehen statt raten." : "Therapeuten-Bereich"}

@@ -7,9 +7,9 @@ type Section = { title: string; body: string; example?: string };
 const PATIENT_SECTIONS: Section[] = [
   {
     title: "So gehst Du vor",
-    body: "1) Bereiche (PDDM): alle ca. 4 Wochen eine Einschätzung, zeigt mögliche Treiber neben der reinen Belastung. 2) Ziele (PSFS): wöchentlich bewerten, wie nah Du an Deinen 2-5 wichtigsten Aktivitäten bist. 3) Heute: bei jeder bewusst getesteten Belastung ein Check-in, danach im Verlauf-Tab den 24h/48h-Wert nachtragen (dafür erinnert Dich die App automatisch). Fragebögen nur bei Bedarf, meist einmalig am Anfang.",
+    body: "Zuerst (Tab \"Bereiche\"): ein paar Fragen zu Deinem Körper beantworten, reicht alle 4 Wochen – zeigt, ob z. B. Schlaf, Stress oder Dein Nervensystem mit eine Rolle spielen, nicht nur die reine Belastung. Dann (Tab \"Ziele\"): aufschreiben, was Du im Alltag wieder können willst (z. B. \"eine Kiste tragen\"), und einmal pro Woche einschätzen, wie nah Du dran bist. Im Alltag (Tab \"Heute\"): jedes Mal, wenn Du Dich bewusst belastet hast (Sport, Treppen, Heben), kurz eintragen, wie stark der Schmerz davor und danach war. Am nächsten Tag schaust Du noch mal nach, wie es jetzt ist – die App erinnert Dich daran. Fragebögen nur, wenn's passt, meist einmal am Anfang.",
     example:
-      "Beispiel-Durchlauf: PDDM zeigt Nervensystem = A (leichtes Kribbeln). Ziel \"Bouldern\": Woche 1 bei 3/10, Woche 4 bei 7/10. Heute-Check-in \"Joggen\": Schmerz davor 2, danach 4 → 24h später wieder bei 2. Ergebnis im Verlauf-Tab: Gesamt Gelb – \"Belastung auf diesem Niveau stabilisieren, nicht weiter steigern und im Blick behalten.\"",
+      "Beispiel: Du trägst beim Joggen ein: Schmerz davor 2, danach 4. Am nächsten Tag schaust Du nach – wieder bei 2, also zurück auf dem Ausgangswert. Die App sagt Dir dazu: \"Belastung auf diesem Niveau stabilisieren, nicht weiter steigern und im Blick behalten.\" Du musst das nicht selbst beurteilen – die App übernimmt die Einordnung.",
   },
   {
     title: "Worum geht es?",

@@ -187,3 +187,5 @@ details summary { cursor: pointer; }
 .sentence .w { border-radius: 4px; padding: 0 1px; transition: background .1s; }
 .sentence .w.on { background: var(--accent); color: #fff; }
 .sentence .w.past { color: var(--muted); }
+.wordhelp { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: center; margin-top: 10px; font-size: 14px; color: var(--muted); }
+.wordhelp b { color: var(--text); }

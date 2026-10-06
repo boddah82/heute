@@ -30,6 +30,9 @@ Hören → „🧠 Gelernte Wörter“: Hör-Abfrage (Deutsch → Pause zum Selb
 ## Schwierige Sätze hören & shadowen
 In Hören und Shadowing ist „⭐ Schwierige Sätze“ der Standard: Sätze, die in der Satz-Abfrage noch nicht sitzen (oft „Nochmal“/„Schwer“, kurze Abstände), schlechteste zuerst; sicher gekonnte (≥ 3 Wochen Abstand) fehlen. Bewertet wird nur in der Satz-Abfrage.
 
+## Wörter aus deinen Sätzen
+Neue Vokabeln kommen nicht stur nach Häufigkeit: Wörter der Wortliste, die in Sätzen vorkommen, die du gerade übst, werden vorgezogen – schwierige Sätze zuerst (Karte zeigt „aus deinem Satz“). Nach dem Aufdecken in der Satz-Abfrage zeigt die Wort-Hilfe die Wörter des Satzes, die noch nicht sicher sitzen. Erkennung über den Wortstamm (bicchieri → bicchiere); unregelmäßige Formen (sono → essere) werden nicht erkannt.
+
 ## Tagesablauf (~30 Min.)
 1. **Wörter** – neue Wörter mit eigener Eselsbrücke, danach Abfrage (Deutsch → Zielsprache) mit Wiederholungsplanung (SM-2).
 2. **Sätze** – Sätze aus den Sprachinseln aktiv abrufen (sprechen, tippen oder im Kopf), aufdecken, bewerten.

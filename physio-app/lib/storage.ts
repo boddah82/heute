@@ -95,6 +95,21 @@ export function useCheckIns(regionId: string) {
   return { entries, addEntry, updateEntry, deleteEntry };
 }
 
+// Für das optionale "Hängt das zusammen?"-Feld im Check-in: welche anderen
+// Regionen haben überhaupt schon Einträge, zu denen ein Zusammenhang
+// überhaupt sinnvoll angeboten werden kann.
+export function useOtherRegionsWithEntries(regionId: string): string[] {
+  const all = useSyncExternalStore(
+    checkInsStore.subscribe,
+    checkInsStore.getSnapshot,
+    checkInsStore.getServerSnapshot
+  );
+  return useMemo(
+    () => Array.from(new Set(all.filter((e) => e.regionId !== regionId).map((e) => e.regionId))),
+    [all, regionId]
+  );
+}
+
 export function usePDDMAssessments(regionId: string) {
   const all = useSyncExternalStore(
     pddmStore.subscribe,
@@ -390,6 +405,22 @@ export function usePatientCheckIns(patientId: string, regionId: string) {
   );
 
   return { entries, addEntry, updateEntry, deleteEntry };
+}
+
+export function usePatientOtherRegionsWithEntries(patientId: string, regionId: string): string[] {
+  const all = useSyncExternalStore(
+    patientRecordsStore.subscribe,
+    patientRecordsStore.getSnapshot,
+    patientRecordsStore.getServerSnapshot
+  );
+  const record = useMemo(() => all.find((r) => r.patientId === patientId), [all, patientId]);
+  return useMemo(
+    () =>
+      Array.from(
+        new Set((record?.checkIns ?? []).filter((e) => e.regionId !== regionId).map((e) => e.regionId))
+      ),
+    [record, regionId]
+  );
 }
 
 export function usePatientPDDMAssessments(patientId: string, regionId: string) {

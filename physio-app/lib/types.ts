@@ -17,6 +17,10 @@ export interface CheckIn {
   painAfter: number; // 0-10
   pain24h?: number; // 0-10, optional, nachgetragen
   pain48h?: number; // 0-10, optional, nachgetragen
+  // Eigene Einschätzung der Person, ob dieser Eintrag mit einer anderen
+  // Region zusammenhängt (z. B. Rücken strahlt in den Oberschenkel aus).
+  // Bewusst subjektiv erfasst, nicht aus Zeitstempeln hergeleitet.
+  relatedRegionId?: string;
   createdAt: string; // ISO timestamp
 }
 

@@ -123,10 +123,10 @@ export default function PSFSPanel({
       <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-3">
         <h3 className="font-semibold text-slate-900">Deine Ziele</h3>
         <p className="text-sm text-slate-600">
-          Nenne 2-5 konkrete Alltags- oder Sportaktivitäten, die Dir wirklich wichtig sind – nicht was
+          Nenne 2-5 konkrete Alltags-, Sport- oder Leistungsziele, die Dir wirklich wichtig sind – nicht was
           andere für wichtig halten (z. B. &quot;Schraubglas aufschrauben&quot;, &quot;Bouldern&quot;,
-          &quot;mit links eine Tasse halten&quot;). Bewerte dann wöchentlich, wie nah Du daran bist, das
-          wieder zu können.
+          &quot;mit links eine Tasse halten&quot;, aber auch &quot;20 kg Kniebeuge&quot; oder &quot;5 km
+          laufen&quot;). Bewerte dann wöchentlich, wie nah Du daran bist, das (wieder) zu können.
         </p>
 
         {goals.length < MAX_GOALS ? (

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckIn } from "@/lib/types";
 import { assess } from "@/lib/trafficLight";
+import { getRegion } from "@/lib/regions";
 import TrafficLightBadge from "./TrafficLightBadge";
 
 function formatDate(iso: string) {
@@ -66,6 +67,12 @@ export default function EntryCard({
       <p className="text-sm font-medium text-slate-900">→ {a.recommendation}</p>
 
       {entry.notes && <p className="text-xs text-slate-500 italic">{entry.notes}</p>}
+
+      {entry.relatedRegionId && (
+        <p className="text-xs text-slate-500">
+          Mögliche Verbindung (eigene Einschätzung): {getRegion(entry.relatedRegionId).label}
+        </p>
+      )}
 
       <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
         <div className="text-slate-500">

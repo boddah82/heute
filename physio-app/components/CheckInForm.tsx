@@ -9,6 +9,7 @@ import ActivityPicker from "./ActivityPicker";
 interface Props {
   regionId: string;
   planExercises?: PlanExercise[];
+  otherRegionIds?: string[];
   onSubmit: (entry: Omit<CheckIn, "id" | "createdAt">) => void;
 }
 
@@ -16,7 +17,7 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export default function CheckInForm({ regionId, planExercises, onSubmit }: Props) {
+export default function CheckInForm({ regionId, planExercises, otherRegionIds, onSubmit }: Props) {
   const region = getRegion(regionId);
   const [date, setDate] = useState(today());
   const [activity, setActivity] = useState("");
@@ -24,6 +25,7 @@ export default function CheckInForm({ regionId, planExercises, onSubmit }: Props
   const [painBefore, setPainBefore] = useState(0);
   const [painAfter, setPainAfter] = useState(0);
   const [notes, setNotes] = useState("");
+  const [relatedRegionId, setRelatedRegionId] = useState("");
   const [saved, setSaved] = useState(false);
   const [showRule, setShowRule] = useState(false);
 
@@ -38,12 +40,14 @@ export default function CheckInForm({ regionId, planExercises, onSubmit }: Props
       painBefore,
       painAfter,
       notes: notes.trim() || undefined,
+      relatedRegionId: relatedRegionId || undefined,
     });
     setActivity("");
     setDurationMin("");
     setPainBefore(0);
     setPainAfter(0);
     setNotes("");
+    setRelatedRegionId("");
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -136,6 +140,30 @@ export default function CheckInForm({ regionId, planExercises, onSubmit }: Props
           placeholder="Besonderheiten, z. B. ungewohnte Belastung am Vortag"
         />
       </div>
+
+      {otherRegionIds && otherRegionIds.length > 0 && (
+        <div>
+          <label className="text-sm font-medium text-slate-700 block mb-1">
+            Hängt das für Dich mit einer anderen Region zusammen? (optional)
+          </label>
+          <p className="text-xs text-slate-500 mb-1">
+            Deine eigene Einschätzung, z. B. wenn der Rücken in den Oberschenkel ausstrahlt – kein automatischer
+            Befund.
+          </p>
+          <select
+            value={relatedRegionId}
+            onChange={(e) => setRelatedRegionId(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="">Nein / nicht sicher</option>
+            {otherRegionIds.map((id) => (
+              <option key={id} value={id}>
+                {getRegion(id).label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <button
         type="submit"

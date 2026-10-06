@@ -33,7 +33,7 @@ const SECTIONS: { title: string; body: string }[] = [
   },
   {
     title: "Tab \"Ziele\" (PSFS)",
-    body: "Nenne 2-5 für Dich persönlich bedeutsame Aktivitäten (z. B. \"Schraubglas aufschrauben\", \"Bouldern\") – nicht was andere für wichtig halten. Bewerte wöchentlich auf einer Skala 0-10, wie nah Du daran bist, das wieder zu können. So siehst Du Fortschritt bei dem, was Dir wirklich wichtig ist, nicht nur beim Schmerzwert.",
+    body: "Nenne 2-5 für Dich persönlich bedeutsame Aktivitäten oder Leistungsziele (z. B. \"Schraubglas aufschrauben\", \"Bouldern\", aber auch \"20 kg Kniebeuge\" oder \"5 km laufen\") – nicht was andere für wichtig halten. Bewerte wöchentlich auf einer Skala 0-10, wie nah Du daran bist, das (wieder) zu können. So siehst Du Fortschritt bei dem, was Dir wirklich wichtig ist, nicht nur beim Schmerzwert – und merkst auch, wenn Du Deine eigene Leistungsfähigkeit schlechter einschätzt, als sie ist.",
   },
   {
     title: "Tab \"Plan\" (für Therapeutinnen/Therapeuten)",

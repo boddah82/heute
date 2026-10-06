@@ -24,6 +24,7 @@ import QuestionnairePanel from "@/components/QuestionnairePanel";
 import {
   useActiveRegion,
   useCheckIns,
+  useOtherRegionsWithEntries,
   usePDDMAssessments,
   usePlan,
   importPlan,
@@ -62,6 +63,7 @@ function readPendingHistory(): HistoryBundle | null {
 export default function Home() {
   const { regionId, select } = useActiveRegion("knie");
   const { entries, addEntry, updateEntry, deleteEntry } = useCheckIns(regionId);
+  const otherRegionIds = useOtherRegionsWithEntries(regionId);
   const { assessments, addAssessment, deleteAssessment } = usePDDMAssessments(regionId);
   const { plan } = usePlan(regionId);
   const { goals, addGoal, deleteGoal } = usePSFSGoals(regionId);
@@ -210,7 +212,12 @@ export default function Home() {
                   </p>
                 )}
                 <OpenFollowUpsBanner entries={entries} onUpdate={updateEntry} onDelete={deleteEntry} />
-                <CheckInForm regionId={regionId} planExercises={plan?.exercises} onSubmit={addEntry} />
+                <CheckInForm
+                  regionId={regionId}
+                  planExercises={plan?.exercises}
+                  otherRegionIds={otherRegionIds}
+                  onSubmit={addEntry}
+                />
               </div>
             )}
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   usePatientCheckIns,
+  usePatientOtherRegionsWithEntries,
   usePatientPDDMAssessments,
   usePatientPSFSGoals,
   usePatientPSFSRatings,
@@ -29,6 +30,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
   const [showPDDMForm, setShowPDDMForm] = useState(false);
 
   const { entries, updateEntry, deleteEntry, addEntry } = usePatientCheckIns(patientId, regionId);
+  const otherRegionIds = usePatientOtherRegionsWithEntries(patientId, regionId);
   const { assessments, addAssessment, deleteAssessment } = usePatientPDDMAssessments(patientId, regionId);
   const { goals, addGoal, deleteGoal } = usePatientPSFSGoals(patientId, regionId);
   const { ratings, addRating } = usePatientPSFSRatings(patientId, regionId);
@@ -74,7 +76,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
             </p>
           )}
           <OpenFollowUpsBanner entries={entries} onUpdate={updateEntry} onDelete={deleteEntry} />
-          <CheckInForm regionId={regionId} onSubmit={addEntry} />
+          <CheckInForm regionId={regionId} otherRegionIds={otherRegionIds} onSubmit={addEntry} />
         </div>
       )}
 

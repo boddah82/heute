@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 
-type Section = { title: string; body: string };
+type Section = { title: string; body: string; example?: string };
 
 const PATIENT_SECTIONS: Section[] = [
   {
     title: "So gehst Du vor",
     body: "1) Bereiche (PDDM): alle ca. 4 Wochen eine Einschätzung, zeigt mögliche Treiber neben der reinen Belastung. 2) Ziele (PSFS): wöchentlich bewerten, wie nah Du an Deinen 2-5 wichtigsten Aktivitäten bist. 3) Heute: bei jeder bewusst getesteten Belastung ein Check-in, danach im Verlauf-Tab den 24h/48h-Wert nachtragen (dafür erinnert Dich die App automatisch). Fragebögen nur bei Bedarf, meist einmalig am Anfang.",
+    example:
+      "Beispiel-Durchlauf: PDDM zeigt Nervensystem = A (leichtes Kribbeln). Ziel \"Bouldern\": Woche 1 bei 3/10, Woche 4 bei 7/10. Heute-Check-in \"Joggen\": Schmerz davor 2, danach 4 → 24h später wieder bei 2. Ergebnis im Verlauf-Tab: Gesamt Gelb – \"Belastung auf diesem Niveau stabilisieren, nicht weiter steigern und im Blick behalten.\"",
   },
   {
     title: "Worum geht es?",
@@ -20,26 +22,38 @@ const PATIENT_SECTIONS: Section[] = [
   {
     title: "Tab \"Bereiche\" – PDDM-Einschätzung",
     body: "Eine kurze Fragerunde (ca. alle 4 Wochen sinnvoll), die zeigt, ob neben der reinen Belastung auch andere Bereiche eine Rolle spielen könnten (z. B. Nervensystem, Stimmung, Arbeitsumfeld). Dazu ein paar Schmerzwerte (aktuell, bei maximaler Belastung, danach). Es gibt keine Punktzahl, nur eine Einordnung je Bereich. Ersetzt keine ärztliche oder therapeutische Diagnose.",
+    example:
+      "Beispiel: Die Frage \"Spüren Sie ein Kribbeln, Taubheitsgefühl oder Ameisenlaufen?\" wird mit \"Manchmal\" beantwortet. Ergebnis: Nervensystem = A (zentrale Sensibilisierung, noch mild). Vorläufiger Rückschluss, den Du in der App siehst: \"Noch milde Sensibilisierungszeichen – bei der nächsten Einschätzung erneut abfragen, ob sie zunehmen; einfache Schmerzedukation kann schon jetzt helfen.\"",
   },
   {
     title: "Tab \"Ziele\" (PSFS)",
     body: "Nenne 2-5 für Dich persönlich bedeutsame Aktivitäten oder Leistungsziele (z. B. \"Schraubglas aufschrauben\", \"Bouldern\", aber auch \"20 kg Kniebeuge\" oder \"5 km laufen\") – nicht was andere für wichtig halten. Bewerte wöchentlich auf einer Skala 0-10, wie nah Du daran bist, das (wieder) zu können. So siehst Du Fortschritt bei dem, was Dir wirklich wichtig ist, nicht nur beim Schmerzwert – und merkst auch, wenn Du Deine eigene Leistungsfähigkeit schlechter einschätzt, als sie ist.",
+    example:
+      "Beispiel: Ziel \"Bouldern\" – Woche 1: 3/10, Woche 4: 7/10. Vorläufiger Rückschluss für Dich: Du kommst dem Ziel näher, auch wenn sich der Alltag noch nicht komplett beschwerdefrei anfühlt.",
   },
   {
     title: "Tab \"Heute\" – Check-in",
     body: "Ein Belastungs-Tagebuch, kein Schmerz-Tagebuch: trage ein, wenn Du bewusst etwas belastet hast, das mit dem Bereich zu tun hat (Training, aber auch Alltag wie langes Sitzen) – nicht jeden Schmerz ohne erkennbaren Auslöser (Faustregel direkt im Formular unter \"Was trage ich hier ein?\"). Erfasst wird, was Du gemacht hast und wie stark der Schmerz direkt davor und direkt danach war (0 = kein Schmerz, 10 = maximaler Schmerz). Hast Du bereits Einträge in einer anderen Region, kannst Du optional vermerken, ob sich das für Dich damit verbunden anfühlt – Deine eigene Einschätzung, kein automatischer Befund. Dauert etwa 30 Sekunden.",
+    example:
+      "Beispiel-Eintrag: \"Joggen\", Schmerz davor 2, direkt danach 4. Der 24h/48h-Wert bleibt zunächst offen – dafür erinnert Dich die App beim nächsten Öffnen des Tabs.",
   },
   {
     title: "Tab \"Verlauf\" – Ampel-Feedback",
     body: "Jeder Eintrag bekommt automatisch eine Ampel-Bewertung in drei Punkten: Intensität (wie hoch war der Schmerz), Anstieg (wie stark ist er durch die Aktivität gestiegen) und Erholung (wie schnell war er wieder auf dem Ausgangsniveau). Grün = Belastung kann gesteigert werden, Gelb = Belastung halten und beobachten, Rot = Belastung anpassen/reduzieren. Trage 24 und 48 Stunden später den Schmerz über \"Verlauf nachtragen\" nach – die App erinnert Dich beim nächsten Öffnen des \"Heute\"-Tabs automatisch an offene Nachträge. Ab zwei Einträgen zeigt Dir oben ein Diagramm den Verlauf, plus eine Tendenz (rückläufig/gleichbleibend/steigend).",
+    example:
+      "Beispiel (derselbe Joggen-Eintrag): 24h später Schmerz wieder bei 2 (dem Ausgangsniveau). Ergebnis: Intensität Gelb, Anstieg Gelb, Erholung Grün → Gesamt Gelb. Vorläufiger Rückschluss: \"Belastung auf diesem Niveau stabilisieren, nicht weiter steigern und im Blick behalten.\"",
   },
   {
     title: "Tab \"Rechner\"",
     body: "Wähle Dein Trainingsziel (Kraft, Hypertrophie oder Athletik/Sprünge) und gib den Schmerz während der Übung ein. Du bekommst eine passende Stellschraube vorgeschlagen – z. B. Gewicht reduzieren, Bewegungsumfang verringern, Übung wechseln oder auf eine Vorbereitungsübung ausweichen – statt nur eine RPE-Zahl.",
+    example:
+      "Beispiel: Ziel \"Kraft\", Schmerz während der Kniebeuge = 6. Ergebnis: \"Gewicht reduzieren.\" Alternativen: Bewegungsumfang verringern oder auf eine isometrische Halteübung wechseln. Vorläufiger Rückschluss: Schmerz liegt im roten Bereich (>5) – die Belastung sollte jetzt angepasst werden, statt die Einheit wie geplant durchzuziehen.",
   },
   {
     title: "Tab \"Fragebögen\"",
     body: "Validierte Screening-Fragebögen (TSK zu Bewegungsangst, FESS zu funktioneller Selbstwirksamkeit, ÖREBRO zu Chronifizierungsrisiko). Üblich: einmalig bei der ersten Nutzung ausfüllen, Wiederholung nur bei deutlicher Veränderung oder auf Anraten Deiner Therapeutin/Deines Therapeuten – kein täglicher oder wöchentlicher Check.",
+    example:
+      "Beispiel: FESS-Score 35 von 60. Ergebnis laut Quelle: \"Geringe Einschränkung der Selbstwirksamkeit\" (Einordnung: <20 extrem · 20–30 moderat · 31–40 gering · >40 minimal). Kein Alarmsignal, aber auch kein Nullbefund.",
   },
   {
     title: "Tab \"Wissen\"",
@@ -48,6 +62,8 @@ const PATIENT_SECTIONS: Section[] = [
   {
     title: "Für Therapeutinnen/Therapeuten",
     body: "Über \"Therapeuten-Bereich\" oben rechts kommt man in die Mandanten-Verwaltung (separat von der eigenen Patientenansicht). Zwei Link-Richtungen: ein Trainingsplan wird dort erstellt und per Link an die Patientin/den Patienten geschickt (kein Live-Sync, bei Änderungen neuen Link schicken); umgekehrt schickt die Patientin/der Patient über \"Verlauf an Therapeut senden\" (siehe unten) einen Link zurück, der im Therapeuten-Bereich direkt importiert wird.",
+    example:
+      "Beispiel: Mandantin \"Lisa M.\" schickt einen Verlauf-Link. Nach dem Import zeigt die Übersicht ihre PDDM-Historie, PSFS-Ziele und Check-ins auf einen Blick – ohne dass sie ein Konto braucht.",
   },
   {
     title: "Icon-Schnellauswahl",
@@ -67,6 +83,8 @@ const THERAPIST_SECTIONS: Section[] = [
   {
     title: "Mandanten",
     body: "Hier legst Du Mandantinnen/Mandanten an und wählst eine als aktiv aus. Für jede aktive Mandantin/jeden aktiven Mandanten gibt es zwei Ansichten: \"Daten eingeben\" (Du trägst direkt eine PDDM-Einschätzung, Ziele, Check-ins oder Fragebögen für sie/ihn ein, z. B. im Termin) und \"Übersicht\" (read-only Zusammenfassung über alle Regionen).",
+    example:
+      "Beispiel: Mandant \"Tom K.\" – Du trägst im Termin direkt die PDDM-Antworten ein. Ergebnis sofort sichtbar: Komorbiditäten = B (Schlaf stark beeinträchtigt). Vorläufiger Rückschluss: \"Schlaf, Stresslevel oder Aktivitätsniveau aktiv ansprechen; bei anhaltend starker Belastung Rücksprache mit Hausarzt oder Psychotherapeut anregen.\"",
   },
   {
     title: "Daten von der Patientin/dem Patienten erhalten",
@@ -114,6 +132,11 @@ export default function HelpPanel({ audience = "patient" }: { audience?: "patien
                 <div key={s.title}>
                   <p className="text-sm font-semibold text-slate-900 mb-1">{s.title}</p>
                   <p className="text-sm text-slate-600">{s.body}</p>
+                  {s.example && (
+                    <div className="mt-1.5 rounded-lg bg-slate-50 border border-slate-200 p-2.5">
+                      <p className="text-xs text-slate-600">{s.example}</p>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

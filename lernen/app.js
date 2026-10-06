@@ -549,7 +549,7 @@ function recallSession(root, ids, cfg) {
         <img data-photo="${esc(id)}" class="photo" hidden alt="">
         <div class="native">${esc(it.d)}</div>
         ${it.note ? `<button class="btn small" id="hint" style="margin-top:8px">💡 Eselsbrücke</button><div class="hint" id="hint-t" hidden>${esc(it.note)}</div>` : ''}
-        <div id="answer" hidden><div class="${cfg.big}">${esc(it.t)}</div><div id="cmp" class="small"></div></div>
+        <div id="answer" hidden><div class="${cfg.big}">${esc(it.t)}</div><div id="cmp" class="small"></div><div id="wordhelp"></div></div>
       </div>
       ${cfg.typing ? `<input type="text" id="typed" placeholder="Antwort tippen (optional)" autocomplete="off" autocapitalize="off" spellcheck="false">` : ''}
       <div class="row" id="pre" style="margin-top:8px">
@@ -601,6 +601,11 @@ function recallSession(root, ids, cfg) {
       if (attempt) {
         const c = compareWords(it.t, attempt);
         $('#cmp', root).innerHTML = `<p>${said ? 'Gesagt' : 'Getippt'}: „${esc(attempt)}“</p><p>${c.html} <b>${c.score}%</b></p>`;
+      }
+      // Wörter des Satzes, die noch nicht sicher sitzen – damit man nicht an einem unbekannten Wort hängen bleibt
+      if (cfg.wordHelp) {
+        const ws = wordsInSentence(it.t).map(wid => wordById(wid)).filter(w => w && !(state.srs[w.id] && state.srs[w.id].iv >= 3));
+        if (ws.length) $('#wordhelp', root).innerHTML = `<div class="wordhelp">${ws.map(w => `<span><b>${esc(w.t)}</b> – ${esc(w.d)}${state.srs[w.id] ? '' : ' <span class="pill">neu</span>'}</span>`).join('')}</div>`;
       }
       speak(it.t);
     };
@@ -798,13 +803,93 @@ views.vocab = function (root, arg) {
   }
 };
 
+// ---------- Wörter ↔ Sätze ----------
+// Findet Wörter der Wortliste in Sätzen – über den Wortstamm, damit auch gebeugte Formen passen
+// (bicchieri → bicchiere, mangiamo → mangiare). Unregelmäßige Formen (sono → essere) werden nicht erkannt.
+// Erlaubte Endungen hinter dem Stamm (sonst zu viele Zufallstreffer wie per → pera)
+const IT_NOUN_END = new Set(['a', 'e', 'i', 'o', 'he', 'hi']);
+const IT_VERB_END = new Set(['o', 'i', 'a', 'e', 'iamo', 'ate', 'ete', 'ite', 'ano', 'ono', 'ato', 'ata', 'ati', 'uto', 'uta', 'uti', 'ito', 'ita', 'iti',
+  'ando', 'endo', 'avo', 'avi', 'ava', 'avamo', 'avate', 'avano', 'evo', 'evi', 'eva', 'evano', 'ivo', 'ivi', 'iva', 'ivano', 'ò', 'ì', 'erò', 'irò', 'erà', 'irà',
+  'eremo', 'iremo', 'erei', 'irei', 'erebbe', 'irebbe', 'are', 'ere', 'ire', 'isco', 'isci', 'isce', 'iscono', 'iamo']);
+const EN_END = new Set(['', 'e', 's', 'es', 'ed', 'd', 'ing', 'er', 'ers']);
+function wordStem(t) {
+  let k = t.toLowerCase().replace(/\(.*?\)/g, '').replace(/[?!.,;:¿¡"«»“”]/g, '').trim();
+  let article = false;
+  if (settings.lang === 'it') {
+    const k2 = k.replace(/^(il|lo|la|i|gli|le|un|una|uno)\s+/, '').replace(/^(l|un)['’]/, '');
+    article = k2 !== k;
+    k = k2;
+  } else k = k.replace(/^(to|the|a|an)\s+/, '');
+  if (!k || /\s/.test(k)) return null; // Wendungen aus mehreren Wörtern auslassen
+  if (k.length <= 3) return { stem: k, kind: 'exact' };
+  if (settings.lang !== 'it') return { stem: k.replace(/e$/, ''), kind: 'en' };
+  if (!article && /(are|ere|ire)$/.test(k)) return { stem: k.slice(0, -3), kind: 'verb' };
+  if (/[aeio]$/.test(k)) return { stem: k.slice(0, -1), kind: 'noun' };
+  return { stem: k, kind: 'exact' };
+}
+function stemMatches(tok, e) {
+  if (e.kind === 'exact') return tok === e.stem;
+  if (!tok.startsWith(e.stem)) return false;
+  const rest = tok.slice(e.stem.length);
+  return e.kind === 'verb' ? IT_VERB_END.has(rest) : e.kind === 'noun' ? IT_NOUN_END.has(rest) : EN_END.has(rest);
+}
+let stemIndexCache = null;
+function stemIndex() {
+  const key = settings.lang + ':' + allWords().length;
+  if (stemIndexCache && stemIndexCache.key === key) return stemIndexCache.map;
+  const map = new Map();
+  allWords().forEach(w => {
+    const st = wordStem(w.t);
+    if (!st || st.stem.length < 2) return;
+    const b = st.stem.slice(0, 2);
+    if (!map.has(b)) map.set(b, []);
+    map.get(b).push({ id: w.id, stem: st.stem, kind: st.kind });
+  });
+  stemIndexCache = { key, map };
+  return map;
+}
+function wordsInSentence(text) {
+  const idx = stemIndex();
+  const found = new Set();
+  text.split(/\s+/).forEach((raw, pos) => {
+    // Großgeschriebene Wörter mitten im Satz sind meist Namen – dann nur exakte Treffer
+    const name = pos > 0 && /^[A-ZÀ-Ý]/.test(raw.replace(/^[^\p{L}]+/u, ''));
+    normWords(raw).forEach(tok => {
+      tok = tok.replace(/^(l|un|dell|dall|nell|sull|all|d|c)['’]/, '');
+      (idx.get(tok.slice(0, 2)) || []).forEach(e => {
+        if (name ? tok === e.stem && e.kind === 'exact' : stemMatches(tok, e)) found.add(e.id);
+      });
+    });
+  });
+  return [...found];
+}
+// Vorrang für neue Wörter: Wörter aus Sätzen, die du übst – schwierige zuerst. Ungeübte Sätze zählen nicht.
+function wordPriorities() {
+  const prio = new Map(); // Wort-ID → { score, sentence }
+  allSentences().forEach(s => {
+    const c = state.srs[s.id];
+    if (!c || c.iv >= 21) return; // noch nicht geübt oder sitzt sicher
+    const score = 1 + sentenceWeakness(c);
+    wordsInSentence(s.t).forEach(id => {
+      const p = prio.get(id);
+      if (!p || p.score < score) prio.set(id, { score, sentence: s });
+    });
+  });
+  return prio;
+}
+
 function vocabNew(pane) {
   const l = dayLog();
   const tempo = newWordTempo();
   const limit = tempo.n + (l.extraNew || 0);
   const recallTab = $('.seg [data-m="recall"]');
   if (recallTab) recallTab.textContent = `Abfragen (${dueIds(isWordId).length})`;
-  const pool = allWords().filter(w => !state.srs[w.id]);
+  // Wörter aus deinen Sätzen (schwierige zuerst) vor der Häufigkeitsreihenfolge
+  const prio = wordPriorities();
+  const pool = allWords().filter(w => !state.srs[w.id])
+    .map((w, i) => ({ w, i, p: prio.get(w.id) }))
+    .sort((a, b) => (b.p ? b.p.score : 0) - (a.p ? a.p.score : 0) || a.i - b.i)
+    .map(x => x.w);
   if (!pool.length) {
     pane.innerHTML = `<div class="card">Alle Wörter sind im Training. Importiere weitere unter „Eigene“.</div>`;
     return;
@@ -816,6 +901,7 @@ function vocabNew(pane) {
     return;
   }
   const w = pool[0];
+  const from = prio.get(w.id);
   const nudge = l.newWords > 0 && l.newWords % 10 === 0;
   pane.innerHTML = `
     <div class="row between muted small"><span>Heute ${l.newWords}/${limit}</span><span>${pool.length} noch nicht gelernt</span></div>
@@ -823,6 +909,7 @@ function vocabNew(pane) {
     ${tempo.reason ? `<div class="notice small">Tempo angepasst: ${tempo.n} statt ${settings.newWords} neue Wörter – ${tempo.reason}</div>` : ''}
     ${nudge ? `<div class="notice">${l.newWords} neue Wörter – kurz <a href="#vocab/recall">abfragen</a>, bevor es weitergeht?</div>` : ''}
     <div class="card flash">
+      ${from ? `<div class="pill" style="margin-bottom:8px">aus deinem Satz</div><div class="small muted" style="margin-bottom:8px">„${esc(from.sentence.t)}“</div>` : ''}
       ${photoEditor(w.id)}
       <div class="target">${esc(w.t)}</div>
       <div class="native">${esc(w.d)}</div>
@@ -936,6 +1023,7 @@ views.review = function (root) {
     <div id="pane"></div>`;
   recallSession($('#pane', root), due.concat(newOnes), {
     big: 'sentence',
+    wordHelp: true,
     typing: true,
     emptyText: 'Nichts fällig. Neue Sätze kommen aus deinen Sprachinseln.',
     doneExtra: `<a class="btn big" href="#shadow">Weiter zum Shadowing</a>`,

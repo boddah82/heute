@@ -28,6 +28,7 @@ Zusammenfassung der bisherigen Arbeit (Sept./Okt. 2026, Claude Code im Web) für
 15. **Schwierige Sätze** in Hören/Shadowing aus den Satz-Abfrage-Bewertungen; Bewertung bleibt nur in der Satz-Abfrage.
 
 16. **Texte in Sätze ordnen**: kopierte Liedzeilen brechen mitten im Satz um; Claude liefert nur Wort-Indizes für Satzanfänge (`segmentText()`), Text bleibt unverändert; ⤴/✂/↩ von Hand.
+17. **Wörter aus Sätzen**: neue Vokabeln aus geübten (v. a. schwierigen) Sätzen vorgezogen, Wort-Hilfe in der Satz-Abfrage (`wordsInSentence()`, Stamm + erlaubte Endungen, Namen nur exakt). Anlass: er bleibt an einzelnen unbekannten Wörtern im Satz hängen.
 
 ## Bewusst nicht gemacht / abgelehnt
 - KI-Übersetzung für eigene Sprachinseln (manuell gewünscht), Emoji-Bilder, KI-Merkbild als Text, Prüfknopf „Klingt komisch?“.

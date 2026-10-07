@@ -189,3 +189,10 @@ details summary { cursor: pointer; }
 .sentence .w.past { color: var(--muted); }
 .wordhelp { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: center; margin-top: 10px; font-size: 14px; color: var(--muted); }
 .wordhelp b { color: var(--text); }
+.badges { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.badge { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 2px; opacity: .45; filter: grayscale(1); }
+.badge.got { opacity: 1; filter: none; border-color: var(--accent); }
+.badge .bi { font-size: 26px; }
+table.wk { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.wk td, table.wk th { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: left; }
+table.wk th { font-size: 12px; color: var(--muted); font-weight: 600; }

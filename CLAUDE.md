@@ -32,7 +32,7 @@ Views in `app.js` (`views.<name>`): `home` (mit „Heute zuerst“ aus `todayPla
 - IDs: Grundwörter `w:<wort>`, eigene `u:…`, Sätze `s:…`, Vorlagen-Inseln fest `st-<lang>-<n>`.
 
 ### Claude im Browser
-- Nur in `talk`, `texts` (Ordnen/Übersetzung) und Hör-Dialogen. Alles andere ist kostenlos/offline.
+- Nur in `talk`, `texts` (Ordnen/Übersetzung), Hör-Dialogen und „🔍 Prüfen“ (Wörter/Sätze; Satz bekommt `gloss` = Wort für Wort im Zusammenhang). Alles andere ist kostenlos/offline.
 - `callClaude()` nutzt das SDK mit `dangerouslyAllowBrowser`, Modell aus Einstellungen (Standard `claude-opus-5-5`), `output_config.format` (JSON-Schema), `effort: 'medium'`, `cache_control`, Server-Fallback (`fallbacks: 'default'`, Beta `server-side-fallback-2026-07-01`) außer bei Haiku. Antwortinhalt wird vollständig in den Verlauf übernommen (Denkblöcke nicht verändern).
 - Prompt-Regel: natürliche, idiomatische Sprache geht immer vor „bekannte Wörter benutzen“.
 

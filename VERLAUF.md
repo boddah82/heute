@@ -27,7 +27,7 @@ Zusammenfassung der bisherigen Arbeit (Sept./Okt. 2026, Claude Code im Web) für
 14. **Shadowing-Takt**: Einzähl-Balken 3·2·1, Wort-Markierung, „Jetzt du“-Pause.
 15. **Schwierige Sätze** in Hören/Shadowing aus den Satz-Abfrage-Bewertungen; Bewertung bleibt nur in der Satz-Abfrage.
 
-16. **Texte in Sätze ordnen**: kopierte Liedzeilen brechen mitten im Satz um; Claude liefert nur Wort-Indizes für Satzanfänge (`segmentText()`), Text bleibt unverändert; ⤴/✂/↩ von Hand.
+16. **Texte in Sätze ordnen**: kopierte Liedzeilen brechen mitten im Satz um; Claude liefert nur Wort-Indizes für Satzanfänge (`segmentText()`), Text bleibt unverändert. Läuft automatisch beim Speichern (danach Übersetzung), `mergeFragments()` hängt Bruchstücke an, Neu-Ordnen immer vom Original. Manuelles ⤴/✂ wieder entfernt (Nutzer: umständlich, erzeugte nur mehr Bruchstücke).
 17. **Wörter aus Sätzen**: neue Vokabeln aus geübten (v. a. schwierigen) Sätzen vorgezogen, Wort-Hilfe in der Satz-Abfrage (`wordsInSentence()`, Stamm + erlaubte Endungen, Namen nur exakt). Anlass: er bleibt an einzelnen unbekannten Wörtern im Satz hängen.
 18. **Jugend-Modus + Punkte/Abzeichen/Wochenrückblick**: für seine 14-jährige Tochter (eigenes Handy, lernt IT + EN, soll KI-Gespräche nutzen; Vater klärt Anthropic-Regeln für Minderjährige und nutzt eigenen Schlüssel mit Limit für sie). `TEEN_RULES` im Prompt, `data/teen.js`; Punkte gleich für jede Bewertung (ehrliches „Nochmal“), Serie mit 2 Jokern/Woche. Später angedacht: Duell/Familienziel (bräuchte Server oder geteilte Wochenkarte).
 

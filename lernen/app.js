@@ -1850,7 +1850,7 @@ views.texts = function (root, id) {
     if (!lines.length) { toast('Bitte Text einfügen'); return; }
     if (lines.length > 300) { toast('Höchstens 300 Zeilen pro Text'); return; }
     const title = $('#tx-title', root).value.trim() || lines[0].slice(0, 40);
-    const n = { id: 'tx' + uid(), title, ts: Date.now(), lines: lines.map(t => ({ id: 'l' + uid(), t, de: '', words: [], note: '' })) };
+    const n = { id: 'tx' + uid(), title, ts: Date.now(), autoSeg: true, lines: lines.map(t => ({ id: 'l' + uid(), t, de: '', words: [], note: '' })) };
     state.texts.push(n);
     persist();
     location.hash = '#texts/' + n.id;
@@ -1864,21 +1864,62 @@ const SEGMENT_SCHEMA = {
   properties: { starts: { type: 'array', items: { type: 'integer' } } },
 };
 const LABEL_LINE = /^\s*[\[(].*[\])]\s*$/; // Abschnittsmarken wie [Ritornello] oder (x2)
-async function segmentText(tx) {
-  const lines = tx.lines.map(l => l.t).filter(t => !LABEL_LINE.test(t));
-  const words = [];
-  const listing = lines.map(line => line.split(/\s+/).filter(Boolean).map(w => { words.push(w); return `${words.length - 1}:${w}`; }).join(' ')).join('\n');
-  if (words.length < 2) return;
-  const lang = settings.lang === 'it' ? 'Italian' : 'English';
-  const r = await callClaude(
-    `A learner pasted a ${lang} text (often song lyrics) for private study. Copying breaks lines in the wrong places: a sentence often runs over several lines, and one line can hold the end of one sentence and the start of the next. Every word below is prefixed with its index; the line breaks are the pasted ones and are unreliable. Split the text into study units: each unit is one complete sentence or one meaningful clause that is understandable on its own (at most about 20 words; split long sentences at natural clause boundaries). Use meaning, grammar, punctuation and capital letters. Return "starts": the ascending word indices where each unit begins (the first is 0). Do not return any text.`,
-    [{ role: 'user', content: listing }], SEGMENT_SCHEMA, 8000);
-  const starts = [...new Set([0].concat(r.data.starts || []))].filter(i => Number.isInteger(i) && i >= 0 && i < words.length).sort((a, b) => a - b);
+// Wörter des Originaltexts (ohne Abschnittsmarken) – Neu-Ordnen geht immer vom eingefügten Original aus
+function originalWords(tx) {
   if (!tx.original) tx.original = tx.lines.map(l => l.t);
-  tx.lines = starts.map((st, k) => ({ id: 'l' + uid(), t: words.slice(st, starts[k + 1] ?? words.length).join(' '), de: '', words: [], note: '' }));
+  return tx.original.filter(t => !LABEL_LINE.test(t)).map(line => line.split(/\s+/).filter(Boolean));
+}
+const SENT_END = /[.!?…]["»”)]*$/;
+// Bruchstücke aus 1–2 Wörtern an den Nachbarsatz hängen: ans vorige Stück, wenn das noch nicht mit Satzzeichen
+// endet (typisch: Satzende rutscht in die nächste Kopierzeile), sonst ans nächste. Echte Ausrufe bleiben.
+function mergeFragments(units) {
+  const out = [];
+  let carry = [];
+  units.forEach(u => {
+    u = carry.concat(u);
+    carry = [];
+    const short = u.length <= 2 && !/[!?]["»”)]*$/.test(u[u.length - 1]);
+    if (!short) { out.push(u); return; }
+    const prev = out[out.length - 1];
+    if (prev && !SENT_END.test(prev[prev.length - 1])) out[out.length - 1] = prev.concat(u);
+    else carry = u;
+  });
+  if (carry.length) { if (out.length) out[out.length - 1] = out[out.length - 1].concat(carry); else out.push(carry); }
+  return out;
+}
+function setUnits(tx, units) {
+  tx.lines = units.map(u => ({ id: 'l' + uid(), t: u.join(' '), de: '', words: [], note: '' }));
   tx.grouped = true;
   tx.ts = Date.now();
   persist();
+}
+// Ohne Claude: nur an Satzzeichen teilen; ohne Satzzeichen bleiben die Zeilen, wie sie sind
+function localSegment(tx) {
+  const lines = originalWords(tx);
+  const words = [].concat(...lines);
+  if (!words.some(w => SENT_END.test(w))) { setUnits(tx, lines.filter(l => l.length)); return; }
+  const units = [];
+  let cur = [];
+  words.forEach(w => { cur.push(w); if (SENT_END.test(w)) { units.push(cur); cur = []; } });
+  if (cur.length) units.push(cur);
+  setUnits(tx, mergeFragments(units));
+}
+async function segmentText(tx) {
+  const lines = originalWords(tx);
+  const words = [];
+  const listing = lines.map(line => line.map(w => { words.push(w); return `${words.length - 1}:${w}`; }).join(' ')).join('\n');
+  if (words.length < 2) return;
+  const lang = settings.lang === 'it' ? 'Italian' : 'English';
+  const r = await callClaude(
+    `A learner pasted a ${lang} text (often song lyrics) for private study. The pasted line breaks are unreliable: a sentence often runs over several lines, one line can hold the end of one sentence and the start of the next, and lyric lines usually start with a capital letter even in the middle of a sentence – so capital letters at line starts are NOT evidence of a new sentence. Every word below is prefixed with its index.
+Split the text into study units that are COMPLETE sentences, judged by grammar and meaning (punctuation helps when present). Rules:
+- Keep each sentence whole. Only split a sentence if it is longer than about 25 words, and then only at a strong boundary between two main clauses.
+- Never create fragments: no unit may be an incomplete phrase that only makes sense with the previous or next words. Words that finish a sentence belong to that sentence.
+- A repeated line or a short exclamation that stands on its own may be its own unit.
+Return "starts": the ascending word indices where each unit begins (the first is 0). Do not return any text.`,
+    [{ role: 'user', content: listing }], SEGMENT_SCHEMA, 8000);
+  const starts = [...new Set([0].concat(r.data.starts || []))].filter(i => Number.isInteger(i) && i >= 0 && i < words.length).sort((a, b) => a - b);
+  setUnits(tx, mergeFragments(starts.map((st, k) => words.slice(st, starts[k + 1] ?? words.length))));
 }
 
 async function translateText(tx, onProgress) {
@@ -1902,6 +1943,7 @@ async function translateText(tx, onProgress) {
 }
 
 let textPlayToken = null;
+let textBusy = null; // ID des Texts, der gerade geordnet/übersetzt wird
 function textDetail(root, tx) {
   const done = tx.lines.every(l => l.de);
   const islandId = 'txt-' + settings.lang;
@@ -1910,13 +1952,9 @@ function textDetail(root, tx) {
   root.innerHTML = `
     <a href="#texts" class="small">‹ Alle Texte</a>
     <input type="text" id="tx-name" value="${esc(tx.title)}" style="font-size:20px;font-weight:700;margin:8px 0 12px">
-    ${done ? '' : `<div class="card"><p class="small">${tx.lines.filter(l => !l.de).length} Zeilen ohne Übersetzung.</p>
-      ${!talkCfg.key ? '<p class="muted small">Zum Übersetzen den Claude-Schlüssel unter <a href="#talk/setup">Reden → ⚙️</a> eintragen.</p>'
-        : !tx.grouped && !tx.lines.some(l => l.de)
-          ? `<button class="btn primary" id="tx-seg">🤖 In Sätze ordnen & übersetzen</button>
-             <button class="btn small" id="tx-tr" style="margin-top:6px">Nur übersetzen (Zeilen so lassen)</button>
-             <p class="muted small">Ordnen: Claude teilt den Text dort, wo Sätze wirklich enden – auch mitten in einer kopierten Zeile. Der Wortlaut bleibt unverändert. Kostet einmalig ein paar Cent (Schätzung).</p>`
-          : '<button class="btn primary" id="tx-tr">🌐 Mit Claude übersetzen</button><p class="muted small">Kostet einmalig ein paar Cent (Schätzung).</p>'}</div>`}
+    ${textBusy === tx.id ? `<div class="card"><p class="typing" id="tx-status">🤖 Ordne in ganze Sätze und übersetze …</p></div>` : done ? '' : `<div class="card"><p class="small">${tx.lines.filter(l => !l.de).length} Sätze ohne Übersetzung.</p>
+      ${talkCfg.key ? '<button class="btn primary" id="tx-tr">🌐 Übersetzen</button>' : '<p class="muted small">Ohne Claude-Schlüssel wird nur an Punkt/Fragezeichen geteilt und nicht übersetzt. Schlüssel unter <a href="#talk/setup">Reden → ⚙️</a>.</p>'}</div>`}
+    ${talkCfg.key && textBusy !== tx.id ? '<button class="btn small" id="tx-reseg" style="margin-bottom:8px">🔄 Neu in Sätze ordnen & übersetzen</button>' : ''}
     ${tx.original ? '<button class="btn small" id="tx-orig" style="margin-bottom:8px">↩ Ursprüngliche Zeilen wiederherstellen</button>' : ''}
     <div class="row" style="margin-bottom:8px">
       <button class="btn grow" id="tx-play">▶ Alles vorlesen</button>
@@ -1937,8 +1975,6 @@ function textDetail(root, tx) {
           <div class="stack" style="flex:none">
             <button class="btn small" data-tp="${i}">🔊</button>
             <button class="btn small" data-td="${i}">DE</button>
-            ${i > 0 ? `<button class="btn small" data-tj="${i}" title="Mit der Zeile darüber verbinden">⤴</button>` : ''}
-            <button class="btn small" data-ts="${i}" title="Zeile teilen">✂</button>
             ${l.de ? `<button class="btn small" data-ta="${i}" ${inIsland(l.t) ? 'disabled' : ''} title="In die Wiederholung">➕</button>` : ''}
           </div>
         </li>`).join('')}
@@ -1946,19 +1982,31 @@ function textDetail(root, tx) {
     <button class="btn danger" id="tx-del" style="width:100%">Text löschen</button>`;
   $('#tx-name', root).onchange = e => { tx.title = e.target.value.trim() || tx.title; tx.ts = Date.now(); persist(); };
   const rerender = () => { if (location.hash === '#texts/' + tx.id) textDetail(root, tx); };
-  const resetLine = l => Object.assign(l, { de: '', words: [], note: '' });
-  if ($('#tx-seg', root)) {
-    $('#tx-seg', root).onclick = async () => {
-      const b = $('#tx-seg', root);
-      b.disabled = true;
-      b.textContent = 'Ordne Sätze …';
-      try {
-        await segmentText(tx);
-        b.textContent = 'Übersetze …';
-        await translateText(tx, (k, n) => { b.textContent = `Übersetze … (${k}/${n})`; });
-        toast('Geordnet und übersetzt');
-      } catch (e) { toast(e.message); }
+  // Ordnen + Übersetzen in einem Rutsch (automatisch nach dem Speichern oder per „Neu ordnen“)
+  const runAuto = async () => {
+    textBusy = tx.id;
+    rerender();
+    try {
+      await segmentText(tx);
       rerender();
+      await translateText(tx, (k, n) => { const el = $('#tx-status'); if (el) el.textContent = `🤖 Übersetze … (${k}/${n})`; });
+      toast('In Sätze geordnet und übersetzt');
+    } catch (e) { toast(e.message); }
+    textBusy = null;
+    rerender();
+  };
+  if (tx.autoSeg && textBusy !== tx.id) {
+    delete tx.autoSeg;
+    persist();
+    if (talkCfg.key) { runAuto(); return; }
+    localSegment(tx);
+    rerender();
+    return;
+  }
+  if ($('#tx-reseg', root)) {
+    $('#tx-reseg', root).onclick = () => {
+      if (tx.lines.some(l => l.de) && !confirm('Neu ordnen? Die bisherigen Übersetzungen werden ersetzt (kostet einmalig ein paar Cent).')) return;
+      runAuto();
     };
   }
   if ($('#tx-orig', root)) {
@@ -1972,33 +2020,6 @@ function textDetail(root, tx) {
       rerender();
     };
   }
-  // Von Hand korrigieren: mit der Zeile darüber verbinden / an einer Stelle teilen
-  $$('[data-tj]', root).forEach(b => {
-    b.onclick = () => {
-      const i = Number(b.dataset.tj);
-      if (!tx.original) tx.original = tx.lines.map(l => l.t);
-      tx.lines[i - 1].t = tx.lines[i - 1].t + ' ' + tx.lines[i].t;
-      resetLine(tx.lines[i - 1]);
-      tx.lines.splice(i, 1);
-      tx.ts = Date.now();
-      persist();
-      rerender();
-    };
-  });
-  $$('[data-ts]', root).forEach(b => {
-    b.onclick = () => {
-      const i = Number(b.dataset.ts);
-      const v = prompt('Setze ein | dort, wo geteilt werden soll:', tx.lines[i].t);
-      if (v === null || !v.includes('|')) return;
-      const parts = v.split('|').map(x => x.trim()).filter(Boolean);
-      if (parts.length < 2) return;
-      if (!tx.original) tx.original = tx.lines.map(l => l.t);
-      tx.lines.splice(i, 1, ...parts.map(t => ({ id: 'l' + uid(), t, de: '', words: [], note: '' })));
-      tx.ts = Date.now();
-      persist();
-      rerender();
-    };
-  });
   if ($('#tx-tr', root)) {
     $('#tx-tr', root).onclick = async () => {
       const b = $('#tx-tr', root);

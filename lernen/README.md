@@ -19,7 +19,7 @@ Modus „🔎 Beschreiben“ unter Reden: Claude gibt eine Aufgabe („Such etwa
 
 ## Eigene Texte
 Unter Inseln → „📄 Texte“: eigene Texte einfügen (z. B. Liedtexte zum Mitlesen). Claude übersetzt Zeile für Zeile, Wort für Wort und erklärt Redewendungen (einmalige Kosten pro Text). Vorlesen mit Markierung, Wörter in die Wortliste übernehmen, einzelne Zeilen per ➕ in die Insel „Texte“ (Wiederholung & Shadowing).
-„🤖 In Sätze ordnen“: Claude teilt kopierte Liedzeilen an echten Satzgrenzen neu auf (auch mitten in einer Zeile; nur Wort-Nummern, der Wortlaut bleibt). Von Hand: ⤴ verbinden, ✂ teilen, ↩ Ursprüngliche Zeilen.
+Beim Speichern wird automatisch in ganze Sätze geordnet: Claude setzt kopierte Liedzeilen an echten Satzgrenzen neu zusammen (nur Wort-Nummern, der Wortlaut bleibt), übrig gebliebene Bruchstücke (≤ 2 Wörter) werden angehängt, dann wird übersetzt. Ohne Schlüssel nur Teilung an Satzzeichen. „🔄 Neu ordnen“ geht immer vom Originaltext aus; „↩ Ursprüngliche Zeilen“ stellt ihn wieder her.
 
 ## Heute zuerst
 Karte oben auf „Heute“: 2–3 empfohlene Schritte in lerngerechter Reihenfolge, nach festen Regeln (keine KI): fällige Wiederholungen vor Neuem, höchstens 50 Wort-Wiederholungen pro Runde (Rückstand nach Pausen verteilen statt nachholen), lange vernachlässigte Sprech-Schritte (Sätze, Shadowing, Gespräch) nach vorn, neue Wörter bei großem Rückstand aussetzen.

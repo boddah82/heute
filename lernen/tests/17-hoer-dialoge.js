@@ -56,6 +56,26 @@ const URL = 'http://localhost:8765/';
   console.log('Liste:', (await p.textContent('.card.step')).replace(/\s+/g, ' ').trim());
   await p.goto(URL + '#texts'); await p.waitForTimeout(200);
   console.log('auch unter Texte:', (await p.textContent('.card.step')).includes('🎭'));
+  // Stimmen zuordnen: nachgebaute Gerätestimmen (Browser im Test hat keine)
+  const p2 = await ctx.newPage();
+  p2.on('pageerror', e => errs.push(e.message));
+  await p2.addInitScript(() => {
+    window.__spoken = [];
+    const fake = [{ name: 'Alice', lang: 'it-IT' }, { name: 'Luca', lang: 'it-IT' }, { name: 'Paola', lang: 'it-IT' }];
+    window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+    speechSynthesis.getVoices = () => fake;
+    speechSynthesis.speak = u => { window.__spoken.push({ t: u.text, pitch: u.pitch, voice: u.voice && u.voice.name }); setTimeout(() => u.onend && u.onend(), 10); };
+  });
+  await p2.goto(URL + '#listen/stories'); await p2.waitForTimeout(200);
+  console.log('Stimmen-Liste offen:', await p2.$eval('#st-voices', e => e.open), '| Einträge:', await p2.$$eval('#st-voices li', x => x.length));
+  await p2.click('[data-vt="1"]');
+  console.log('Probe mit Luca:', await p2.evaluate(() => window.__spoken.slice(-1)[0].voice));
+  await p2.click('[data-vg="0"][data-g="f"]'); await p2.click('[data-vg="1"][data-g="m"]');
+  console.log('gespeichert:', JSON.stringify(await p2.evaluate(() => settings.voiceGender)));
+  const id = await p2.evaluate(() => state.texts[state.texts.length - 1].id);
+  await p2.goto(URL + '#texts/' + id); await p2.waitForTimeout(200);
+  await p2.click('#tx-play'); await p2.waitForTimeout(3000);
+  console.log('Wiedergabe mit Zuordnung:', JSON.stringify((await p2.evaluate(() => window.__spoken)).filter(x => x.t !== 'Ciao, come stai? Io sto bene.').map(x => [x.t, x.voice, x.pitch])));
   console.log('ERRORS:', errs);
   await b.close();
 })();

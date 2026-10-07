@@ -27,7 +27,7 @@ function save(key, val) {
 }
 
 const settings = Object.assign(
-  { lang: 'it', newWords: 30, newSentences: 10, rate: 0.9, enVariant: 'en-GB', voices: {}, autoTempo: true, talkModel: 'claude-opus-5-5', teen: false, dailyGoal: 30 },
+  { lang: 'it', newWords: 30, newSentences: 10, rate: 0.9, enVariant: 'en-GB', voices: {}, voiceGender: {}, autoTempo: true, talkModel: 'claude-opus-5-5', teen: false, dailyGoal: 30 },
   load('sl.settings', {})
 );
 settings.profile = Object.assign({ name: '', gender: 'm', origin: 'de', city: '', ts: 0 }, settings.profile);
@@ -359,7 +359,7 @@ let voices = [];
 function refreshVoices() { voices = window.speechSynthesis ? speechSynthesis.getVoices() : []; }
 if (window.speechSynthesis) {
   refreshVoices();
-  speechSynthesis.onvoiceschanged = () => { refreshVoices(); if (location.hash.startsWith('#settings') || location.hash === '#home' || !location.hash) route(); };
+  speechSynthesis.onvoiceschanged = () => { refreshVoices(); if (location.hash.startsWith('#settings') || location.hash === '#home' || location.hash === '#listen/stories' || !location.hash) route(); };
 }
 function langCode(lang = settings.lang) { return lang === 'it' ? 'it-IT' : settings.enVariant; }
 function voicesFor(prefix) { return voices.filter(v => v.lang.toLowerCase().replace('_', '-').startsWith(prefix)); }
@@ -2171,19 +2171,31 @@ const STORY_SCHEMA = {
     } } },
   },
 };
-// Stimme pro Sprecher: verschiedene Gerätestimmen, falls vorhanden – sonst dieselbe Stimme mit anderer Tonhöhe
+// Stimme pro Sprecher: Die Browser-Schnittstelle verrät das Geschlecht einer Stimme nicht – deshalb ordnet
+// der Nutzer seine Gerätestimmen einmal Mann/Frau zu (settings.voiceGender). Ohne passende Stimme: Tonhöhe.
+function storyVoices() {
+  const code = langCode().toLowerCase();
+  const vs = voicesFor(settings.lang);
+  return vs.filter(v => v.lang.toLowerCase().replace('_', '-') === code).concat(vs.filter(v => v.lang.toLowerCase().replace('_', '-') !== code));
+}
 function storyVoice(tx, sp) {
   if (!tx.story || sp === undefined || sp === null) return {};
   const base = pickVoice(settings.lang);
-  const order = base ? [base].concat(voicesFor(settings.lang).filter(v => v !== base)) : voicesFor(settings.lang);
-  if (sp < 0) return order[0] ? { voice: order[0] } : {};
+  if (sp < 0) return base ? { voice: base } : {};
   const sps = tx.story.speakers;
-  const voice = order.length > 1 ? order[(sp + 1) % order.length] : order[0];
-  const distinct = order.length > sps.length; // Erzähler + alle Sprecher mit eigener Stimme
-  if (distinct) return voice ? { voice } : {};
   const g = (sps[sp] && sps[sp].gender) || 'f';
-  const n = sps.slice(0, sp).filter(x => x.gender === g).length;
-  const pitch = g === 'm' ? [0.75, 0.6, 0.9][n % 3] : [1.25, 1.5, 1.1][n % 3];
+  const n = sps.slice(0, sp).filter(x => x.gender === g).length; // wievielte Person dieses Geschlechts
+  const pool = storyVoices().filter(v => (settings.voiceGender || {})[v.name] === g);
+  if (pool.length) {
+    // genug passende Stimmen: jede Person eine eigene; sonst dieselbe Stimme leicht verstellt
+    const round = Math.floor(n / pool.length);
+    const pitch = round ? (g === 'm' ? [1, 0.85, 1.1] : [1, 1.15, 0.9])[round % 3] : 1;
+    return { voice: pool[n % pool.length], pitch };
+  }
+  // keine Stimme dieses Geschlechts bekannt: nicht zugeordnete (oder Standard-)Stimme mit Tonhöhe
+  const other = storyVoices().filter(v => !(settings.voiceGender || {})[v.name]);
+  const voice = other.includes(base) ? base : other[0] || base;
+  const pitch = g === 'm' ? [0.7, 0.55, 0.85][n % 3] : [1.25, 1.5, 1.1][n % 3];
   return Object.assign({ pitch }, voice ? { voice } : {});
 }
 async function createStory(o) {
@@ -2242,15 +2254,32 @@ function listenStories(root) {
       </div>
       <label class="inline"><input type="checkbox" id="st-nar" ${opts.narrator ? 'checked' : ''}> Mit Erzähler</label>
       <button class="btn primary big" id="st-go" style="margin-top:12px" ${storyBusy ? 'disabled' : ''}>${storyBusy ? '🤖 Schreibe …' : '🎭 Dialog erstellen'}</button>
-      <p class="muted small">Kostet einmalig grob 5–15 Cent (Schätzung), danach beliebig oft anhören. ${nVoices > 1 ? `${nVoices} Stimmen auf diesem Gerät.` : nVoices === 1 ? 'Auf diesem Gerät gibt es nur eine Stimme für diese Sprache – die Personen werden über die Tonhöhe unterschieden.' : ''}</p>`
+      <p class="muted small">Kostet einmalig grob 5–15 Cent (Schätzung), danach beliebig oft anhören.</p>`
       : `<p class="small">Dafür brauchst du einen Claude-Schlüssel: <a href="#talk/setup">Reden → ⚙️</a>.</p>`}
     </div>
+    ${nVoices ? `<details class="card" id="st-voices" ${Object.keys(settings.voiceGender || {}).some(k => storyVoices().some(v => v.name === k)) ? '' : 'open'}>
+      <summary><b>🗣️ Stimmen zuordnen</b> <span class="muted small">(${nVoices} auf diesem Gerät)</span></summary>
+      <p class="muted small">Der Browser verrät nicht, ob eine Stimme männlich oder weiblich ist. Einmal anhören und zuordnen – dann sprechen Männer mit Männerstimme.${nVoices === 1 ? ' Nur eine Stimme: Die zweite Stimme wird über die Tonhöhe erzeugt. Weitere Stimmen ggf. in den Geräte-Einstellungen (Text-in-Sprache) installieren; Chrome auf Android zeigt oft trotzdem nur eine.' : ''}</p>
+      <ul class="list">${storyVoices().map((v, i) => `<li><div class="grow"><div class="t small">${esc(v.name)}</div><div class="d">${esc(v.lang)}</div>
+        <div class="chips" style="margin-top:4px"><button class="chip" data-vt="${i}">▶</button>${[['m', 'Mann'], ['f', 'Frau'], ['', '?']].map(([g, l]) => `<button class="chip ${((settings.voiceGender || {})[v.name] || '') === g ? 'on' : ''}" data-vg="${i}" data-g="${g}">${l}</button>`).join('')}</div></div></li>`).join('')}</ul>
+    </details>` : ''}
     ${stories.map(x => `
       <a class="card step" href="#texts/${x.id}">
         <div class="num">🎭</div>
         <div class="grow"><b>${esc(x.title)}</b><div class="meta">${esc(x.story.situation)} · ${x.story.speakers.length} Personen · ${x.lines.length} Zeilen · ${esc(x.story.stage)}</div></div><div>›</div>
       </a>`).join('')}`;
   bindGo(root);
+  const vlist = storyVoices();
+  $$('[data-vt]', root).forEach(b => { b.onclick = () => speak(settings.lang === 'it' ? 'Ciao, come stai? Io sto bene.' : 'Hello, how are you? I\'m fine, thanks.', { voice: vlist[b.dataset.vt] }); });
+  $$('[data-vg]', root).forEach(b => {
+    b.onclick = () => {
+      settings.voiceGender = settings.voiceGender || {};
+      const name = vlist[b.dataset.vg].name;
+      if (b.dataset.g) settings.voiceGender[name] = b.dataset.g; else delete settings.voiceGender[name];
+      saveSettings();
+      $$(`[data-vg="${b.dataset.vg}"]`, root).forEach(x => x.classList.toggle('on', x === b));
+    };
+  });
   if (!talkCfg.key) return;
   const store = () => save('sl.story', opts);
   $$('.chips[data-name="st-sit"] .chip', root).forEach(c => { c.onclick = () => { opts.sit = Number(c.dataset.i); store(); listenStories(root); }; });

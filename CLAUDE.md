@@ -22,7 +22,7 @@ Reine statische PWA ohne Build-Schritt, Vanilla-JS, kein Framework.
 | `lernen/vendor/anthropic-sdk.js` | offizielles `@anthropic-ai/sdk`, per esbuild als ESM-Browser-Bundle; wird per `import()` erst bei Bedarf geladen |
 | `lernen/sw.js` | Service Worker, Netzwerk zuerst; nur same-origin. **`VERSION` bei jeder Änderung hochzählen** |
 
-Views in `app.js` (`views.<name>`): `home` (mit „Heute zuerst“ aus `todayPlan()`, Regeln dort kommentiert), `method`, `vocab` (neu/abfragen/verstehen/eigene; „verstehen“ = Rückrichtung hören → Deutsch, SRS-ID `r:<Wort-ID>`, `hearQueue()`; neue Wörter nach `wordPriorities()` – Wörter aus geübten Sätzen zuerst), `review` (Sätze), `listen` (Sätze, `#listen/words` gelernte Wörter, `#listen/check` Hör-Check ohne Bewertung), `shadow` (beide mit „Schwierige Sätze“ aus `weakSentences()`; Bewertung nur in `review`), `builder` (Satzbaukasten + Drill), `texts` (eigene Texte; beim Speichern automatisch `segmentText()`/`localSegment()` + `mergeFragments()`, dann Übersetzung), `islands`, `level` (Einstufungstest), `awards` (Punkte/Ränge/Abzeichen), `week` (Wochenrückblick), `talk` (Gespräche mit Claude), `settings`.
+Views in `app.js` (`views.<name>`): `home` (mit „Heute zuerst“ aus `todayPlan()`, Regeln dort kommentiert), `method`, `vocab` (neu/abfragen/verstehen/eigene; „verstehen“ = Rückrichtung hören → Deutsch, SRS-ID `r:<Wort-ID>`, `hearQueue()`; neue Wörter nach `wordPriorities()` – Wörter aus geübten Sätzen zuerst), `review` (Sätze), `listen` (Sätze, `#listen/words` gelernte Wörter, `#listen/check` Hör-Check ohne Bewertung, `#listen/stories` Hör-Dialoge von Claude → als Text mit `story`/`sp` gespeichert, Stimmen über `storyVoice()`), `shadow` (beide mit „Schwierige Sätze“ aus `weakSentences()`; Bewertung nur in `review`), `builder` (Satzbaukasten + Drill), `texts` (eigene Texte; beim Speichern automatisch `segmentText()`/`localSegment()` + `mergeFragments()`, dann Übersetzung), `islands`, `level` (Einstufungstest), `awards` (Punkte/Ränge/Abzeichen), `week` (Wochenrückblick), `talk` (Gespräche mit Claude), `settings`.
 
 ### Daten
 - `localStorage`: `sl.settings`, `sl.data.<lang>` (Zustand pro Sprache), `sl.sync`, `sl.talkcfg` (API-Schlüssel), `sl.talk.<lang>` (laufendes Gespräch), `sl.usage`.
@@ -32,7 +32,7 @@ Views in `app.js` (`views.<name>`): `home` (mit „Heute zuerst“ aus `todayPla
 - IDs: Grundwörter `w:<wort>`, eigene `u:…`, Sätze `s:…`, Vorlagen-Inseln fest `st-<lang>-<n>`.
 
 ### Claude im Browser
-- Nur in `talk` und `texts` (Übersetzung). Alles andere ist kostenlos/offline.
+- Nur in `talk`, `texts` (Ordnen/Übersetzung) und Hör-Dialogen. Alles andere ist kostenlos/offline.
 - `callClaude()` nutzt das SDK mit `dangerouslyAllowBrowser`, Modell aus Einstellungen (Standard `claude-opus-5-5`), `output_config.format` (JSON-Schema), `effort: 'medium'`, `cache_control`, Server-Fallback (`fallbacks: 'default'`, Beta `server-side-fallback-2026-07-01`) außer bei Haiku. Antwortinhalt wird vollständig in den Verlauf übernommen (Denkblöcke nicht verändern).
 - Prompt-Regel: natürliche, idiomatische Sprache geht immer vor „bekannte Wörter benutzen“.
 

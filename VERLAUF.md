@@ -29,6 +29,7 @@ Zusammenfassung der bisherigen Arbeit (Sept./Okt. 2026, Claude Code im Web) für
 
 16. **Texte in Sätze ordnen**: kopierte Liedzeilen brechen mitten im Satz um; Claude liefert nur Wort-Indizes für Satzanfänge (`segmentText()`), Text bleibt unverändert; ⤴/✂/↩ von Hand.
 17. **Wörter aus Sätzen**: neue Vokabeln aus geübten (v. a. schwierigen) Sätzen vorgezogen, Wort-Hilfe in der Satz-Abfrage (`wordsInSentence()`, Stamm + erlaubte Endungen, Namen nur exakt). Anlass: er bleibt an einzelnen unbekannten Wörtern im Satz hängen.
+18. **Jugend-Modus + Punkte/Abzeichen/Wochenrückblick**: für seine 14-jährige Tochter (eigenes Handy, lernt IT + EN, soll KI-Gespräche nutzen; Vater klärt Anthropic-Regeln für Minderjährige und nutzt eigenen Schlüssel mit Limit für sie). `TEEN_RULES` im Prompt, `data/teen.js`; Punkte gleich für jede Bewertung (ehrliches „Nochmal“), Serie mit 2 Jokern/Woche. Später angedacht: Duell/Familienziel (bräuchte Server oder geteilte Wochenkarte).
 
 ## Bewusst nicht gemacht / abgelehnt
 - KI-Übersetzung für eigene Sprachinseln (manuell gewünscht), Emoji-Bilder, KI-Merkbild als Text, Prüfknopf „Klingt komisch?“.

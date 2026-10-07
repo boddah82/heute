@@ -12,7 +12,7 @@ const STEPS = [
   { key: 'shadow', title: 'Shadowing', goal: 10 },
   { key: 'islands', title: 'Sprachinseln erstellen', goal: 5 },
 ];
-const DAILY_GOAL_MIN = 30;
+const goalMin = () => settings.dailyGoal || 30; // Tagesziel in Minuten (einstellbar)
 const IDLE_MS = 120000; // ohne Eingabe wird nach 2 Minuten keine Zeit mehr gezählt
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -27,7 +27,7 @@ function save(key, val) {
 }
 
 const settings = Object.assign(
-  { lang: 'it', newWords: 30, newSentences: 10, rate: 0.9, enVariant: 'en-GB', voices: {}, autoTempo: true, talkModel: 'claude-opus-5-5' },
+  { lang: 'it', newWords: 30, newSentences: 10, rate: 0.9, enVariant: 'en-GB', voices: {}, autoTempo: true, talkModel: 'claude-opus-5-5', teen: false, dailyGoal: 30 },
   load('sl.settings', {})
 );
 settings.profile = Object.assign({ name: '', gender: 'm', origin: 'de', city: '', ts: 0 }, settings.profile);
@@ -113,16 +113,115 @@ function minutesToday(step) {
   const sec = step ? (l.sec[step] || 0) : Object.values(l.sec).reduce((a, b) => a + b, 0);
   return Math.floor(sec / 60);
 }
-function streak() {
-  const minsOf = day => {
-    const l = state.log[day];
-    return l ? Object.values(l.sec).reduce((a, b) => a + b, 0) / 60 : 0;
-  };
+function dayMinutes(day) {
+  const l = state.log[day];
+  return l ? Object.values(l.sec || {}).reduce((a, b) => a + b, 0) / 60 : 0;
+}
+function weekStart(day) { return day - ((new Date(day * 86400000).getUTCDay() + 6) % 7); } // Montag
+// Serie mit Jokern: bis zu 2 verpasste Tage pro Woche (Mo–So) halten die Serie, zählen aber nicht mit.
+const JOKERS_PER_WEEK = 2;
+function streakInfo() {
   let d = today();
-  if (minsOf(d) < DAILY_GOAL_MIN) d--; // heute zählt erst, wenn das Ziel erreicht ist
+  if (dayMinutes(d) < goalMin()) d--; // heute zählt erst, wenn das Ziel erreicht ist
   let n = 0;
-  while (minsOf(d) >= DAILY_GOAL_MIN) { n++; d--; }
-  return n;
+  const used = {};
+  for (let k = 0; k < 400; k++, d--) {
+    if (dayMinutes(d) >= goalMin()) { n++; continue; }
+    const w = weekStart(d);
+    if (n > 0 && (used[w] || 0) < JOKERS_PER_WEEK) { used[w] = (used[w] || 0) + 1; continue; }
+    break;
+  }
+  const thisWeek = weekStart(today());
+  return { days: n, jokersLeft: JOKERS_PER_WEEK - (used[thisWeek] || 0) };
+}
+function streak() { return streakInfo().days; }
+
+// ---------- Punkte, Ränge, Abzeichen ----------
+// Punkte: fürs Abrufen, Sprechen und Üben (+1 je Lernminute, +20 für erreichtes Tagesziel)
+function addXP(n) {
+  const l = dayLog();
+  l.xp = (l.xp || 0) + n;
+  checkBadges();
+}
+function dayXP(day) {
+  const l = state.log[day];
+  if (!l) return 0;
+  const mins = Math.floor(dayMinutes(day));
+  return (l.xp || 0) + mins + (mins >= goalMin() ? 20 : 0);
+}
+function totalXP() { return Object.keys(state.log).reduce((a, d) => a + dayXP(Number(d)), 0); }
+const RANKS = [
+  { min: 0, name: '🌱 Neuling' }, { min: 200, name: '🧭 Entdecker' }, { min: 600, name: '📘 Lernende(r)' },
+  { min: 1500, name: '🗣️ Sprecher(in)' }, { min: 3000, name: '🎭 Erzähler(in)' }, { min: 6000, name: '🏆 Profi' },
+  { min: 10000, name: '👑 Meister(in)' },
+];
+function rankOf(xp) {
+  let i = 0;
+  while (i + 1 < RANKS.length && xp >= RANKS[i + 1].min) i++;
+  return { cur: RANKS[i], next: RANKS[i + 1] || null };
+}
+function sumLog(key) { return Object.values(state.log).reduce((a, l) => a + (l[key] || 0), 0); }
+function sumSec(key) { return Object.values(state.log).reduce((a, l) => a + ((l.sec || {})[key] || 0), 0); }
+const BADGES = [
+  { id: 'w10', icon: '🌱', name: 'Erste Wörter', desc: '10 Wörter im Training', ok: () => Object.keys(state.srs).filter(isWordId).length >= 10 },
+  { id: 'w100', icon: '📗', name: '100 Wörter', desc: '100 Wörter im Training', ok: () => Object.keys(state.srs).filter(isWordId).length >= 100 },
+  { id: 'w500', icon: '📚', name: '500 Wörter', desc: '500 Wörter im Training', ok: () => Object.keys(state.srs).filter(isWordId).length >= 500 },
+  { id: 'w1000', icon: '🏛️', name: '1000 Wörter', desc: '1000 Wörter im Training', ok: () => Object.keys(state.srs).filter(isWordId).length >= 1000 },
+  { id: 's20', icon: '💬', name: '20 Sätze', desc: '20 Sätze im Training', ok: () => Object.keys(state.srs).filter(id => id.startsWith('s:')).length >= 20 },
+  { id: 's100', icon: '🗨️', name: '100 Sätze', desc: '100 Sätze im Training', ok: () => Object.keys(state.srs).filter(id => id.startsWith('s:')).length >= 100 },
+  { id: 'goal', icon: '🎯', name: 'Tagesziel', desc: 'Einmal das Tagesziel geschafft', ok: () => Object.keys(state.log).some(d => dayMinutes(Number(d)) >= goalMin()) },
+  { id: 'streak7', icon: '🔥', name: '7 Tage', desc: '7 Tage Serie', ok: () => streakInfo().days >= 7 },
+  { id: 'streak30', icon: '☄️', name: '30 Tage', desc: '30 Tage Serie', ok: () => streakInfo().days >= 30 },
+  { id: 'talk1', icon: '🎙️', name: 'Erstes Gespräch', desc: 'Ein Gespräch mit Auswertung beendet', ok: () => sumLog('talks') >= 1 },
+  { id: 'talk10', icon: '🤝', name: '10 Gespräche', desc: '10 Gespräche beendet', ok: () => sumLog('talks') >= 10 },
+  { id: 'shadow60', icon: '🗣️', name: 'Schattenläufer', desc: '60 Minuten Shadowing', ok: () => sumSec('shadow') >= 3600 },
+  { id: 'listen120', icon: '🎧', name: 'Gute Ohren', desc: '2 Stunden Hören', ok: () => sumSec('listen') >= 7200 },
+  { id: 'drill50', icon: '🧱', name: 'Baumeister', desc: '50 Sätze im Drill gebildet', ok: () => sumLog('drill') >= 50 },
+  { id: 'test', icon: '📈', name: 'Eingestuft', desc: 'Einstufungstest gemacht', ok: () => !!state.level },
+  { id: 'text', icon: '📄', name: 'Textforscher', desc: 'Einen eigenen Text übersetzt', ok: () => (state.texts || []).some(t => t.lines.length && t.lines.every(l => l.de)) },
+];
+let badgeCheckAt = 0;
+function checkBadges(force) {
+  if (!force && Date.now() - badgeCheckAt < 3000) return; // nicht bei jedem Klick alles zählen
+  badgeCheckAt = Date.now();
+  state.badges = state.badges || {};
+  const fresh = BADGES.filter(b => !state.badges[b.id] && b.ok());
+  fresh.forEach(b => { state.badges[b.id] = Date.now(); });
+  if (fresh.length) { persist(); toast(`🏅 Neues Abzeichen: ${fresh.map(b => b.icon + ' ' + b.name).join(', ')}`); }
+}
+
+// Wochenwerte (Mo–So) für Rückblick und Teilen
+function weekStats(start) {
+  const out = { minutes: 0, days: 0, xp: 0, newWords: 0, reviews: 0, wok: 0, wfail: 0, talks: 0, newSent: 0 };
+  for (let d = start; d < start + 7 && d <= today(); d++) {
+    const l = state.log[d];
+    if (!l) continue;
+    const m = dayMinutes(d);
+    out.minutes += m;
+    if (m >= 1) out.days++;
+    out.xp += dayXP(d);
+    ['newWords', 'reviews', 'wok', 'wfail', 'talks', 'newSent'].forEach(k => { out[k] += l[k] || 0; });
+  }
+  out.acc = out.wok + out.wfail ? Math.round(out.wok / (out.wok + out.wfail) * 100) : null;
+  return out;
+}
+function fmtMin(m) { m = Math.round(m); return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`; }
+function fmtDay(day) { return new Date(day * 86400000).toLocaleDateString('de-DE', { day: 'numeric', month: 'short', timeZone: 'UTC' }); }
+
+// Jugend-Modus: Vorlage-Inseln für Jugendliche in beiden Sprachen ergänzen (feste IDs → kein Doppeln im Sync)
+function ensureTeenIslands() {
+  let added = 0;
+  Object.keys(LANGS).forEach(lang => {
+    const st = lang === settings.lang ? state : loadState(lang);
+    window.TEEN.islands[lang].forEach((isl, i) => {
+      const id = `teen-${lang}-${i}`;
+      if (st.islands.some(x => x.id === id) || (st.deleted && st.deleted[id])) return;
+      st.islands.push({ id, title: isl.title, ts: Date.now(), sentences: parseLines(isl.sentences).map(([t, d], j) => ({ id: `s:teen-${lang}-${i}-${j}`, t, d, ts: Date.now() })) });
+      added++;
+    });
+    if (lang === settings.lang) persist(); else save(stateKey(lang), st);
+  });
+  return added;
 }
 
 // ---------- Inhalte ----------
@@ -234,6 +333,8 @@ function grade(id, r) {
   l.reviews++;
   if (isWordId(id)) { if (r === 0) l.wfail = (l.wfail || 0) + 1; else l.wok = (l.wok || 0) + 1; }
   if (isNew && id.startsWith('s:')) l.newSent++;
+  // Punkte fürs Abrufen – gleich für jede Bewertung, damit sich ehrliches „Nochmal“ nicht rächt
+  addXP(isWordId(id) ? 2 : 3);
   persist();
 }
 
@@ -712,8 +813,10 @@ views.home = function (root) {
     <h1>${LANGS[settings.lang].flag} Heute</h1>
     ${voiceNotice()}
     <div class="card">
-      <div class="row between"><b>${total} / ${DAILY_GOAL_MIN} Minuten</b><span class="muted small">🔥 ${streak()} Tage in Folge</span></div>
-      <div class="progress" style="margin-top:8px"><div style="width:${Math.min(100, total / DAILY_GOAL_MIN * 100)}%"></div></div>
+      <div class="row between"><b>${total} / ${goalMin()} Minuten</b><span class="muted small">🔥 ${streakInfo().days} Tage in Folge · 🃏 ${streakInfo().jokersLeft} Joker</span></div>
+      <div class="progress" style="margin-top:8px"><div style="width:${Math.min(100, total / goalMin() * 100)}%"></div></div>
+      <a href="#awards" class="row between" style="margin-top:10px;text-decoration:none;color:var(--text)"><span>⭐ <b>${totalXP()}</b> Punkte · ${rankOf(totalXP()).cur.name}</span><span class="muted small">🏅 ${Object.keys(state.badges || {}).length} Abzeichen ›</span></a>
+      <a href="#week" class="small">📅 Wochenrückblick</a>
     </div>
     ${(() => {
       const plan = todayPlan();
@@ -946,6 +1049,7 @@ function vocabNew(pane) {
     saveNote();
     const t = today();
     state.srs[w.id] = { iv: 21, ef: 2.5, reps: 1, lapses: 0, due: t + 21, ts: Date.now() };
+    addXP(1);
     persist();
     vocabNew(pane);
   };
@@ -953,6 +1057,7 @@ function vocabNew(pane) {
     saveNote();
     state.srs[w.id] = { iv: 0, ef: 2.5, reps: 0, lapses: 0, due: today(), ts: Date.now() };
     l.newWords++;
+    addXP(3);
     persist();
     vocabNew(pane);
   };
@@ -1269,6 +1374,7 @@ function shadowCue(pane, text) {
       const pause = Math.max(1500, text.length * 80 / rate);
       for (let i = 0; i < times && !token.stop; i++) {
         await once(token, rate);
+        if (!token.stop) addXP(1);
         if (token.stop) break;
         // 3. Pause zum Selbersprechen
         label.textContent = times > 1 ? `Jetzt du (${i + 1}/${times})` : 'Jetzt du';
@@ -1373,7 +1479,17 @@ views.shadow = function (root) {
 };
 
 // ---------- Satzbaukasten ----------
-function builderData() { return window.BUILDER[settings.lang]; }
+function builderData() {
+  const b = window.BUILDER[settings.lang];
+  if (!settings.teen) return b;
+  // Jugend-Modus: unpassende Bausteine ausblenden
+  const h = window.TEEN.hideBuilder;
+  return Object.assign({}, b, {
+    adjectives: b.adjectives.filter(x => !h.adjectives.includes(x.id)),
+    likes: b.likes.filter(x => !h.likes.includes(x.id)),
+    verbs: b.verbs.filter(x => !h.verbs.includes(x.id)),
+  });
+}
 function builderVerbs() { return builderData().verbs.concat(state.builderVerbs); }
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function fillProfile(s, german) {
@@ -1667,7 +1783,7 @@ views.builder = function (root, arg) {
     $('#reveal', pane).onclick = reveal;
     $('#again', pane).onclick = () => speak(sent.t);
     $('#add', pane).onclick = () => addToBuilderIsland({ t: sent.q ? sent.q + ' – ' + sent.t : sent.t, d: sent.q ? sent.qd + ' – ' + sent.d : sent.d });
-    $('#next', pane).onclick = () => { l.drill = (l.drill || 0) + 1; persist(); renderDrill(); };
+    $('#next', pane).onclick = () => { l.drill = (l.drill || 0) + 1; addXP(2); persist(); renderDrill(); };
     if ($('#say', pane)) micToggle($('#say', pane), '🎙 Sprechen', t => { said = t; reveal(); }, live => { $('#cmp', pane).innerHTML = `<p class="muted">${esc(live)}</p>`; $('#answer', pane).hidden = true; });
     keyHandler = e => {
       if (e.target.tagName === 'INPUT') return;
@@ -2263,12 +2379,16 @@ function talkStage() {
   const li = levelInfo();
   return STAGES[Math.max(0, Math.min(STAGES.length - 1, li.idx + (state.talkAdjust || 0)))];
 }
+// Jugend-Modus: zusätzliche Regeln für Claude (Lernende ist minderjährig)
+const TEEN_RULES = `The learner is a teenager (about 14). Keep everything age-appropriate: no romantic or sexual content, no alcohol, drugs, gambling or graphic violence. Stay on language practice and everyday teen topics (school, friends, hobbies, music, sport, family, holidays). Never ask for or encourage sharing personal details (full name, address, school name, phone number, social media, photos of themselves), and never suggest meeting anyone. If the learner brings up something unsafe or a serious personal problem, respond kindly and briefly, suggest talking to a parent or another trusted adult, and gently return to the practice. Do not comment on anyone's looks or body.`;
+function scenarios() { return settings.teen ? window.TEEN.scenarios : SCENARIOS; }
+
 function talkSystem(scenarioKey, custom) {
   const lang = settings.lang === 'it' ? 'Italian' : 'British English';
   const stage = talkStage();
   const p = settings.profile;
   const city = settings.lang === 'it' ? 'Rome' : 'London';
-  const scen = scenarioKey === 'custom' ? `Talk about this topic chosen by the learner: ${custom}` : SCENARIOS[scenarioKey].it.replace('{city}', city);
+  const scen = scenarioKey === 'custom' ? `Talk about this topic chosen by the learner: ${custom}` : (scenarios()[scenarioKey] || SCENARIOS.free).it.replace('{city}', city);
   const known = knownWordList(400);
   const length = { A0: 'one very short, simple sentence plus a question', A1: '1–2 short, simple sentences (present tense)', A2: '2–3 simple sentences', B1: 'up to 4 natural sentences', B2: 'natural, conversational length (max 5 sentences)' }[stage.id];
   return `You are a warm, patient conversation partner helping a German-speaking learner practise spoken ${lang}. The conversation is spoken aloud: your reply is read out by text-to-speech and the learner answers by voice.
@@ -2278,7 +2398,7 @@ Estimated level: ${stage.id} – vocabulary-based estimate, adapt if the learner
 Words the learner already knows (${known.length}) – for orientation only: ${known.length ? known.join(', ') : 'almost none – keep sentences very short and simple'}.
 Scenario: ${scen}
 
-Most important rule: everything you write in ${lang} – "reply", "correction.corrected" and "suggestion.answer" – must be natural, idiomatic ${lang} exactly as a native speaker would say it in this situation. Never build an unnatural or word-by-word sentence just to use words from the list above. If the natural way needs words the learner doesn't know yet, use them and list them in "new_words". Keep it simple through short sentences and everyday phrasing, not through odd word choices.${settings.lang === 'it' ? ' Drop subject pronouns (io, tu …) unless a native speaker would use them for emphasis.' : ''}
+${settings.teen ? TEEN_RULES + '\n\n' : ''}Most important rule: everything you write in ${lang} – "reply", "correction.corrected" and "suggestion.answer" – must be natural, idiomatic ${lang} exactly as a native speaker would say it in this situation. Never build an unnatural or word-by-word sentence just to use words from the list above. If the natural way needs words the learner doesn't know yet, use them and list them in "new_words". Keep it simple through short sentences and everyday phrasing, not through odd word choices.${settings.lang === 'it' ? ' Drop subject pronouns (io, tu …) unless a native speaker would use them for emphasis.' : ''}
 
 How to reply:
 - "reply": only ${lang}. Length: ${length}. Prefer words the learner knows where that stays natural; at most 2–3 new words per reply.
@@ -2378,7 +2498,7 @@ function talkStart(root) {
       ${!state.level ? '<p class="muted small">Tipp: Mach zuerst den <a href="#level/test">Einstufungstest</a>, damit der Gesprächspartner deine Wörter kennt.</p>' : ''}
     </div>
     <label>Worüber willst du reden?</label>
-    ${chips('scen', Object.values(SCENARIOS), -1, x => x.label)}
+    ${chips('scen', Object.values(scenarios()), -1, x => x.label)}
     <div class="row" style="margin-top:8px"><input type="text" id="topic" class="grow" placeholder="Eigenes Thema (Deutsch geht)"><button class="btn" id="go-custom">Los</button></div>
     <p class="muted small" style="margin-top:12px">So läuft es: Claude beginnt, liest vor, du antwortest laut (🎙). Korrekturen erscheinen unter deiner Nachricht, die Übersetzung per Tipp. Am Ende gibt es eine Auswertung.<br>🔎 Beschreiben: Claude gibt dir eine Aufgabe („Such etwas Grünes …“), du beschreibst es in 2–3 Sätzen und bekommst Nachfragen. Mit 📷 kannst du ein Foto davon mitschicken – kostet etwas mehr.</p>
     <a href="#talk/setup" class="small">⚙️ Schlüssel & Modell</a>`;
@@ -2390,7 +2510,7 @@ function talkStart(root) {
     route();
     await talkSend(t, settings.lang === 'it' ? 'Inizia tu la conversazione, per favore.' : 'Please start the conversation.', true);
   };
-  $$('.chips[data-name="scen"] .chip', root).forEach(c => { c.onclick = () => begin(Object.keys(SCENARIOS)[Number(c.dataset.i)]); });
+  $$('.chips[data-name="scen"] .chip', root).forEach(c => { c.onclick = () => begin(Object.keys(scenarios())[Number(c.dataset.i)]); });
   $('#go-custom', root).onclick = () => { const v = $('#topic', root).value.trim(); if (v) begin('custom', v); };
 }
 
@@ -2414,6 +2534,7 @@ async function talkSend(t, text, hidden, note, img) {
     t.cost += cost;
     const lastMe = [...t.turns].reverse().find(x => x.role === 'me');
     if (lastMe && data.correction && data.correction.needed && !hidden) lastMe.fix = data.correction;
+    if (!hidden) addXP(5);
     t.turns.push({ role: 'ai', text: data.reply, tr: data.translation, words: data.new_words || [], sug: data.suggestion || null, hint: 0 });
     saveTalk(t);
     talkBusy = false;
@@ -2485,7 +2606,7 @@ function talkHintBox(t) {
 }
 
 function talkChat(root, t) {
-  const scen = t.scenario === 'custom' ? t.custom : SCENARIOS[t.scenario].label;
+  const scen = t.scenario === 'custom' ? t.custom : ((scenarios()[t.scenario] || SCENARIOS[t.scenario] || { label: 'Gespräch' }).label);
   root.innerHTML = `
     <div class="row between"><b>💬 ${esc(scen)}</b><span class="muted small">≈ $${t.cost.toFixed(2)}</span></div>
     <div class="chat" id="chat" style="margin-top:10px">
@@ -2592,7 +2713,7 @@ async function talkFeedback(root, t) {
   let fb;
   try {
     const r = await callClaude(
-      `You give short, encouraging feedback to a German-speaking ${lang} learner (level ${talkStage().id}) after a spoken practice conversation. Write "summary" in German (2–3 sentences: what went well, one thing to practise). "mistakes": up to 5 of the learner's most useful mistakes (ignore punctuation, capitals and likely speech-recognition glitches). "sentences": 3–6 useful ${lang} sentences the learner could have said or should keep for next time, adapted to their situation, with German translation.`,
+      `${settings.teen ? TEEN_RULES + '\n\n' : ''}You give short, encouraging feedback to a German-speaking ${lang} learner (level ${talkStage().id}) after a spoken practice conversation. Write "summary" in German (2–3 sentences: what went well, one thing to practise). "mistakes": up to 5 of the learner's most useful mistakes (ignore punctuation, capitals and likely speech-recognition glitches). "sentences": 3–6 useful ${lang} sentences the learner could have said or should keep for next time, adapted to their situation, with German translation.`,
       [{ role: 'user', content: transcript }], FEEDBACK_SCHEMA, 6000);
     fb = r.data;
     t.cost += r.cost;
@@ -2627,6 +2748,60 @@ async function talkFeedback(root, t) {
   }
 }
 
+views.awards = function (root) {
+  checkBadges(true);
+  const xp = totalXP();
+  const r = rankOf(xp);
+  const si = streakInfo();
+  root.innerHTML = `
+    <h1>⭐ Punkte & Abzeichen</h1>
+    <div class="card">
+      <div class="row between"><b style="font-size:20px">${r.cur.name}</b><span><b>${xp}</b> Punkte</span></div>
+      ${r.next ? `<div class="progress" style="margin-top:8px"><div style="width:${Math.round((xp - r.cur.min) / (r.next.min - r.cur.min) * 100)}%"></div></div>
+        <p class="muted small">Noch ${r.next.min - xp} Punkte bis ${r.next.name}.</p>` : ''}
+      <p class="small">🔥 ${si.days} Tage in Folge · 🃏 noch ${si.jokersLeft} Joker diese Woche</p>
+      <p class="muted small">Punkte gibt es fürs Abrufen (gleich viel für jede Bewertung – ehrlich bewerten lohnt sich), für neue Wörter, Drill, Shadowing, Gespräche, je Lernminute und +20 fürs Tagesziel. Joker: bis zu ${JOKERS_PER_WEEK} verpasste Tage pro Woche halten die Serie.</p>
+    </div>
+    <div class="badges">
+      ${BADGES.map(b => { const got = (state.badges || {})[b.id]; return `<div class="badge ${got ? 'got' : ''}"><span class="bi">${b.icon}</span><b>${esc(b.name)}</b><span class="muted small">${esc(b.desc)}</span>${got ? `<span class="small">✓ ${new Date(got).toLocaleDateString('de-DE')}</span>` : ''}</div>`; }).join('')}
+    </div>
+    <a class="btn big" href="#week" style="display:block;margin-top:12px">📅 Wochenrückblick</a>`;
+};
+
+views.week = function (root) {
+  const cur = weekStart(today());
+  const a = weekStats(cur), b = weekStats(cur - 7);
+  const cmp = (x, y) => (y ? (x > y ? ' <span style="color:var(--good)">▲</span>' : x < y ? ' <span style="color:var(--bad)">▼</span>' : '') : '');
+  const row = (label, x, y, f = v => v) => `<tr><td>${label}</td><td><b>${f(x)}</b>${cmp(x, y)}</td><td class="muted">${f(y)}</td></tr>`;
+  const newBadges = BADGES.filter(x => (state.badges || {})[x.id] && (state.badges[x.id] / 86400000) >= cur);
+  root.innerHTML = `
+    <h1>📅 Wochenrückblick</h1>
+    <p class="muted small">${LANGS[settings.lang].flag} ${fmtDay(cur)} – heute, verglichen mit der Vorwoche</p>
+    <div class="card">
+      <table class="wk"><tr><th></th><th>Diese Woche</th><th>Vorwoche</th></tr>
+        ${row('⭐ Punkte', a.xp, b.xp)}
+        ${row('⏱ Lernzeit', a.minutes, b.minutes, fmtMin)}
+        ${row('📅 Lerntage', a.days, b.days)}
+        ${row('🧠 Neue Wörter', a.newWords, b.newWords)}
+        ${row('🔁 Abfragen', a.reviews, b.reviews)}
+        ${row('🎯 Treffer Wörter', a.acc ?? '–', b.acc ?? '–', v => (v === '–' ? v : v + ' %'))}
+        ${row('💬 Neue Sätze', a.newSent, b.newSent)}
+        ${row('🎙️ Gespräche', a.talks, b.talks)}
+      </table>
+    </div>
+    ${newBadges.length ? `<div class="card"><b>Neu diese Woche:</b> ${newBadges.map(x => x.icon + ' ' + esc(x.name)).join(', ')}</div>` : ''}
+    <button class="btn primary big" id="wk-share">📤 Woche teilen</button>
+    <p class="muted small">Teilt eine kurze Zusammenfassung, z. B. per WhatsApp – gut für ein Familien-Duell.</p>`;
+  $('#wk-share', root).onclick = async () => {
+    const name = settings.profile.name ? settings.profile.name + ' – ' : '';
+    const text = `📚 ${name}Sprachtraining ${LANGS[settings.lang].flag} Woche ab ${fmtDay(cur)}\n⭐ ${a.xp} Punkte · ⏱ ${fmtMin(a.minutes)} · 📅 ${a.days} Tage\n🧠 ${a.newWords} neue Wörter · 🔁 ${a.reviews} Abfragen${a.acc !== null ? ` (${a.acc} % richtig)` : ''}\n💬 ${a.newSent} neue Sätze · 🎙️ ${a.talks} Gespräche · 🔥 Serie ${streakInfo().days} Tage\n${rankOf(totalXP()).cur.name}`;
+    try {
+      if (navigator.share) await navigator.share({ text });
+      else { await navigator.clipboard.writeText(text); toast('In die Zwischenablage kopiert'); }
+    } catch (e) { /* Teilen abgebrochen */ }
+  };
+};
+
 views.settings = function (root) {
   const voiceOpts = lang => {
     const list = voicesFor(lang);
@@ -2647,6 +2822,9 @@ views.settings = function (root) {
     </div>
     <div class="card">
       <b>Über dich</b> <span class="muted small">(für Satzbaukasten & Dialoge)</span>
+      <label class="inline" style="margin-top:8px"><input type="checkbox" id="p-teen" ${settings.teen ? 'checked' : ''}> Jugend-Modus</label>
+      <p class="muted small">Altersgerechte Gesprächsthemen und Regeln für Claude, Vorlage-Inseln „Schule“ und „Freunde & Freizeit“, passender Satzbaukasten.</p>
+      <label for="p-goal">Tagesziel (Minuten)</label><select id="p-goal">${[10, 15, 20, 30, 45, 60].map(n => `<option ${n === goalMin() ? 'selected' : ''}>${n}</option>`).join('')}</select>
       <label for="p-name">Vorname</label><input type="text" id="p-name" value="${esc(settings.profile.name)}">
       <label for="p-gender">Ich bin</label>
       <select id="p-gender"><option value="m" ${settings.profile.gender === 'm' ? 'selected' : ''}>männlich (sono stanco)</option><option value="f" ${settings.profile.gender === 'f' ? 'selected' : ''}>weiblich (sono stanca)</option></select>
@@ -2686,6 +2864,13 @@ views.settings = function (root) {
     saveSettings();
   };
   $('#p-name', root).onchange = saveProfile;
+  $('#p-teen', root).onchange = e => {
+    settings.teen = e.target.checked;
+    saveSettings();
+    if (settings.teen) { const n = ensureTeenIslands(); toast(n ? `Jugend-Modus an – ${n} Vorlage-Inseln hinzugefügt` : 'Jugend-Modus an'); }
+    else toast('Jugend-Modus aus');
+  };
+  $('#p-goal', root).onchange = e => { settings.dailyGoal = Number(e.target.value); saveSettings(); };
   $('#p-gender', root).onchange = saveProfile;
   if ($('#y-connect', root)) {
     $('#y-connect', root).onclick = async () => {
@@ -2818,6 +3003,7 @@ function mergeState(a, b) {
   });
   return {
     words: mergeList(a.words, b.words), islands, srs, notes, noteTs, overrides, log, deleted, resetAt: a.resetAt,
+    badges: Object.assign({}, b.badges || {}, a.badges || {}),
     level: !a.level ? b.level : !b.level ? a.level : (b.level.ts || 0) > (a.level.ts || 0) ? b.level : a.level,
     talkAdjust: (b.talkAdjustTs || 0) > (a.talkAdjustTs || 0) ? b.talkAdjust : a.talkAdjust,
     talkAdjustTs: Math.max(a.talkAdjustTs || 0, b.talkAdjustTs || 0),
@@ -2901,6 +3087,7 @@ function renderLangSwitch() {
   $$('#lang-switch button').forEach(b => b.classList.toggle('on', b.dataset.lang === settings.lang));
 }
 function route() {
+  setTimeout(() => checkBadges(true), 300);
   cancelDictation();
   stopAudio();
   if (recorder && recorder.state === 'recording') recorder.stop();

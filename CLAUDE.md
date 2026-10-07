@@ -18,10 +18,11 @@ Reine statische PWA ohne Build-Schritt, Vanilla-JS, kein Framework.
 | `lernen/data/it.js`, `en.js` | Grundwörter + Vorlagen-Sprachinseln (`window.STARTER`) |
 | `lernen/data/it-words.js`, `en-words.js` | ~1250 weitere Wörter je Sprache, nach Häufigkeit sortiert (`ziel\|deutsch`) |
 | `lernen/data/builder.js` | Satzbaukasten-Muster (`window.BUILDER`) |
+| `lernen/data/teen.js` | Jugend-Modus: Inseln, Gesprächsthemen, ausgeblendete Bausteine (`window.TEEN`) |
 | `lernen/vendor/anthropic-sdk.js` | offizielles `@anthropic-ai/sdk`, per esbuild als ESM-Browser-Bundle; wird per `import()` erst bei Bedarf geladen |
 | `lernen/sw.js` | Service Worker, Netzwerk zuerst; nur same-origin. **`VERSION` bei jeder Änderung hochzählen** |
 
-Views in `app.js` (`views.<name>`): `home` (mit „Heute zuerst“ aus `todayPlan()`, Regeln dort kommentiert), `method`, `vocab` (neu/abfragen/eigene; neue Wörter nach `wordPriorities()` – Wörter aus geübten Sätzen zuerst), `review` (Sätze), `listen` (Sätze oder `#listen/words` gelernte Wörter), `shadow` (beide mit „Schwierige Sätze“ aus `weakSentences()`; Bewertung nur in `review`), `builder` (Satzbaukasten + Drill), `texts` (eigene Texte), `islands`, `level` (Einstufungstest), `talk` (Gespräche mit Claude), `settings`.
+Views in `app.js` (`views.<name>`): `home` (mit „Heute zuerst“ aus `todayPlan()`, Regeln dort kommentiert), `method`, `vocab` (neu/abfragen/eigene; neue Wörter nach `wordPriorities()` – Wörter aus geübten Sätzen zuerst), `review` (Sätze), `listen` (Sätze oder `#listen/words` gelernte Wörter), `shadow` (beide mit „Schwierige Sätze“ aus `weakSentences()`; Bewertung nur in `review`), `builder` (Satzbaukasten + Drill), `texts` (eigene Texte), `islands`, `level` (Einstufungstest), `awards` (Punkte/Ränge/Abzeichen), `week` (Wochenrückblick), `talk` (Gespräche mit Claude), `settings`.
 
 ### Daten
 - `localStorage`: `sl.settings`, `sl.data.<lang>` (Zustand pro Sprache), `sl.sync`, `sl.talkcfg` (API-Schlüssel), `sl.talk.<lang>` (laufendes Gespräch), `sl.usage`.

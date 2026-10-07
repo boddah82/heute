@@ -2329,6 +2329,7 @@ function textDetail(root, tx) {
     <div class="row" style="margin-bottom:8px">
       <button class="btn grow" id="tx-play">▶ Alles vorlesen</button>
       <label class="inline small" style="margin:0"><input type="checkbox" id="tx-show" ${tx.showDe ? 'checked' : ''}> Deutsch zeigen</label>
+      <label class="inline small" style="margin:0"><input type="checkbox" id="tx-loop" ${tx.loop ? 'checked' : ''}> 🔁 Schleife</label>
       ${tx.story ? `<label class="inline small" style="margin:0"><input type="checkbox" id="tx-hide" ${tx.hideT ? 'checked' : ''}> Text verbergen</label>` : ''}
     </div>
     <ul class="list card ${tx.story && tx.hideT ? 'tx-hidden' : ''}" id="tx-list">
@@ -2406,6 +2407,7 @@ function textDetail(root, tx) {
   $('#tx-show', root).onchange = e => { tx.showDe = e.target.checked; persist(); $$('.tx-de', root).forEach(x => { x.hidden = !tx.showDe; }); };
   $$('[data-td]', root).forEach(b => { b.onclick = () => { const el = $(`li[data-i="${b.dataset.td}"] .tx-de`, root); el.hidden = !el.hidden; }; });
   $$('[data-tp]', root).forEach(b => { b.onclick = () => speak(tx.lines[b.dataset.tp].t, storyVoice(tx, tx.lines[b.dataset.tp].sp)); });
+  $('#tx-loop', root).onchange = e => { tx.loop = e.target.checked; persist(); };
   if ($('#tx-hide', root)) $('#tx-hide', root).onchange = e => { tx.hideT = e.target.checked; persist(); $('#tx-list', root).classList.toggle('tx-hidden', tx.hideT); };
   $$('[data-ta]', root).forEach(b => {
     b.onclick = () => {
@@ -2440,13 +2442,16 @@ function textDetail(root, tx) {
     textPlayToken = token;
     listening = true;
     btn.textContent = '■ Stopp';
-    for (let i = 0; i < tx.lines.length && !token.stop; i++) {
-      $$('#tx-list li', root).forEach(x => x.classList.toggle('now', Number(x.dataset.i) === i));
-      const li = $(`#tx-list li[data-i="${i}"]`, root);
-      if (li) li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      await speakP(tx.lines[i].t, storyVoice(tx, tx.lines[i].sp));
-      if (!token.stop) await wait(700);
-    }
+    do {
+      for (let i = 0; i < tx.lines.length && !token.stop; i++) {
+        $$('#tx-list li', root).forEach(x => x.classList.toggle('now', Number(x.dataset.i) === i));
+        const li = $(`#tx-list li[data-i="${i}"]`, root);
+        if (li) li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        await speakP(tx.lines[i].t, storyVoice(tx, tx.lines[i].sp));
+        if (!token.stop) await wait(700);
+      }
+      if (tx.loop && !token.stop) await wait(2500); // kurze Pause vor der nächsten Runde
+    } while (tx.loop && !token.stop);
     if (textPlayToken === token) { textPlayToken = null; listening = false; btn.textContent = '▶ Alles vorlesen'; }
   };
   $('#tx-del', root).onclick = () => {

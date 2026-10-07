@@ -51,10 +51,10 @@ export default function BeforeAfterChart({ points }: { points: Point[] }) {
               x2={WIDTH - PADDING_RIGHT}
               y1={yFor(v)}
               y2={yFor(v)}
-              stroke="#e2e8f0"
+              className="stroke-slate-200 dark:stroke-slate-700"
               strokeWidth={1}
             />
-            <text x={PADDING_LEFT - 5} y={yFor(v) + 3} textAnchor="end" className="fill-slate-400" fontSize={9}>
+            <text x={PADDING_LEFT - 5} y={yFor(v) + 3} textAnchor="end" className="fill-slate-400 dark:fill-slate-500" fontSize={9}>
               {v}
             </text>
           </g>
@@ -65,19 +65,19 @@ export default function BeforeAfterChart({ points }: { points: Point[] }) {
 
         {points.map((p, i) => (
           <g key={i}>
-            <circle cx={xFor(i)} cy={yFor(p.before)} r={3.5} fill={BEFORE_COLOR} stroke="#fff" strokeWidth={1.5}>
+            <circle cx={xFor(i)} cy={yFor(p.before)} r={3.5} fill={BEFORE_COLOR} className="stroke-white dark:stroke-slate-800" strokeWidth={1.5}>
               <title>{formatShortDate(p.date)}: davor {p.before}/10</title>
             </circle>
-            <circle cx={xFor(i)} cy={yFor(p.after)} r={3.5} fill={AFTER_COLOR} stroke="#fff" strokeWidth={1.5}>
+            <circle cx={xFor(i)} cy={yFor(p.after)} r={3.5} fill={AFTER_COLOR} className="stroke-white dark:stroke-slate-800" strokeWidth={1.5}>
               <title>{formatShortDate(p.date)}: danach {p.after}/10</title>
             </circle>
           </g>
         ))}
 
-        <text x={xFor(points.length - 1)} y={yFor(last.before) + 12} textAnchor="end" className="fill-slate-400" fontSize={10}>
+        <text x={xFor(points.length - 1)} y={yFor(last.before) + 12} textAnchor="end" className="fill-slate-400 dark:fill-slate-500" fontSize={10}>
           {last.before}
         </text>
-        <text x={xFor(points.length - 1)} y={yFor(last.after) - 8} textAnchor="end" className="fill-brand-800" fontSize={11} fontWeight={600}>
+        <text x={xFor(points.length - 1)} y={yFor(last.after) - 8} textAnchor="end" className="fill-brand-800 dark:fill-brand-200" fontSize={11} fontWeight={600}>
           {last.after}
         </text>
 
@@ -88,7 +88,7 @@ export default function BeforeAfterChart({ points }: { points: Point[] }) {
               x={xFor(i)}
               y={HEIGHT - 8}
               textAnchor={i === 0 ? "start" : i === points.length - 1 ? "end" : "middle"}
-              className="fill-slate-400"
+              className="fill-slate-400 dark:fill-slate-500"
               fontSize={10}
             >
               {formatShortDate(p.date)}
@@ -98,11 +98,11 @@ export default function BeforeAfterChart({ points }: { points: Point[] }) {
       </svg>
 
       <div className="flex gap-4 mt-1">
-        <span className="flex items-center gap-1.5 text-xs text-slate-500">
+        <span className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
           <span className="w-3 h-0.5 rounded-full" style={{ backgroundColor: BEFORE_COLOR }} />
           Schmerz davor
         </span>
-        <span className="flex items-center gap-1.5 text-xs text-slate-500">
+        <span className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
           <span className="w-3 h-0.5 rounded-full" style={{ backgroundColor: AFTER_COLOR }} />
           Schmerz danach
         </span>

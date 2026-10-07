@@ -13,7 +13,7 @@ export default function ActivityPicker({ planExercises, onPick }: Props) {
     <div className="space-y-2">
       {planExercises && planExercises.length > 0 && (
         <div>
-          <p className="text-xs font-medium text-slate-500 mb-1.5">Dein Plan</p>
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Dein Plan</p>
           <div className="flex flex-wrap gap-2">
             {planExercises.map((ex) => (
               <button
@@ -21,7 +21,7 @@ export default function ActivityPicker({ planExercises, onPick }: Props) {
                 type="button"
                 onClick={() => onPick(ex.label)}
                 title={ex.notes}
-                className="rounded-md bg-brand-50 border border-brand-200 px-3 py-1.5 text-sm text-brand-900"
+                className="rounded-md bg-brand-50 dark:bg-brand-900/40 border border-brand-200 dark:border-brand-700 px-3 py-1.5 text-sm text-brand-900 dark:text-brand-100"
               >
                 {ex.label}
               </button>
@@ -31,7 +31,7 @@ export default function ActivityPicker({ planExercises, onPick }: Props) {
       )}
 
       <div>
-        <p className="text-xs font-medium text-slate-500 mb-1.5">
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">
           {planExercises && planExercises.length > 0 ? "Weitere Aktivitäten" : "Schnellauswahl"}
         </p>
         <div className="flex flex-wrap gap-2">
@@ -40,7 +40,7 @@ export default function ActivityPicker({ planExercises, onPick }: Props) {
               key={a.id}
               type="button"
               onClick={() => onPick(a.label)}
-              className="rounded-md bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-200 border border-slate-200"
+              className="rounded-md bg-slate-100 dark:bg-slate-700 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:bg-slate-600 border border-slate-200 dark:border-slate-700"
             >
               {a.label}
             </button>

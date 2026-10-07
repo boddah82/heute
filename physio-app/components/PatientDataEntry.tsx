@@ -60,7 +60,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
             key={t.id}
             onClick={() => setTab(t.id)}
             className={`rounded-md px-3 py-1.5 text-sm font-medium shrink-0 border ${
-              tab === t.id ? "bg-brand-700 text-white border-brand-700" : "bg-white text-slate-600 border-slate-200"
+              tab === t.id ? "bg-brand-700 text-white border-brand-700 dark:border-brand-400" : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
             }`}
           >
             {t.label}
@@ -71,7 +71,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
       {tab === "heute" && (
         <div className="space-y-2">
           {entries.length === 0 && assessments.length > 0 && goals.length > 0 && (
-            <p className="text-xs font-medium text-brand-700 uppercase tracking-wide">
+            <p className="text-xs font-medium text-brand-700 dark:text-brand-300 uppercase tracking-wide">
               Schritt 3 von 3 – Laufendes Tracking
             </p>
           )}
@@ -82,7 +82,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
 
       {tab === "verlauf" &&
         (entries.length === 0 ? (
-          <p className="text-sm text-slate-500 text-center py-6">Noch keine Check-ins für diesen Bereich.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-6">Noch keine Check-ins für diesen Bereich.</p>
         ) : (
           <div className="space-y-3">
             {entries.map((entry) => (
@@ -104,7 +104,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
         ) : (
           <div className="space-y-3">
             {assessments.length === 0 && (
-              <p className="text-xs font-medium text-brand-700 uppercase tracking-wide">
+              <p className="text-xs font-medium text-brand-700 dark:text-brand-300 uppercase tracking-wide">
                 Schritt 1 von 3 – Bestandsaufnahme
               </p>
             )}
@@ -115,8 +115,8 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
               Neue Einschätzung starten
             </button>
             {assessments.length > 0 && goals.length === 0 && (
-              <div className="bg-brand-50 border border-brand-200 rounded-lg p-3 flex items-center justify-between gap-3">
-                <p className="text-sm text-brand-900">
+              <div className="bg-brand-50 dark:bg-brand-900/40 border border-brand-200 dark:border-brand-700 rounded-lg p-3 flex items-center justify-between gap-3">
+                <p className="text-sm text-brand-900 dark:text-brand-100">
                   Nächster Schritt: Ziele festlegen – damit werden die Empfehlungen oben konkreter.
                 </p>
                 <button
@@ -136,7 +136,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
       {tab === "ziele" && (
         <div className="space-y-2">
           {goals.length === 0 && (
-            <p className="text-xs font-medium text-brand-700 uppercase tracking-wide">
+            <p className="text-xs font-medium text-brand-700 dark:text-brand-300 uppercase tracking-wide">
               Schritt 2 von 3 – Ziele festlegen
             </p>
           )}

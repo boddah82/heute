@@ -68,10 +68,10 @@ export default function MiniLineChart({ points, yMax, yMin = 0, fillColor = "#1f
             x2={WIDTH - PADDING_RIGHT}
             y1={yFor(v)}
             y2={yFor(v)}
-            stroke="#e2e8f0"
+            className="stroke-slate-200 dark:stroke-slate-700"
             strokeWidth={1}
           />
-          <text x={PADDING_LEFT - 5} y={yFor(v) + 3} textAnchor="end" className="fill-slate-400" fontSize={9}>
+          <text x={PADDING_LEFT - 5} y={yFor(v) + 3} textAnchor="end" className="fill-slate-400 dark:fill-slate-500" fontSize={9}>
             {Math.round(v)}
           </text>
         </g>
@@ -91,7 +91,14 @@ export default function MiniLineChart({ points, yMax, yMin = 0, fillColor = "#1f
               {formatShortDate(p.date)}: {p.tooltipValue ?? p.value} ({LIGHT_COLORS[p.status].label})
             </title>
           </circle>
-          <circle cx={xFor(i)} cy={yFor(p.value)} r={5} fill={LIGHT_HEX[p.status]} stroke="#ffffff" strokeWidth={2} />
+          <circle
+            cx={xFor(i)}
+            cy={yFor(p.value)}
+            r={5}
+            fill={LIGHT_HEX[p.status]}
+            className="stroke-white dark:stroke-slate-800"
+            strokeWidth={2}
+          />
         </g>
       ))}
 
@@ -99,7 +106,7 @@ export default function MiniLineChart({ points, yMax, yMin = 0, fillColor = "#1f
         x={xFor(points.length - 1)}
         y={yFor(last.value) - 10}
         textAnchor="end"
-        className="fill-slate-700"
+        className="fill-slate-700 dark:fill-slate-300"
         fontSize={11}
         fontWeight={600}
       >
@@ -113,7 +120,7 @@ export default function MiniLineChart({ points, yMax, yMin = 0, fillColor = "#1f
             x={xFor(i)}
             y={height - 8}
             textAnchor={i === 0 ? "start" : i === points.length - 1 ? "end" : "middle"}
-            className="fill-slate-400"
+            className="fill-slate-400 dark:fill-slate-500"
             fontSize={10}
           >
             {formatShortDate(p.date)}

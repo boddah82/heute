@@ -85,19 +85,19 @@ export default function QuestionnairePanel({
         const latest = history[0];
 
         return (
-          <div key={id} className="bg-white rounded-lg border border-slate-200 p-4 space-y-3">
+          <div key={id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
             <div>
-              <h3 className="font-semibold text-slate-900">{def.title}</h3>
-              <p className="text-xs text-slate-500">{def.subtitle}</p>
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100">{def.title}</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{def.subtitle}</p>
             </div>
 
             {latest && (
-              <div className="bg-slate-50 rounded-lg p-3 text-sm">
-                <p className="text-slate-800">
+              <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 text-sm">
+                <p className="text-slate-800 dark:text-slate-200">
                   Letztes Ergebnis: <span className="font-semibold">{latest.totalScore}</span> / {def.scoreRange[1]}{" "}
-                  <span className="text-slate-400">({formatDate(latest.date)})</span>
+                  <span className="text-slate-400 dark:text-slate-500">({formatDate(latest.date)})</span>
                 </p>
-                {def.interpret && <p className="text-slate-600 mt-1">{def.interpret(latest.totalScore)}</p>}
+                {def.interpret && <p className="text-slate-600 dark:text-slate-400 mt-1">{def.interpret(latest.totalScore)}</p>}
               </div>
             )}
 
@@ -113,7 +113,7 @@ export default function QuestionnairePanel({
                   setPrinting(id);
                   printNode();
                 }}
-                className="rounded-lg bg-slate-100 text-slate-700 font-medium py-2 px-3 text-sm"
+                className="rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium py-2 px-3 text-sm"
               >
                 Drucken
               </button>
@@ -121,10 +121,10 @@ export default function QuestionnairePanel({
 
             {history.length > 1 && (
               <details className="text-sm">
-                <summary className="text-brand-700 font-medium cursor-pointer">
+                <summary className="text-brand-700 dark:text-brand-300 font-medium cursor-pointer">
                   Verlauf anzeigen ({history.length})
                 </summary>
-                <ul className="mt-2 space-y-1 text-slate-600">
+                <ul className="mt-2 space-y-1 text-slate-600 dark:text-slate-400">
                   {history.map((r) => (
                     <li key={r.id} className="flex justify-between">
                       <span>{formatDate(r.date)}</span>
@@ -132,7 +132,7 @@ export default function QuestionnairePanel({
                         <span className="font-medium">
                           {r.totalScore}/{def.scoreRange[1]}
                         </span>
-                        <button onClick={() => onDelete(r.id)} className="text-xs text-slate-400">
+                        <button onClick={() => onDelete(r.id)} className="text-xs text-slate-400 dark:text-slate-500">
                           Löschen
                         </button>
                       </span>
@@ -142,24 +142,24 @@ export default function QuestionnairePanel({
               </details>
             )}
 
-            <p className="text-[11px] text-slate-400">{def.resultNote}</p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500">{def.resultNote}</p>
           </div>
         );
       })}
 
-      <div className="bg-white rounded-lg border border-slate-200 p-4 space-y-3">
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
         <div>
-          <h3 className="font-semibold text-slate-900">Örebro Musculoskeletal Pain Screening Questionnaire</h3>
-          <p className="text-xs text-slate-500">Prognose-Screening (Original in Englisch)</p>
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100">Örebro Musculoskeletal Pain Screening Questionnaire</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Prognose-Screening (Original in Englisch)</p>
         </div>
 
         {latestOerebro && (
-          <div className="bg-slate-50 rounded-lg p-3 text-sm">
-            <p className="text-slate-800">
+          <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 text-sm">
+            <p className="text-slate-800 dark:text-slate-200">
               Letztes Ergebnis: <span className="font-semibold">{latestOerebro.totalScore}</span> / {OEREBRO_SCORE_RANGE[1]}{" "}
-              <span className="text-slate-400">({formatDate(latestOerebro.date)})</span>
+              <span className="text-slate-400 dark:text-slate-500">({formatDate(latestOerebro.date)})</span>
             </p>
-            <p className="text-slate-600 mt-1">{oerebroInterpretation(latestOerebro.totalScore)}</p>
+            <p className="text-slate-600 dark:text-slate-400 mt-1">{oerebroInterpretation(latestOerebro.totalScore)}</p>
           </div>
         )}
 
@@ -175,7 +175,7 @@ export default function QuestionnairePanel({
               setPrinting("oerebro");
               printNode();
             }}
-            className="rounded-lg bg-slate-100 text-slate-700 font-medium py-2 px-3 text-sm"
+            className="rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium py-2 px-3 text-sm"
           >
             Drucken
           </button>
@@ -183,16 +183,16 @@ export default function QuestionnairePanel({
 
         {oerebroHistory.length > 1 && (
           <details className="text-sm">
-            <summary className="text-brand-700 font-medium cursor-pointer">
+            <summary className="text-brand-700 dark:text-brand-300 font-medium cursor-pointer">
               Verlauf anzeigen ({oerebroHistory.length})
             </summary>
-            <ul className="mt-2 space-y-1 text-slate-600">
+            <ul className="mt-2 space-y-1 text-slate-600 dark:text-slate-400">
               {oerebroHistory.map((r) => (
                 <li key={r.id} className="flex justify-between">
                   <span>{formatDate(r.date)}</span>
                   <span className="flex items-center gap-2">
                     <span className="font-medium">{r.totalScore}/{OEREBRO_SCORE_RANGE[1]}</span>
-                    <button onClick={() => onDelete(r.id)} className="text-xs text-slate-400">
+                    <button onClick={() => onDelete(r.id)} className="text-xs text-slate-400 dark:text-slate-500">
                       Löschen
                     </button>
                   </span>
@@ -202,7 +202,7 @@ export default function QuestionnairePanel({
           </details>
         )}
 
-        <p className="text-[11px] text-slate-400">{OEREBRO_SOURCE_NOTE}</p>
+        <p className="text-[11px] text-slate-400 dark:text-slate-500">{OEREBRO_SOURCE_NOTE}</p>
       </div>
 
       {printing && (

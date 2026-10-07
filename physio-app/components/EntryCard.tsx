@@ -36,11 +36,11 @@ export default function EntryCard({
   }
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm space-y-3">
+    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 shadow-sm space-y-3">
       <div className="flex items-start justify-between">
         <div>
-          <p className="font-semibold text-slate-900">{entry.activity}</p>
-          <p className="text-xs text-slate-500">
+          <p className="font-semibold text-slate-900 dark:text-slate-100">{entry.activity}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             {formatDate(entry.date)}
             {entry.durationMin ? ` · ${entry.durationMin} Min.` : ""}
           </p>
@@ -48,7 +48,7 @@ export default function EntryCard({
         <TrafficLightBadge light={a.overall} size="lg" />
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-xs text-slate-600">
+      <div className="grid grid-cols-3 gap-2 text-xs text-slate-600 dark:text-slate-400">
         <div className="flex flex-col gap-0.5">
           <span>Intensität</span>
           <TrafficLightBadge light={a.intensity} size="sm" />
@@ -63,28 +63,28 @@ export default function EntryCard({
         </div>
       </div>
 
-      <p className="text-sm text-slate-700">{a.explanation}</p>
-      <p className="text-sm font-medium text-slate-900">→ {a.recommendation}</p>
+      <p className="text-sm text-slate-700 dark:text-slate-300">{a.explanation}</p>
+      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">→ {a.recommendation}</p>
 
-      {entry.notes && <p className="text-xs text-slate-500 italic">{entry.notes}</p>}
+      {entry.notes && <p className="text-xs text-slate-500 dark:text-slate-400 italic">{entry.notes}</p>}
 
       {entry.relatedRegionId && (
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
           Mögliche Verbindung (eigene Einschätzung): {getRegion(entry.relatedRegionId).label}
         </p>
       )}
 
-      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-        <div className="text-slate-500">
+      <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+        <div className="text-slate-500 dark:text-slate-400">
           Schmerz davor {entry.painBefore} · danach {entry.painAfter}
           {entry.pain24h !== undefined && ` · 24h ${entry.pain24h}`}
           {entry.pain48h !== undefined && ` · 48h ${entry.pain48h}`}
         </div>
         <div className="flex gap-3">
-          <button onClick={() => setEditingFollowUp((v) => !v)} className="text-brand-700 font-medium">
+          <button onClick={() => setEditingFollowUp((v) => !v)} className="text-brand-700 dark:text-brand-300 font-medium">
             Verlauf nachtragen
           </button>
-          <button onClick={() => onDelete(entry.id)} className="text-slate-400">
+          <button onClick={() => onDelete(entry.id)} className="text-slate-400 dark:text-slate-500">
             Löschen
           </button>
         </div>
@@ -93,7 +93,7 @@ export default function EntryCard({
       {editingFollowUp && (
         <div className="pt-2 space-y-3">
           <div>
-            <label className="text-xs text-slate-600 block mb-1">Schmerz nach 24h: {pain24h}/10</label>
+            <label className="text-xs text-slate-600 dark:text-slate-400 block mb-1">Schmerz nach 24h: {pain24h}/10</label>
             <input
               type="range"
               min={0}
@@ -104,7 +104,7 @@ export default function EntryCard({
             />
           </div>
           <div>
-            <label className="text-xs text-slate-600 block mb-1">Schmerz nach 48h: {pain48h}/10</label>
+            <label className="text-xs text-slate-600 dark:text-slate-400 block mb-1">Schmerz nach 48h: {pain48h}/10</label>
             <input
               type="range"
               min={0}

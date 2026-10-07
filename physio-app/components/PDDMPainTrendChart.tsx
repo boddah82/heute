@@ -52,12 +52,12 @@ export default function PDDMPainTrendChart({ assessments }: { assessments: PDDMA
 
   return (
     <div>
-      <p className="text-sm font-semibold text-slate-900 mb-1">Schmerz-Baseline im Verlauf</p>
+      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">Schmerz-Baseline im Verlauf</p>
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full">
         {[0, 5, 10].map((v) => (
           <g key={v}>
-            <line x1={PADDING_LEFT} x2={WIDTH - PADDING_RIGHT} y1={yFor(v)} y2={yFor(v)} stroke="#e2e8f0" strokeWidth={1} />
-            <text x={PADDING_LEFT - 5} y={yFor(v) + 3} textAnchor="end" className="fill-slate-400" fontSize={9}>
+            <line x1={PADDING_LEFT} x2={WIDTH - PADDING_RIGHT} y1={yFor(v)} y2={yFor(v)} className="stroke-slate-200 dark:stroke-slate-700" strokeWidth={1} />
+            <text x={PADDING_LEFT - 5} y={yFor(v) + 3} textAnchor="end" className="fill-slate-400 dark:fill-slate-500" fontSize={9}>
               {v}
             </text>
           </g>
@@ -70,7 +70,7 @@ export default function PDDMPainTrendChart({ assessments }: { assessments: PDDMA
         {points.map((p, i) => (
           <g key={i}>
             {SERIES.map((s) => (
-              <circle key={s.key} cx={xFor(i)} cy={yFor(p[s.key])} r={3} fill={s.color} stroke="#fff" strokeWidth={1.5}>
+              <circle key={s.key} cx={xFor(i)} cy={yFor(p[s.key])} r={3} fill={s.color} className="stroke-white dark:stroke-slate-800" strokeWidth={1.5}>
                 <title>
                   {formatShortDate(p.date)}: {s.label} {p[s.key]}/10
                 </title>
@@ -86,7 +86,7 @@ export default function PDDMPainTrendChart({ assessments }: { assessments: PDDMA
               x={xFor(i)}
               y={HEIGHT - 8}
               textAnchor={i === 0 ? "start" : i === points.length - 1 ? "end" : "middle"}
-              className="fill-slate-400"
+              className="fill-slate-400 dark:fill-slate-500"
               fontSize={10}
             >
               {formatShortDate(p.date)}
@@ -97,7 +97,7 @@ export default function PDDMPainTrendChart({ assessments }: { assessments: PDDMA
 
       <div className="flex gap-4 mt-1 flex-wrap">
         {SERIES.map((s) => (
-          <span key={s.key} className="flex items-center gap-1.5 text-xs text-slate-500">
+          <span key={s.key} className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
             <span className="w-3 h-0.5 rounded-full" style={{ backgroundColor: s.color }} />
             {s.label}
           </span>

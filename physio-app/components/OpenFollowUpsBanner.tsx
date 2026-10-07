@@ -21,7 +21,7 @@ export default function OpenFollowUpsBanner({
 
   return (
     <div className="space-y-2">
-      <p className="text-sm font-semibold text-amber-800">
+      <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
         Offene Nachträge ({open.length}) – Schmerz nach 24h/48h eintragen
       </p>
       {open.map((entry) => (

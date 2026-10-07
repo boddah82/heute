@@ -29,7 +29,7 @@ export default function RecoveryStrip({ points }: { points: Point[] }) {
           />
         ))}
       </div>
-      <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+      <div className="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 mt-1">
         <span>{formatShortDate(points[0].date)}</span>
         {points.length > 2 && <span>{formatShortDate(points[points.length - 1].date)}</span>}
       </div>

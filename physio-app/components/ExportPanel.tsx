@@ -45,10 +45,10 @@ export default function ExportPanel() {
 
       {open && (
         <div className="fixed inset-0 bg-black/40 z-20 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col">
-            <div className="p-4 border-b border-slate-200 space-y-2">
-              <h2 className="font-semibold text-slate-900">Verlauf senden</h2>
-              <p className="text-xs text-slate-500">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-700 space-y-2">
+              <h2 className="font-semibold text-slate-900 dark:text-slate-100">Verlauf senden</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 {mode === "link"
                   ? "Link kopieren und schicken – Deine Therapeutin/Dein Therapeut öffnet ihn im Therapeuten-Bereich, der Verlauf wird dort direkt übernommen."
                   : "Text kopieren und z. B. per WhatsApp oder E-Mail schicken – zum Nachlesen, nicht zum automatischen Import."}
@@ -58,8 +58,8 @@ export default function ExportPanel() {
                   onClick={() => setMode("link")}
                   className={`rounded-md px-3 py-1 text-xs font-medium border ${
                     mode === "link"
-                      ? "bg-brand-700 text-white border-brand-700"
-                      : "bg-white text-slate-600 border-slate-200"
+                      ? "bg-brand-700 text-white border-brand-700 dark:border-brand-400"
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
                   }`}
                 >
                   Link (empfohlen)
@@ -68,8 +68,8 @@ export default function ExportPanel() {
                   onClick={() => setMode("text")}
                   className={`rounded-md px-3 py-1 text-xs font-medium border ${
                     mode === "text"
-                      ? "bg-brand-700 text-white border-brand-700"
-                      : "bg-white text-slate-600 border-slate-200"
+                      ? "bg-brand-700 text-white border-brand-700 dark:border-brand-400"
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
                   }`}
                 >
                   Text
@@ -79,10 +79,10 @@ export default function ExportPanel() {
             <textarea
               readOnly
               value={value}
-              className="flex-1 p-4 text-xs font-mono text-slate-700 resize-none outline-none"
+              className="flex-1 p-4 text-xs font-mono text-slate-700 dark:text-slate-300 resize-none outline-none"
               onFocus={(e) => e.currentTarget.select()}
             />
-            <div className="p-4 border-t border-slate-200 flex gap-2">
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex gap-2">
               <button
                 onClick={copy}
                 className="flex-1 rounded-lg bg-brand-700 text-white font-semibold py-2.5 text-sm hover:bg-brand-800 transition"
@@ -91,7 +91,7 @@ export default function ExportPanel() {
               </button>
               <button
                 onClick={() => setOpen(false)}
-                className="rounded-lg bg-slate-100 text-slate-700 font-medium py-2.5 px-4 text-sm hover:bg-slate-200 transition"
+                className="rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium py-2.5 px-4 text-sm hover:bg-slate-200 dark:bg-slate-600 transition"
               >
                 Schließen
               </button>

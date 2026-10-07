@@ -24,10 +24,10 @@ export default function MriEducation() {
   const band = AGE_BANDS[index];
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-4">
+    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm space-y-4">
       <div>
-        <h3 className="font-semibold text-slate-900">Was zeigt ein MRT wirklich?</h3>
-        <p className="text-sm text-slate-600 mt-1">
+        <h3 className="font-semibold text-slate-900 dark:text-slate-100">Was zeigt ein MRT wirklich?</h3>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
           Veränderungen im MRT sind auch bei Menschen ohne jegliche Schmerzen sehr häufig – und
           nehmen mit dem Alter normal zu, ähnlich wie graue Haare oder Falten. Ein Befund im Bild
           bedeutet also nicht automatisch, dass er die Ursache für aktuelle Beschwerden ist.
@@ -35,7 +35,7 @@ export default function MriEducation() {
       </div>
 
       <div>
-        <label className="text-sm font-medium text-slate-700 block mb-2">Altersgruppe wählen</label>
+        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-2">Altersgruppe wählen</label>
         <input
           type="range"
           min={0}
@@ -44,22 +44,22 @@ export default function MriEducation() {
           onChange={(e) => setIndex(Number(e.target.value))}
           className="w-full h-2 rounded-lg cursor-pointer accent-brand-700"
         />
-        <div className="flex justify-between text-xs text-slate-400 mt-1">
+        <div className="flex justify-between text-xs text-slate-400 dark:text-slate-500 mt-1">
           {AGE_BANDS.map((b) => (
             <span key={b.label}>{b.label}</span>
           ))}
         </div>
       </div>
 
-      <div className="bg-brand-50 rounded-lg p-4 text-center">
-        <p className="text-3xl font-bold text-brand-800">ca. {band.value}%</p>
-        <p className="text-sm text-brand-900 mt-1">
+      <div className="bg-brand-50 dark:bg-brand-900/40 rounded-lg p-4 text-center">
+        <p className="text-3xl font-bold text-brand-800 dark:text-brand-200">ca. {band.value}%</p>
+        <p className="text-sm text-brand-900 dark:text-brand-100 mt-1">
           der schmerzfreien Personen in ihren {band.label} Lebensjahren zeigen im MRT eine
           Bandscheibenvorwölbung – ganz ohne Beschwerden.
         </p>
       </div>
 
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-slate-400 dark:text-slate-500">
         Grobe Richtwerte, gerundet nach Brinjikji et al. (2015), American Journal of
         Neuroradiology – systematische Übersichtsarbeit zu Bildgebungsbefunden bei
         beschwerdefreien Personen. Für eine konkrete medizinische Einordnung Deines eigenen

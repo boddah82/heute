@@ -27,14 +27,14 @@ export default function DemoPatientPicker({ onLoaded, variant = "onDark" }: Prop
       <button
         onClick={() => setOpen((v) => !v)}
         className={`text-xs font-medium underline underline-offset-2 ${
-          variant === "onDark" ? "text-brand-100" : "text-brand-700"
+          variant === "onDark" ? "text-brand-100" : "text-brand-700 dark:text-brand-300"
         }`}
       >
         Demo-Patient laden
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-72 rounded-lg bg-white shadow-lg border border-slate-200 p-2 z-10 text-slate-800">
+        <div className="absolute right-0 mt-2 w-72 rounded-lg bg-white dark:bg-slate-800 shadow-lg border border-slate-200 dark:border-slate-700 p-2 z-10 text-slate-800 dark:text-slate-200">
           {pending ? (
             <div className="p-2 space-y-2">
               <p className="text-sm">
@@ -50,7 +50,7 @@ export default function DemoPatientPicker({ onLoaded, variant = "onDark" }: Prop
                 </button>
                 <button
                   onClick={() => setPending(null)}
-                  className="flex-1 rounded-lg bg-slate-100 text-slate-700 text-sm font-medium py-1.5"
+                  className="flex-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-sm font-medium py-1.5"
                 >
                   Abbrechen
                 </button>
@@ -58,17 +58,17 @@ export default function DemoPatientPicker({ onLoaded, variant = "onDark" }: Prop
             </div>
           ) : (
             <>
-              <p className="text-xs text-slate-500 px-2 py-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400 px-2 py-1">
                 Simulierte Verlaufsdaten (patellare Tendinopathie) zum Ausprobieren.
               </p>
               {DEMO_PATIENTS.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => setPending(p)}
-                  className="w-full text-left px-2 py-2 rounded-lg hover:bg-slate-50"
+                  className="w-full text-left px-2 py-2 rounded-lg hover:bg-slate-50 dark:bg-slate-900"
                 >
                   <p className="text-sm font-medium">{p.label}</p>
-                  <p className="text-xs text-slate-500">{p.description}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">{p.description}</p>
                 </button>
               ))}
             </>

@@ -78,8 +78,8 @@ export default function TherapistArea({
             onClick={() => setSubTab(t.id)}
             className={`rounded-md px-3 py-1.5 text-sm font-medium border ${
               subTab === t.id
-                ? "bg-brand-700 text-white border-brand-700"
-                : "bg-white text-slate-600 border-slate-200"
+                ? "bg-brand-700 text-white border-brand-700 dark:border-brand-400"
+                : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
             }`}
           >
             {t.label}
@@ -95,7 +95,7 @@ export default function TherapistArea({
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Name des neuen Mandanten"
-              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm"
             />
             <button type="submit" className="rounded-lg bg-brand-700 text-white px-3 py-2 text-sm font-medium hover:bg-brand-800 transition">
               Anlegen
@@ -103,7 +103,7 @@ export default function TherapistArea({
           </form>
 
           {patients.length === 0 ? (
-            <p className="text-sm text-slate-500 text-center py-6">
+            <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-6">
               Noch keine Mandanten angelegt. Ein Mandant entsteht auch automatisch, wenn Du einen Verlauf-Link öffnest.
             </p>
           ) : (
@@ -114,8 +114,8 @@ export default function TherapistArea({
                   onClick={() => onSelectPatient(p.id)}
                   className={`rounded-md px-3 py-1.5 text-sm font-medium border ${
                     activePatientId === p.id
-                      ? "bg-brand-50 border-brand-200 text-brand-900"
-                      : "bg-white border-slate-200 text-slate-700"
+                      ? "bg-brand-50 dark:bg-brand-900/40 border-brand-200 dark:border-brand-700 text-brand-900 dark:text-brand-100"
+                      : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
                   }`}
                 >
                   {p.name}
@@ -125,11 +125,11 @@ export default function TherapistArea({
           )}
 
           {activePatient && (
-            <div className="bg-white rounded-lg border border-slate-200 p-4 space-y-3">
+            <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="font-semibold text-slate-900">{activePatient.name}</h3>
-                  <p className="text-xs text-slate-400">Angelegt am {formatDate(activePatient.createdAt)}</p>
+                  <h3 className="font-semibold text-slate-900 dark:text-slate-100">{activePatient.name}</h3>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">Angelegt am {formatDate(activePatient.createdAt)}</p>
                 </div>
                 {confirmDeleteId === activePatient.id ? (
                   <div className="flex gap-2 shrink-0">
@@ -138,16 +138,16 @@ export default function TherapistArea({
                         onDeletePatient(activePatient.id);
                         setConfirmDeleteId(null);
                       }}
-                      className="text-xs font-medium text-red-600"
+                      className="text-xs font-medium text-red-600 dark:text-red-400"
                     >
                       Wirklich löschen
                     </button>
-                    <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-slate-400">
+                    <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-slate-400 dark:text-slate-500">
                       Abbrechen
                     </button>
                   </div>
                 ) : (
-                  <button onClick={() => setConfirmDeleteId(activePatient.id)} className="text-xs text-slate-400 shrink-0">
+                  <button onClick={() => setConfirmDeleteId(activePatient.id)} className="text-xs text-slate-400 dark:text-slate-500 shrink-0">
                     Mandant löschen
                   </button>
                 )}
@@ -163,8 +163,8 @@ export default function TherapistArea({
                     onClick={() => setMandantView(v.id)}
                     className={`rounded-md px-3 py-1.5 text-xs font-medium border ${
                       mandantView === v.id
-                        ? "bg-brand-700 text-white border-brand-700"
-                        : "bg-white text-slate-600 border-slate-200"
+                        ? "bg-brand-700 text-white border-brand-700 dark:border-brand-400"
+                        : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
                     }`}
                   >
                     {v.label}
@@ -179,13 +179,13 @@ export default function TherapistArea({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => importOwnDeviceData(activePatient.id)}
-                      className="text-xs font-medium text-brand-700 underline underline-offset-2"
+                      className="text-xs font-medium text-brand-700 dark:text-brand-300 underline underline-offset-2"
                     >
                       Eigene Testdaten dieses Geräts übernehmen
                     </button>
-                    {imported && <span className="text-xs text-emerald-700">Importiert ✓</span>}
+                    {imported && <span className="text-xs text-emerald-700 dark:text-emerald-300">Importiert ✓</span>}
                   </div>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500">
                     Nur zum Testen: übernimmt Deinen eigenen Tracking-Stand (Heute/Bereiche/Ziele/Fragebögen auf
                     diesem Gerät) direkt in diesen Mandanten, ohne Link – ersetzt einen evtl. vorhandenen echten
                     Verlauf.
@@ -194,7 +194,7 @@ export default function TherapistArea({
                   {activeRecord ? (
                     <PatientRecordView record={activeRecord} />
                   ) : (
-                    <p className="text-sm text-slate-500">
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
                       Noch keine Daten. Trage sie unter &quot;Daten eingeben&quot; direkt ein, oder der Patient
                       schickt Dir per &quot;Verlauf an Therapeut senden&quot; einen Link zum Importieren.
                     </p>
@@ -209,8 +209,8 @@ export default function TherapistArea({
       {subTab === "plan" && <PlanSection />}
 
       {subTab === "vorschau" && (
-        <div className="bg-white rounded-lg border border-slate-200 p-4 space-y-2">
-          <p className="text-sm text-slate-600">
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-2">
+          <p className="text-sm text-slate-600 dark:text-slate-400">
             Lädt Testdaten in die Patientenansicht dieses Geräts, um sie auszuprobieren – nicht für echte Mandanten gedacht.
           </p>
           <DemoPatientPicker onLoaded={onDemoLoaded} variant="onLight" />

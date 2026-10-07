@@ -12,9 +12,9 @@ function formatDate(iso: string) {
 }
 
 const STATUS_STYLE: Record<PDDMStatus, string> = {
-  NONE: "bg-slate-100 text-slate-500",
-  A: "bg-amber-100 text-amber-800",
-  B: "bg-red-100 text-red-800",
+  NONE: "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400",
+  A: "bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300",
+  B: "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300",
 };
 
 function subtypeLabel(domain: PDDMDomainId, subtype?: "peripheral" | "central_sensitization") {
@@ -34,29 +34,29 @@ export default function PDDMResultCard({
   const relevantDomains = PDDM_DOMAINS.filter((d) => assessment.results[d].status !== "NONE");
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm space-y-3">
+    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 shadow-sm space-y-3">
       <div className="flex items-start justify-between">
-        <p className="text-xs text-slate-500">{formatDate(assessment.date)}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{formatDate(assessment.date)}</p>
         {onDelete && (
-          <button onClick={() => onDelete(assessment.id)} className="text-xs text-slate-400">
+          <button onClick={() => onDelete(assessment.id)} className="text-xs text-slate-400 dark:text-slate-500">
             Löschen
           </button>
         )}
       </div>
 
       {assessment.painBaseline && (
-        <div className="grid grid-cols-3 gap-2 text-center pb-2 border-b border-slate-100">
+        <div className="grid grid-cols-3 gap-2 text-center pb-2 border-b border-slate-100 dark:border-slate-800">
           <div>
-            <p className="text-lg font-semibold text-slate-900">{assessment.painBaseline.current}</p>
-            <p className="text-[11px] text-slate-500">Aktuell</p>
+            <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{assessment.painBaseline.current}</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">Aktuell</p>
           </div>
           <div>
-            <p className="text-lg font-semibold text-slate-900">{assessment.painBaseline.maxLoad}</p>
-            <p className="text-[11px] text-slate-500">Max. Belastung</p>
+            <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{assessment.painBaseline.maxLoad}</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">Max. Belastung</p>
           </div>
           <div>
-            <p className="text-lg font-semibold text-slate-900">{assessment.painBaseline.afterMaxLoad ?? "–"}</p>
-            <p className="text-[11px] text-slate-500">Danach</p>
+            <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{assessment.painBaseline.afterMaxLoad ?? "–"}</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">Danach</p>
           </div>
         </div>
       )}
@@ -69,13 +69,13 @@ export default function PDDMResultCard({
           return (
             <div key={domain} className="flex items-start justify-between gap-3 text-sm">
               <div>
-                <p className="font-medium text-slate-800">{PDDM_DOMAIN_LABELS[domain]}</p>
-                <p className="text-xs text-slate-400">{PDDM_DOMAIN_HINTS[domain]}</p>
-                {sub && <p className="text-xs text-slate-500">{sub}</p>}
+                <p className="font-medium text-slate-800 dark:text-slate-200">{PDDM_DOMAIN_LABELS[domain]}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">{PDDM_DOMAIN_HINTS[domain]}</p>
+                {sub && <p className="text-xs text-slate-500 dark:text-slate-400">{sub}</p>}
                 {reasons.length > 0 && (
                   <ul className="mt-1 space-y-0.5">
                     {reasons.map((r) => (
-                      <li key={r.text} className="text-xs text-slate-500">
+                      <li key={r.text} className="text-xs text-slate-500 dark:text-slate-400">
                         weil: {r.text} → <span className="font-medium">{r.value}</span>
                       </li>
                     ))}
@@ -91,17 +91,17 @@ export default function PDDMResultCard({
       </div>
 
       {relevantDomains.length > 0 ? (
-        <div className="pt-2 border-t border-slate-100 space-y-1.5">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Mögliche nächste Schritte</p>
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Mögliche nächste Schritte</p>
           {relevantDomains.map((domain) => (
-            <p key={domain} className="text-sm text-slate-700">
+            <p key={domain} className="text-sm text-slate-700 dark:text-slate-300">
               <span className="font-medium">{PDDM_DOMAIN_LABELS[domain]}:</span>{" "}
               {domainRecommendation(domain, assessment.results[domain])}
             </p>
           ))}
         </div>
       ) : (
-        <p className="text-sm text-slate-500 pt-2 border-t border-slate-100">
+        <p className="text-sm text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
           Aktuell kein Bereich auffällig – der Fokus kann auf der reinen Belastungssteuerung bleiben.
         </p>
       )}

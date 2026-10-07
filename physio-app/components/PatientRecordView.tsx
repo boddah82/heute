@@ -38,12 +38,12 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
   );
 
   if (regionIds.length === 0) {
-    return <p className="text-sm text-slate-500 py-6 text-center">Noch keine Daten in diesem Verlauf.</p>;
+    return <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">Noch keine Daten in diesem Verlauf.</p>;
   }
 
   return (
     <div className="space-y-5">
-      <p className="text-xs text-slate-400">Importiert am {formatDateTime(record.importedAt)}</p>
+      <p className="text-xs text-slate-400 dark:text-slate-500">Importiert am {formatDateTime(record.importedAt)}</p>
 
       {regionIds.map((regionId) => {
         const region = getRegion(regionId);
@@ -58,26 +58,26 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
 
         return (
           <div key={regionId} className="space-y-3">
-            <h3 className="font-semibold text-slate-900">{region.label}</h3>
+            <h3 className="font-semibold text-slate-900 dark:text-slate-100">{region.label}</h3>
 
             {pddm.filter((a) => a.painBaseline).length > 1 && (
-              <div className="bg-white rounded-lg border border-slate-200 p-4">
+              <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
                 <PDDMPainTrendChart assessments={pddm} />
               </div>
             )}
 
             {pddm.map((a) => (
-              <div key={a.id} className="bg-white rounded-lg border border-slate-200 p-4 space-y-2">
-                <p className="text-xs text-slate-500">Bereichs-Einschätzung vom {formatDate(a.date)}</p>
+              <div key={a.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Bereichs-Einschätzung vom {formatDate(a.date)}</p>
                 {a.painBaseline && (
-                  <p className="text-sm text-slate-700">
+                  <p className="text-sm text-slate-700 dark:text-slate-300">
                     Schmerz: aktuell {a.painBaseline.current} · max. Belastung {a.painBaseline.maxLoad}
                     {a.painBaseline.afterMaxLoad !== undefined && ` · danach ${a.painBaseline.afterMaxLoad}`}
                   </p>
                 )}
                 <div className="space-y-1">
                   {PDDM_DOMAINS.filter((d) => a.results[d].status !== "NONE").map((d) => (
-                    <p key={d} className="text-sm text-slate-700">
+                    <p key={d} className="text-sm text-slate-700 dark:text-slate-300">
                       <span className="font-medium">{PDDM_DOMAIN_LABELS[d]}:</span> {statusLabel(a.results[d].status)}
                     </p>
                   ))}
@@ -88,11 +88,11 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
             {questionnaireResults.map((r) => {
               if (r.questionnaireId === "oerebro") {
                 return (
-                  <div key={r.id} className="bg-white rounded-lg border border-slate-200 p-4 space-y-1">
-                    <p className="text-xs text-slate-500">Örebro-Fragebogen vom {formatDate(r.date)}</p>
-                    <p className="text-sm text-slate-800">
+                  <div key={r.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-1">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Örebro-Fragebogen vom {formatDate(r.date)}</p>
+                    <p className="text-sm text-slate-800 dark:text-slate-200">
                       <span className="font-semibold">{r.totalScore}</span> / {OEREBRO_SCORE_RANGE[1]}
-                      <span className="text-slate-600">
+                      <span className="text-slate-600 dark:text-slate-400">
                         {" "}
                         · {r.totalScore > OEREBRO_CUTOFF ? `über Cut-off ${OEREBRO_CUTOFF}` : `unter Cut-off ${OEREBRO_CUTOFF}`}
                       </span>
@@ -102,13 +102,13 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
               }
               const def = QUESTIONNAIRES[r.questionnaireId];
               return (
-                <div key={r.id} className="bg-white rounded-lg border border-slate-200 p-4 space-y-1">
-                  <p className="text-xs text-slate-500">
+                <div key={r.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-1">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     {def.title} vom {formatDate(r.date)}
                   </p>
-                  <p className="text-sm text-slate-800">
+                  <p className="text-sm text-slate-800 dark:text-slate-200">
                     <span className="font-semibold">{r.totalScore}</span> / {def.scoreRange[1]}
-                    {def.interpret && <span className="text-slate-600"> · {def.interpret(r.totalScore)}</span>}
+                    {def.interpret && <span className="text-slate-600 dark:text-slate-400"> · {def.interpret(r.totalScore)}</span>}
                   </p>
                 </div>
               );
@@ -120,11 +120,11 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
                 .sort((a, b) => (a.date < b.date ? 1 : -1));
               const latest = ratings[0];
               return (
-                <div key={goal.id} className="bg-white rounded-lg border border-slate-200 p-4 flex items-center justify-between">
-                  <p className="text-sm text-slate-700">{goal.label}</p>
+                <div key={goal.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between">
+                  <p className="text-sm text-slate-700 dark:text-slate-300">{goal.label}</p>
                   {latest && (
-                    <p className="text-sm font-semibold text-brand-800 shrink-0">
-                      {latest.value}/10 <span className="font-normal text-slate-400">({formatDate(latest.date)})</span>
+                    <p className="text-sm font-semibold text-brand-800 dark:text-brand-200 shrink-0">
+                      {latest.value}/10 <span className="font-normal text-slate-400 dark:text-slate-500">({formatDate(latest.date)})</span>
                     </p>
                   )}
                 </div>
@@ -132,28 +132,28 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
             })}
 
             {checkIns.length === 0 ? (
-              <p className="text-sm text-slate-500">Keine Check-ins.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Keine Check-ins.</p>
             ) : (
               checkIns.map((c) => {
                 const a = assess(c);
                 return (
-                  <div key={c.id} className="bg-white rounded-lg border border-slate-200 p-4 space-y-1.5">
+                  <div key={c.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-1.5">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="font-medium text-slate-900 text-sm">{c.activity}</p>
-                        <p className="text-xs text-slate-500">
+                        <p className="font-medium text-slate-900 dark:text-slate-100 text-sm">{c.activity}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
                           {formatDate(c.date)}
                           {c.durationMin ? ` · ${c.durationMin} Min.` : ""}
                         </p>
                       </div>
                       <TrafficLightBadge light={a.overall} size="sm" />
                     </div>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
                       Schmerz {c.painBefore}→{c.painAfter}
                       {c.pain24h !== undefined && ` · 24h ${c.pain24h}`}
                       {c.pain48h !== undefined && ` · 48h ${c.pain48h}`}
                     </p>
-                    {c.notes && <p className="text-xs text-slate-500 italic">{c.notes}</p>}
+                    {c.notes && <p className="text-xs text-slate-500 dark:text-slate-400 italic">{c.notes}</p>}
                   </div>
                 );
               })

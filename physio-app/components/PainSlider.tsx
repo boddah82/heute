@@ -18,8 +18,8 @@ export default function PainSlider({
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="text-sm font-medium text-slate-700">{label}</label>
-        <span className="text-sm font-semibold text-slate-900 tabular-nums">{value}/10</span>
+        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</label>
+        <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{value}/10</span>
       </div>
       <input
         type="range"

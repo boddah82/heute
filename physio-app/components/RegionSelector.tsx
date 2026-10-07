@@ -18,8 +18,8 @@ export default function RegionSelector({ value, onChange }: Props) {
             onClick={() => onChange(region.id)}
             className={`rounded-md px-4 py-2 text-sm font-medium shrink-0 transition border ${
               active
-                ? "bg-brand-700 text-white border-brand-700"
-                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                ? "bg-brand-700 text-white border-brand-700 dark:border-brand-400"
+                : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900"
             }`}
           >
             {region.label}

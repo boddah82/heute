@@ -84,10 +84,10 @@ export function assess(entry: CheckIn): CheckInAssessment {
 }
 
 export const LIGHT_COLORS: Record<TrafficLight, { bg: string; text: string; label: string }> = {
-  GREEN: { bg: "bg-emerald-500", text: "text-emerald-700", label: "Grün" },
-  YELLOW: { bg: "bg-amber-500", text: "text-amber-700", label: "Gelb" },
-  RED: { bg: "bg-red-500", text: "text-red-700", label: "Rot" },
-  PENDING: { bg: "bg-slate-400", text: "text-slate-600", label: "Offen" },
+  GREEN: { bg: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300", label: "Grün" },
+  YELLOW: { bg: "bg-amber-500", text: "text-amber-700 dark:text-amber-300", label: "Gelb" },
+  RED: { bg: "bg-red-500", text: "text-red-700 dark:text-red-300", label: "Rot" },
+  PENDING: { bg: "bg-slate-400", text: "text-slate-600 dark:text-slate-400", label: "Offen" },
 };
 
 // Hex-Äquivalente derselben Ampelfarben für SVG-Charts (Tailwind-Klassen

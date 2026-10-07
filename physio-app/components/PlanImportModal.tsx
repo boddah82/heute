@@ -14,10 +14,10 @@ export default function PlanImportModal({ plan, onConfirm, onDismiss }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-30 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-5 space-y-4">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-sm w-full p-5 space-y-4">
         <div>
-          <h2 className="font-semibold text-slate-900">Trainingsplan gefunden</h2>
-          <p className="text-sm text-slate-600 mt-1">
+          <h2 className="font-semibold text-slate-900 dark:text-slate-100">Trainingsplan gefunden</h2>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
             Deine Therapeutin/Dein Therapeut hat einen Trainingsplan für &quot;{region.label}&quot; geschickt
             ({plan.exercises.length} Übung{plan.exercises.length === 1 ? "" : "en"}). Ein evtl. vorhandener
             Plan für diesen Bereich wird dabei ersetzt.
@@ -32,7 +32,7 @@ export default function PlanImportModal({ plan, onConfirm, onDismiss }: Props) {
           </button>
           <button
             onClick={onDismiss}
-            className="flex-1 rounded-lg bg-slate-100 text-slate-700 font-medium py-2.5 text-sm"
+            className="flex-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium py-2.5 text-sm"
           >
             Verwerfen
           </button>

@@ -9,6 +9,7 @@ import PDDMForm from "@/components/PDDMForm";
 import PDDMResultCard from "@/components/PDDMResultCard";
 import ExportPanel from "@/components/ExportPanel";
 import HelpPanel from "@/components/HelpPanel";
+import ThemeToggle from "@/components/ThemeToggle";
 import PainMixer from "@/components/PainMixer";
 import MriEducation from "@/components/MriEducation";
 import StabilizationParadox from "@/components/StabilizationParadox";
@@ -118,12 +119,13 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-900">
       <header className="bg-brand-800 text-white px-4 pt-6 pb-4 flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold">Reiz-Reaktions-Tracker</h1>
             <HelpPanel audience={mode === "therapist" ? "therapist" : "patient"} />
+            <ThemeToggle />
           </div>
           <p className="text-sm text-brand-100">
             {mode === "patient" ? "Belastbarkeit verstehen statt raten." : "Therapeuten-Bereich"}
@@ -173,8 +175,8 @@ export default function Home() {
               onClick={() => setTab(t.id)}
               className={`px-4 py-2 rounded-t-lg text-sm font-medium shrink-0 ${
                 tab === t.id
-                  ? "bg-white text-brand-800 border-b-2 border-brand-700"
-                  : "text-slate-500"
+                  ? "bg-white dark:bg-slate-800 text-brand-800 dark:text-brand-200 border-b-2 border-brand-700 dark:border-brand-400"
+                  : "text-slate-500 dark:text-slate-400"
               }`}
             >
               {t.label}
@@ -207,7 +209,7 @@ export default function Home() {
             {tab === "heute" && (
               <div className="space-y-2">
                 {entries.length === 0 && assessments.length > 0 && goals.length > 0 && (
-                  <p className="text-xs font-medium text-brand-700 uppercase tracking-wide">
+                  <p className="text-xs font-medium text-brand-700 dark:text-brand-300 uppercase tracking-wide">
                     Schritt 3 von 3 – Laufendes Tracking
                   </p>
                 )}
@@ -225,7 +227,7 @@ export default function Home() {
 
             {tab === "verlauf" &&
               (entries.length === 0 ? (
-                <p className="text-sm text-slate-500 text-center py-10">
+                <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-10">
                   Noch keine Einträge für diesen Bereich. Starte im Reiter &quot;Heute&quot; mit Deinem ersten Check-in.
                 </p>
               ) : (
@@ -247,7 +249,7 @@ export default function Home() {
               ) : (
                 <div className="space-y-4">
                   {assessments.length === 0 && (
-                    <p className="text-xs font-medium text-brand-700 uppercase tracking-wide">
+                    <p className="text-xs font-medium text-brand-700 dark:text-brand-300 uppercase tracking-wide">
                       Schritt 1 von 3 – Bestandsaufnahme
                     </p>
                   )}
@@ -258,14 +260,14 @@ export default function Home() {
                     Neue Einschätzung starten
                   </button>
                   {assessments.length === 0 ? (
-                    <p className="text-sm text-slate-500 text-center py-6">
+                    <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-6">
                       Noch keine Einschätzung für diesen Bereich. Eine Wiederholung alle ca. 4 Wochen reicht aus.
                     </p>
                   ) : (
                     <>
                       {goals.length === 0 && (
-                        <div className="bg-brand-50 border border-brand-200 rounded-lg p-3 flex items-center justify-between gap-3">
-                          <p className="text-sm text-brand-900">
+                        <div className="bg-brand-50 dark:bg-brand-900/40 border border-brand-200 dark:border-brand-700 rounded-lg p-3 flex items-center justify-between gap-3">
+                          <p className="text-sm text-brand-900 dark:text-brand-100">
                             Nächster Schritt: Lege Deine Ziele fest – damit werden die Empfehlungen oben konkreter.
                           </p>
                           <button
@@ -296,7 +298,7 @@ export default function Home() {
             {tab === "ziele" && (
               <div className="space-y-2">
                 {goals.length === 0 && (
-                  <p className="text-xs font-medium text-brand-700 uppercase tracking-wide">
+                  <p className="text-xs font-medium text-brand-700 dark:text-brand-300 uppercase tracking-wide">
                     Schritt 2 von 3 – Deine Ziele festlegen
                   </p>
                 )}

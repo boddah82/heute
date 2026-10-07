@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { CheckIn, PDDMAssessment, TrainingPlan, PSFSGoal, PSFSRating, Patient, PatientRecord, HistoryBundle, QuestionnaireResult } from "./types";
 
+const THEME_KEY = "rrt.theme.v1";
 const STORAGE_KEY = "rrt.checkins.v1";
 const REGION_KEY = "rrt.activeRegion.v1";
 const PDDM_KEY = "rrt.pddm.v1";
@@ -52,6 +53,63 @@ function createLocalStorageStore<T>(key: string, defaultValue: T) {
   }
 
   return { getSnapshot, getServerSnapshot, subscribe, set };
+}
+
+export type Theme = "light" | "dark";
+
+function systemPrefersDark(): boolean {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+// Eigene, kleine Variante statt createLocalStorageStore: ohne gespeicherte
+// Wahl soll die Systemeinstellung gelten, nicht ein fester Default.
+function readTheme(): Theme {
+  if (typeof window === "undefined") return "light";
+  try {
+    const raw = window.localStorage.getItem(THEME_KEY);
+    if (raw) return JSON.parse(raw) as Theme;
+  } catch {
+    // ignorieren, auf Systemeinstellung zurückfallen
+  }
+  return systemPrefersDark() ? "dark" : "light";
+}
+
+let themeCache: Theme | undefined;
+const themeListeners = new Set<() => void>();
+
+function applyThemeClass(theme: Theme) {
+  document.documentElement.classList.toggle("dark", theme === "dark");
+}
+
+export function useTheme() {
+  const theme = useSyncExternalStore<Theme>(
+    (listener) => {
+      themeListeners.add(listener);
+      return () => themeListeners.delete(listener);
+    },
+    () => {
+      if (themeCache === undefined) themeCache = readTheme();
+      return themeCache;
+    },
+    () => "light"
+  );
+
+  useEffect(() => {
+    applyThemeClass(theme);
+  }, [theme]);
+
+  const setTheme = useCallback((t: Theme) => {
+    themeCache = t;
+    try {
+      window.localStorage.setItem(THEME_KEY, JSON.stringify(t));
+    } catch {
+      // Speichern fehlgeschlagen (z. B. privater Modus) – Auswahl gilt
+      // trotzdem für diese Sitzung, da themeCache gesetzt ist.
+    }
+    themeListeners.forEach((l) => l());
+  }, []);
+
+  return { theme, setTheme };
 }
 
 const checkInsStore = createLocalStorageStore<CheckIn[]>(STORAGE_KEY, []);

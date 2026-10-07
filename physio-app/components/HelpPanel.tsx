@@ -113,28 +113,28 @@ export default function HelpPanel({ audience = "patient" }: { audience?: "patien
       <button
         onClick={() => setOpen(true)}
         aria-label="Hilfe anzeigen"
-        className="w-6 h-6 rounded-full border border-brand-100 text-brand-100 text-xs font-semibold flex items-center justify-center shrink-0"
+        className="w-6 h-6 rounded-full border border-brand-100 dark:border-brand-700 text-brand-100 text-xs font-semibold flex items-center justify-center shrink-0"
       >
         ?
       </button>
 
       {open && (
         <div className="fixed inset-0 bg-black/40 z-20 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col">
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="font-semibold text-slate-900">Hilfe</h2>
-              <button onClick={() => setOpen(false)} className="text-slate-400 text-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-lg w-full max-h-[80vh] flex flex-col">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <h2 className="font-semibold text-slate-900 dark:text-slate-100">Hilfe</h2>
+              <button onClick={() => setOpen(false)} className="text-slate-400 dark:text-slate-500 text-sm">
                 Schließen
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {sections.map((s) => (
                 <div key={s.title}>
-                  <p className="text-sm font-semibold text-slate-900 mb-1">{s.title}</p>
-                  <p className="text-sm text-slate-600">{s.body}</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{s.title}</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">{s.body}</p>
                   {s.example && (
-                    <div className="mt-1.5 rounded-lg bg-slate-50 border border-slate-200 p-2.5">
-                      <p className="text-xs text-slate-600">{s.example}</p>
+                    <div className="mt-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2.5">
+                      <p className="text-xs text-slate-600 dark:text-slate-400">{s.example}</p>
                     </div>
                   )}
                 </div>

@@ -23,12 +23,28 @@ export const viewport: Viewport = {
   themeColor: "#1f3a50",
 };
 
+// Läuft blockierend vor dem ersten Paint, damit beim Laden nicht kurz das
+// falsche Theme aufblitzt (Logik gespiegelt zu lib/storage.ts useTheme()).
+const THEME_INIT_SCRIPT = `
+(function () {
+  try {
+    var raw = localStorage.getItem("rrt.theme.v1");
+    var theme = raw ? JSON.parse(raw) : null;
+    var isDark = theme === "dark" || (!theme && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    if (isDark) document.documentElement.classList.add("dark");
+  } catch (e) {}
+})();
+`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="de"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

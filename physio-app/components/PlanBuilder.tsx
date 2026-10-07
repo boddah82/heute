@@ -70,10 +70,10 @@ export default function PlanBuilder({ regionId, plan, onSave }: Props) {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-5">
+    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm space-y-5">
       <div>
-        <h3 className="font-semibold text-slate-900">Trainingsplan für {region.label}</h3>
-        <p className="text-sm text-slate-600 mt-1">
+        <h3 className="font-semibold text-slate-900 dark:text-slate-100">Trainingsplan für {region.label}</h3>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
           Stell hier die Übungen zusammen, die Du für diesen Bereich vorgibst. Am Ende bekommst Du
           einen Link, den Du dem Patienten schickst – beim Öffnen wird der Plan auf seinem Gerät
           geladen (kein Konto, keine Anmeldung nötig).
@@ -83,21 +83,21 @@ export default function PlanBuilder({ regionId, plan, onSave }: Props) {
       {exercises.length > 0 && (
         <div className="space-y-2">
           {exercises.map((ex) => (
-            <div key={ex.id} className="flex items-start gap-2 bg-slate-50 rounded-lg p-3">
+            <div key={ex.id} className="flex items-start gap-2 bg-slate-50 dark:bg-slate-900 rounded-lg p-3">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-800">{ex.label}</p>
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{ex.label}</p>
                 <input
                   type="text"
                   value={ex.notes ?? ""}
                   onChange={(e) => updateNotes(ex.id, e.target.value)}
                   placeholder="Notiz, z. B. 3x12, Pause 60s"
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"
+                  className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 px-2 py-1 text-xs"
                 />
               </div>
               <button
                 type="button"
                 onClick={() => removeExercise(ex.id)}
-                className="text-slate-400 text-xs shrink-0"
+                className="text-slate-400 dark:text-slate-500 text-xs shrink-0"
               >
                 Entfernen
               </button>
@@ -107,14 +107,14 @@ export default function PlanBuilder({ regionId, plan, onSave }: Props) {
       )}
 
       <div>
-        <p className="text-xs font-medium text-slate-500 mb-1.5">Übung hinzufügen</p>
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Übung hinzufügen</p>
         <div className="flex flex-wrap gap-2">
           {ACTIVITY_ICONS.map((a) => (
             <button
               key={a.id}
               type="button"
               onClick={() => addFromIcon(a.label)}
-              className="rounded-md bg-slate-100 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-200 border border-slate-200"
+              className="rounded-md bg-slate-100 dark:bg-slate-700 px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:bg-slate-600 border border-slate-200 dark:border-slate-700"
             >
               {a.label}
             </button>
@@ -126,12 +126,12 @@ export default function PlanBuilder({ regionId, plan, onSave }: Props) {
             value={customLabel}
             onChange={(e) => setCustomLabel(e.target.value)}
             placeholder="Eigene Übung eingeben"
-            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm"
           />
           <button
             type="button"
             onClick={addCustom}
-            className="rounded-lg bg-slate-100 text-slate-700 px-3 py-2 text-sm font-medium"
+            className="rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2 text-sm font-medium"
           >
             Hinzufügen
           </button>
@@ -148,19 +148,19 @@ export default function PlanBuilder({ regionId, plan, onSave }: Props) {
       </button>
 
       {link && (
-        <div className="space-y-2 pt-2 border-t border-slate-100">
-          <p className="text-xs font-medium text-slate-500">Link zum Weitergeben</p>
+        <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Link zum Weitergeben</p>
           <textarea
             readOnly
             value={link}
             rows={2}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono resize-none"
+            className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-xs font-mono resize-none"
             onFocus={(e) => e.currentTarget.select()}
           />
           <button
             type="button"
             onClick={copyLink}
-            className="w-full rounded-lg bg-slate-100 text-slate-700 font-medium py-2 text-sm"
+            className="w-full rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium py-2 text-sm"
           >
             {copied ? "Kopiert ✓" : "Link kopieren"}
           </button>

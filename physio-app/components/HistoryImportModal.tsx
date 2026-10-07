@@ -29,10 +29,10 @@ export default function HistoryImportModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 z-30 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-5 space-y-4">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-sm w-full p-5 space-y-4">
         <div>
-          <h2 className="font-semibold text-slate-900">Verlauf empfangen</h2>
-          <p className="text-sm text-slate-600 mt-1">
+          <h2 className="font-semibold text-slate-900 dark:text-slate-100">Verlauf empfangen</h2>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
             Ein Patient hat einen Verlauf geschickt ({bundle.checkIns.length} Check-in
             {bundle.checkIns.length === 1 ? "" : "s"}). Welchem Mandanten soll er zugeordnet werden?
           </p>
@@ -40,12 +40,12 @@ export default function HistoryImportModal({
 
         {patients.length > 0 && (
           <div className="space-y-1.5">
-            <p className="text-xs font-medium text-slate-500">Bestehender Mandant</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Bestehender Mandant</p>
             {patients.map((p) => (
               <button
                 key={p.id}
                 onClick={() => onAssignExisting(p.id)}
-                className="w-full text-left rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-900"
               >
                 {p.name}
               </button>
@@ -54,14 +54,14 @@ export default function HistoryImportModal({
         )}
 
         <form onSubmit={submitNew} className="space-y-1.5">
-          <p className="text-xs font-medium text-slate-500">Neuer Mandant</p>
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Neuer Mandant</p>
           <div className="flex gap-2">
             <input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Name"
-              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm"
             />
             <button
               type="submit"
@@ -72,7 +72,7 @@ export default function HistoryImportModal({
           </div>
         </form>
 
-        <button onClick={onDismiss} className="w-full rounded-lg bg-slate-100 text-slate-700 font-medium py-2 text-sm">
+        <button onClick={onDismiss} className="w-full rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium py-2 text-sm">
           Verwerfen
         </button>
       </div>

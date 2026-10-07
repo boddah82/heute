@@ -31,10 +31,10 @@ export default function PainMixer() {
   );
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-5 shadow-sm space-y-5">
+    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm space-y-5">
       <div>
-        <h3 className="font-semibold text-slate-900">Schmerz-Mischpult</h3>
-        <p className="text-sm text-slate-600 mt-1">
+        <h3 className="font-semibold text-slate-900 dark:text-slate-100">Schmerz-Mischpult</h3>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
           Schmerz entsteht nicht nur durch Gewebebelastung. Stress, Schlafmangel und Bewegungsangst
           können die &quot;Lautstärke&quot; des Schmerzsystems mit erhöhen – auch wenn das Gewebe kaum
           belastet ist. Schieb die Regler und beobachte den Gesamtpegel unten.
@@ -45,8 +45,8 @@ export default function PainMixer() {
         {FACTORS.map((f) => (
           <div key={f.id}>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium text-slate-700">{f.label}</label>
-              <span className="text-sm font-semibold text-slate-900 tabular-nums">{values[f.id]}/10</span>
+              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{f.label}</label>
+              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{values[f.id]}/10</span>
             </div>
             <input
               type="range"
@@ -56,23 +56,23 @@ export default function PainMixer() {
               onChange={(e) => setValues((v) => ({ ...v, [f.id]: Number(e.target.value) }))}
               className="w-full h-2 rounded-lg cursor-pointer accent-brand-700"
             />
-            <p className="text-xs text-slate-400 mt-0.5">{f.hint}</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{f.hint}</p>
           </div>
         ))}
       </div>
 
-      <div className="pt-2 border-t border-slate-100">
+      <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-sm font-semibold text-slate-900">Gesamtpegel (Master Volume)</span>
-          <span className="text-sm font-bold text-slate-900 tabular-nums">{total.toFixed(1)}/10</span>
+          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Gesamtpegel (Master Volume)</span>
+          <span className="text-sm font-bold text-slate-900 dark:text-slate-100 tabular-nums">{total.toFixed(1)}/10</span>
         </div>
-        <div className="w-full h-4 rounded-md bg-slate-100 overflow-hidden">
+        <div className="w-full h-4 rounded-md bg-slate-100 dark:bg-slate-700 overflow-hidden">
           <div
             className={`h-full transition-all ${volumeColor(total)}`}
             style={{ width: `${(total / 10) * 100}%` }}
           />
         </div>
-        <p className="text-xs text-slate-500 mt-2">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
           Diese Darstellung ist eine vereinfachte Veranschaulichung (Durchschnitt aus allen vier
           Reglern), keine medizinische Berechnung. Sie soll zeigen: Auch wenn die Gewebebelastung
           niedrig ist, kann der Gesamtpegel durch andere Einflüsse hoch bleiben – und umgekehrt lässt

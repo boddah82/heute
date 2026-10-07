@@ -53,25 +53,25 @@ export default function CheckInForm({ regionId, planExercises, otherRegionIds, o
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 bg-white rounded-lg p-5 shadow-sm border border-slate-200">
+    <form onSubmit={handleSubmit} className="space-y-5 bg-white dark:bg-slate-800 rounded-lg p-5 shadow-sm border border-slate-200 dark:border-slate-700">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-sm font-medium text-slate-700 block mb-1">Datum</label>
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">Datum</label>
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm"
           />
         </div>
         <div>
-          <label className="text-sm font-medium text-slate-700 block mb-1">Dauer (Min., optional)</label>
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">Dauer (Min., optional)</label>
           <input
             type="number"
             min={0}
             value={durationMin}
             onChange={(e) => setDurationMin(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm"
             placeholder="z. B. 30"
           />
         </div>
@@ -79,29 +79,29 @@ export default function CheckInForm({ regionId, planExercises, otherRegionIds, o
 
       <div>
         <div className="flex items-center justify-between">
-          <label className="text-sm font-medium text-slate-700 block mb-1">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">
             Reiz / Aktivität (Belastung oder Entlastung)
           </label>
           <button
             type="button"
             onClick={() => setShowRule((v) => !v)}
-            className="text-xs text-brand-700 underline underline-offset-2 mb-1"
+            className="text-xs text-brand-700 dark:text-brand-300 underline underline-offset-2 mb-1"
           >
             Was trage ich hier ein?
           </button>
         </div>
         {showRule && (
-          <div className="mb-2 rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 space-y-1.5">
+          <div className="mb-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 text-xs text-slate-600 dark:text-slate-400 space-y-1.5">
             <p>
-              <span className="font-medium text-slate-800">Eintragen</span>, wenn Du bewusst etwas belastet hast,
+              <span className="font-medium text-slate-800 dark:text-slate-200">Eintragen</span>, wenn Du bewusst etwas belastet hast,
               das mit diesem Bereich zu tun hat (z. B. Training, eine Bewegung, vor der Du Respekt hast) – auch
               wenn&apos;s schmerzfrei blieb. Oder wenn der Schmerz danach anders war als erwartet.
             </p>
             <p>
-              <span className="font-medium text-slate-800">Nicht eintragen</span>: normale Alltagsbewegungen ohne
+              <span className="font-medium text-slate-800 dark:text-slate-200">Nicht eintragen</span>: normale Alltagsbewegungen ohne
               besonderen Belastungscharakter, oder Schmerz &quot;einfach so&quot;, ohne erkennbaren Auslöser.
             </p>
-            <p className="text-slate-500 italic">
+            <p className="text-slate-500 dark:text-slate-400 italic">
               Kurz: ein Belastungs-Tagebuch, kein Schmerz-Tagebuch.
             </p>
           </div>
@@ -115,7 +115,7 @@ export default function CheckInForm({ regionId, planExercises, otherRegionIds, o
           onChange={(e) => setActivity(e.target.value)}
           list="activity-suggestions"
           placeholder={region.exampleReize[0] ?? "z. B. langes Sitzen"}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm"
           required
         />
         <datalist id="activity-suggestions">
@@ -131,29 +131,29 @@ export default function CheckInForm({ regionId, planExercises, otherRegionIds, o
       </div>
 
       <div>
-        <label className="text-sm font-medium text-slate-700 block mb-1">Notizen (optional)</label>
+        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">Notizen (optional)</label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm"
           placeholder="Besonderheiten, z. B. ungewohnte Belastung am Vortag"
         />
       </div>
 
       {otherRegionIds && otherRegionIds.length > 0 && (
         <div>
-          <label className="text-sm font-medium text-slate-700 block mb-1">
+          <label className="text-sm font-medium text-slate-700 dark:text-slate-300 block mb-1">
             Hängt das für Dich mit einer anderen Region zusammen? (optional)
           </label>
-          <p className="text-xs text-slate-500 mb-1">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
             Deine eigene Einschätzung, z. B. wenn der Rücken in den Oberschenkel ausstrahlt – kein automatischer
             Befund.
           </p>
           <select
             value={relatedRegionId}
             onChange={(e) => setRelatedRegionId(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm"
           >
             <option value="">Nein / nicht sicher</option>
             {otherRegionIds.map((id) => (
@@ -172,7 +172,7 @@ export default function CheckInForm({ regionId, planExercises, otherRegionIds, o
         Check-in speichern
       </button>
       {saved && (
-        <p className="text-sm text-emerald-600 text-center">Gespeichert. Trage den Verlauf nach 24h/48h im Reiter &quot;Verlauf&quot; nach.</p>
+        <p className="text-sm text-emerald-600 dark:text-emerald-400 text-center">Gespeichert. Trage den Verlauf nach 24h/48h im Reiter &quot;Verlauf&quot; nach.</p>
       )}
     </form>
   );

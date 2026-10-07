@@ -1,8 +1,19 @@
 @import "tailwindcss";
 
+/* Dark Mode über eine .dark-Klasse auf <html> gesteuert (nicht nur
+   @media prefers-color-scheme), damit ein manueller Toggle möglich ist –
+   siehe lib/storage.ts useTheme() und components/ThemeToggle.tsx. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  color-scheme: dark;
 }
 
 @theme inline {

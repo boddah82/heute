@@ -32,9 +32,10 @@ Zusammenfassung der bisherigen Arbeit (Sept./Okt. 2026, Claude Code im Web) für
 18. **Jugend-Modus + Punkte/Abzeichen/Wochenrückblick**: für seine 14-jährige Tochter (eigenes Handy, lernt IT + EN, soll KI-Gespräche nutzen; Vater klärt Anthropic-Regeln für Minderjährige und nutzt eigenen Schlüssel mit Limit für sie). `TEEN_RULES` im Prompt, `data/teen.js`; Punkte gleich für jede Bewertung (ehrliches „Nochmal“), Serie mit 2 Jokern/Woche. Später angedacht: Duell/Familienziel (bräuchte Server oder geteilte Wochenkarte).
 19. **Rückrichtung + Hör-Check**: Wörter auch Zielsprache → Deutsch, als Hören (SRS-IDs `r:<Wort-ID>`, erst ab Abstand ≥ 3 Tage in der Hauptrichtung, 15 neue/Tag – Kompromiss, damit sich die Abfragen nicht verdoppeln). Sätze IT → DE nur als Hör-Check ohne Bewertung (Nutzer fand eigene Satz-Abfrage in Gegenrichtung wenig sinnvoll).
 20. **Hör-Dialoge**: Claude schreibt Alltagsszenen mit mehreren Personen auf seinem Niveau (`createStory()`, `listenStories()`); gespeichert als Text mit `story` und `sp` pro Zeile, Stimmen pro Sprecher über `storyVoice()`: Nutzer ordnet Gerätestimmen Mann/Frau zu (`settings.voiceGender`, Anlass: Mann sprach mit Frauenstimme), sonst Tonhöhe. Wortwahl teils über seinem Wortschatz – laut Nutzer vorerst ok. Wie echte Gerätestimmen klingen, ist ungetestet.
+21. **Prüfen-Knopf** (`checkWordUI`, `checkSentenceUI`, Satz-Feld `gloss`): Anlass „Sei mai stato in Germania?“ – Wort-Hilfe zeigte sei = sechs, stato = Staat (Wortliste kennt keinen Zusammenhang). Früher abgelehnter „Klingt komisch?“-Knopf damit jetzt doch gewünscht.
 
 ## Bewusst nicht gemacht / abgelehnt
-- KI-Übersetzung für eigene Sprachinseln (manuell gewünscht), Emoji-Bilder, KI-Merkbild als Text, Prüfknopf „Klingt komisch?“.
+- KI-Übersetzung für eigene Sprachinseln (manuell gewünscht), Emoji-Bilder, KI-Merkbild als Text. (Prüfknopf zuerst abgelehnt, später gewünscht – siehe 21.)
 - Sprachaufnahme der eigenen Stimme als Eselsbrücke (Text-Diktat gebaut; Audio wäre möglich, nicht angefragt).
 - Fotos im Sync/Backup (zu groß).
 

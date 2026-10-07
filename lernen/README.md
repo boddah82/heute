@@ -27,6 +27,9 @@ Karte oben auf „Heute“: 2–3 empfohlene Schritte in lerngerechter Reihenfol
 ## Gelernte Wörter anhören
 Hören → „🧠 Gelernte Wörter“: Hör-Abfrage (Deutsch → Pause zum Selbst-Sagen → Lösung, zweimal) oder Anhören & Nachsprechen; schwierige Wörter zuerst, zuletzt geübte oder alle gemischt.
 
+## Prüfen (Claude)
+„🔍 Prüfen“ nach dem Aufdecken in der Satz-Abfrage, in der Wort-Abfrage und bei neuen Wörtern (≈ 1–3 Cent, Schätzung). Sätze: korrekt und natürlich? Deutsch passend? Vorschlag per „Übernehmen“, dazu Wort für Wort mit der Bedeutung im Satz (z. B. sei = bist-du statt sechs) – wird gespeichert und ersetzt danach die Wortlisten-Hilfe. Wörter: Übersetzung richtig? Weitere Bedeutungen/gleich geschriebene Wörter.
+
 ## Rückrichtung & Hör-Check
 - Wörter → „Verstehen“: Wort hören → Bedeutung auf Deutsch sagen → aufdecken, bewerten. Eigene Wiederholungsplanung; ein Wort kommt erst dazu, wenn es in der Hauptrichtung (Deutsch → Zielsprache) sitzt (≥ 3 Tage Abstand). Höchstens 15 neue pro Tag, 30 pro Runde.
 - Hören → Wörter: zusätzlich „Wort hören → Bedeutung sagen → Deutsch“ als Schleife.

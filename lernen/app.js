@@ -662,7 +662,8 @@ function recallSession(root, ids, cfg) {
         <button class="btn primary grow" id="reveal">Aufdecken</button>
       </div>
       <div id="post" hidden class="stack">
-        <div class="row"><button class="btn grow" id="replay">🔊 Nochmal hören</button>${cfg.correct ? '<button class="btn" id="fix">✎ Korrigieren</button>' : ''}</div>
+        <div class="row"><button class="btn grow" id="replay">🔊 Nochmal hören</button>${cfg.correct ? '<button class="btn" id="fix">✎ Korrigieren</button>' : ''}${cfg.check && talkCfg.key ? '<button class="btn" id="chk" title="Mit Claude prüfen (≈ 1–3 Cent)">🔍 Prüfen</button>' : ''}</div>
+        <div id="chk-out"></div>
         <div class="rate">
           <button class="btn again" data-r="0">Nochmal</button>
           <button class="btn hard" data-r="1">Schwer</button>
@@ -708,9 +709,11 @@ function recallSession(root, ids, cfg) {
         $('#cmp', root).innerHTML = `<p>${said ? 'Gesagt' : 'Getippt'}: „${esc(attempt)}“</p><p>${c.html} <b>${c.score}%</b></p>`;
       }
       // Wörter des Satzes, die noch nicht sicher sitzen – damit man nicht an einem unbekannten Wort hängen bleibt
-      if (cfg.wordHelp) {
+      const gl = cfg.gloss && cfg.gloss(id);
+      if (gl) $('#wordhelp', root).innerHTML = `<div class="muted small" style="margin-top:8px">Wort für Wort (geprüft)</div>${glossRow(gl, false)}`;
+      else if (cfg.wordHelp) {
         const ws = wordsInSentence(it.t).map(wid => wordById(wid)).filter(w => w && !(state.srs[w.id] && state.srs[w.id].iv >= 3));
-        if (ws.length) $('#wordhelp', root).innerHTML = `<div class="wordhelp">${ws.map(w => `<span><b>${esc(w.t)}</b> – ${esc(w.d)}${state.srs[w.id] ? '' : ' <span class="pill">neu</span>'}</span>`).join('')}</div>`;
+        if (ws.length) $('#wordhelp', root).innerHTML = `<div class="wordhelp">${ws.map(w => `<span><b>${esc(w.t)}</b> – ${esc(w.d)}${state.srs[w.id] ? '' : ' <span class="pill">neu</span>'}</span>`).join('')}</div><div class="muted small">aus der Wortliste – im Satz kann ein Wort etwas anderes heißen${talkCfg.key ? ' (🔍 Prüfen)' : ''}</div>`;
       }
       speak(it.t);
     };
@@ -723,6 +726,11 @@ function recallSession(root, ids, cfg) {
     };
     $('#reveal', root).onclick = reveal;
     $('#replay', root).onclick = () => speak(it.t);
+    if ($('#chk', root)) $('#chk', root).onclick = () => cfg.check(id, $('#chk', root), $('#chk-out', root), n => {
+      it.t = n.t; it.d = n.d;
+      $('#answer .' + cfg.big, root).textContent = n.t;
+      $('.native', root).textContent = n.d;
+    });
     if (cfg.correct) $('#fix', root).onclick = () => cfg.correct(id, () => { const n = cfg.get(id); if (n) { it.t = n.t; it.d = n.d; $('#answer .' + cfg.big, root).textContent = n.t; $('.native', root).textContent = n.d; } });
     $$('.rate .btn', root).forEach(b => { b.onclick = () => rate(Number(b.dataset.r)); });
     if ($('#hint', root)) $('#hint', root).onclick = () => { $('#hint-t', root).hidden = false; };
@@ -907,6 +915,7 @@ views.vocab = function (root, arg) {
           + (hear ? `<a class="btn big" href="#vocab/hear">Weiter: ${hear} Wörter verstehen (hören)</a>` : '');
       },
       correct: correctWord,
+      check: checkWordUI,
       get: id => { const w = wordById(id); return w && { t: w.t, d: w.d, note: state.notes[id] }; },
     });
   } else if (mode === 'hear') {
@@ -1116,7 +1125,9 @@ function vocabNew(pane) {
       <div class="row" style="justify-content:center;margin-top:10px">
         <button class="btn small" id="play">🔊 Anhören</button>
         <button class="btn small" id="fix" title="Übersetzung korrigieren">✎ Korrigieren</button>
+        ${talkCfg.key ? '<button class="btn small" id="chk" title="Mit Claude prüfen (≈ 1–3 Cent)">🔍 Prüfen</button>' : ''}
       </div>
+      <div id="chk-out"></div>
     </div>
     <div class="row between" style="margin-top:10px"><label for="note" style="margin:0">Eselsbrücke: Welches Bild, welche Geschichte verbindet Klang und Bedeutung?</label>
       ${SR ? '<button class="btn small" id="note-mic">🎙 Einsprechen</button>' : ''}</div>
@@ -1142,6 +1153,7 @@ function vocabNew(pane) {
   speak(w.t);
   $('#play', pane).onclick = () => speak(w.t);
   $('#fix', pane).onclick = () => { saveNote(); correctWord(w.id, () => vocabNew(pane)); };
+  if ($('#chk', pane)) $('#chk', pane).onclick = () => checkWordUI(w.id, $('#chk', pane), $('#chk-out', pane), n => { $('.flash .target', pane).textContent = n.t; $('.flash .native', pane).textContent = n.d; });
   $('#known', pane).onclick = () => {
     saveNote();
     const t = today();
@@ -1231,6 +1243,8 @@ views.review = function (root) {
     emptyText: 'Nichts fällig. Neue Sätze kommen aus deinen Sprachinseln.',
     doneExtra: `<a class="btn big" href="#shadow">Weiter zum Shadowing</a>`,
     get: id => { const s = byId[id]; return s && { t: s.t, d: s.d, isNew: !state.srs[id], note: state.notes[id] }; },
+    gloss: id => { const s = findSentence(id); return s && s.gloss && s.gloss.length ? s.gloss : null; },
+    check: checkSentenceUI,
   });
 };
 
@@ -2052,6 +2066,78 @@ views.texts = function (root, id) {
   };
 };
 
+// ---------- Prüfen mit Claude: Wortkarten und Sätze ----------
+// Wortliste und Vorlagen sind ungeprüft; Wörter haben je nach Satz andere Bedeutungen (sei = sechs / du bist).
+const CHECK_WORD_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['ok', 'problems', 't', 'de', 'other'],
+  properties: { ok: { type: 'boolean' }, problems: { type: 'string' }, t: { type: 'string' }, de: { type: 'string' }, other: { type: 'string' } },
+};
+const CHECK_SENT_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['ok', 'problems', 'target', 'de', 'words'],
+  properties: {
+    ok: { type: 'boolean' }, problems: { type: 'string' }, target: { type: 'string' }, de: { type: 'string' },
+    words: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de'], properties: { t: { type: 'string' }, de: { type: 'string' } } } },
+  },
+};
+function findSentence(id) {
+  for (const isl of state.islands) { const s = isl.sentences.find(x => x.id === id); if (s) return s; }
+  return null;
+}
+function setWordCard(id, t, d) {
+  if (id.startsWith('u:')) {
+    const own = state.words.find(x => x.id === id);
+    if (own) { own.t = t; own.d = d; own.ts = Date.now(); }
+  } else state.overrides[id] = { t, d, ts: Date.now() };
+  persist();
+}
+async function checkWordUI(id, btn, out, onChange) {
+  const w = wordById(id);
+  if (!w) return;
+  const lang = settings.lang === 'it' ? 'Italian' : 'British English';
+  btn.disabled = true; btn.textContent = '🔍 Prüfe …';
+  try {
+    const r = await callClaude(
+      `Check a vocabulary card for a German-speaking learner of ${lang}. The German translation comes from an unchecked frequency word list and may be wrong or misleading. ok = true if the German is a correct, common translation of the word. "t": the ${lang} word as it should stand on the card (normally unchanged; dictionary form). "de": the best short German translation – up to 3 common meanings separated by " / ", most common first. "other": other important meanings a learner should know, especially homographs and words that are also forms of another word (e.g. Italian "sei" = "sechs", but also "du bist" from essere) – short German, empty if none. "problems": a short German explanation if the card is wrong or misleading, else empty.`,
+      [{ role: 'user', content: `${w.t} = ${w.d}` }], CHECK_WORD_SCHEMA, 4000);
+    const d = r.data;
+    const changed = !d.ok && (d.t.trim() !== w.t || d.de.trim() !== w.d);
+    out.innerHTML = `<div class="notice ${d.ok ? '' : 'warn'}" style="margin-top:10px;text-align:left">
+      ${d.ok ? '✓ Passt.' : '⚠️ ' + esc(d.problems || 'Nicht ganz richtig.')}
+      ${changed ? `<div style="margin-top:6px">Vorschlag: <b>${esc(d.t)}</b> – ${esc(d.de)}</div><button class="btn small" id="chk-take" style="margin-top:6px">✓ Übernehmen</button>` : ''}
+      ${d.other ? `<div style="margin-top:6px">Auch: ${esc(d.other)}</div>` : ''}
+    </div>`;
+    if (changed) $('#chk-take', out).onclick = () => { setWordCard(id, d.t.trim(), d.de.trim()); toast('Übernommen'); onChange && onChange({ t: d.t.trim(), d: d.de.trim() }); $('#chk-take', out).remove(); };
+    btn.remove();
+  } catch (e) { toast(e.message); btn.disabled = false; btn.textContent = '🔍 Prüfen'; }
+}
+async function checkSentenceUI(id, btn, out, onChange) {
+  const s = findSentence(id);
+  if (!s) return;
+  const lang = settings.lang === 'it' ? 'Italian' : 'British English';
+  btn.disabled = true; btn.textContent = '🔍 Prüfe …';
+  try {
+    const r = await callClaude(
+      `A German-speaking learner studies a ${lang} sentence with its German translation (written by the learner or taken from a template – it may contain mistakes). Check: 1) Is the ${lang} sentence correct and natural, exactly as a native speaker would say it? 2) Does the German translation match its meaning? ok = true only if both are fine (small style preferences are not mistakes). "problems": a short German explanation of what is wrong or unnatural, empty if ok. "target": the corrected, natural ${lang} sentence – identical to the given one if it is fine; keep the meaning and keep it simple. "de": a natural German translation of "target". "words": "target" split into its words in original order (punctuation attached), each with its German meaning IN THIS SENTENCE, literal and in ${lang} word order (e.g. Italian "Sei mai stato in Germania?" → Sei = "bist-du", mai = "jemals", stato = "gewesen" – not "sechs" or "Staat"); join several German words with hyphens.`,
+      [{ role: 'user', content: `${lang}: ${s.t}\nGerman: ${s.d}` }], CHECK_SENT_SCHEMA, 6000);
+    const d = r.data;
+    const changed = !d.ok && (d.target.trim() !== s.t || d.de.trim() !== s.d);
+    if (!changed) { s.gloss = d.words; s.ts = Date.now(); persist(); }
+    out.innerHTML = `<div class="notice ${changed ? 'warn' : ''}" style="margin-top:10px;text-align:left">
+      ${changed ? '⚠️ ' + esc(d.problems || 'Nicht ganz richtig.') : '✓ Passt.' + (d.problems ? ' ' + esc(d.problems) : '')}
+      ${changed ? `<div style="margin-top:6px">Vorschlag: <b>${esc(d.target)}</b><br>${esc(d.de)}</div><button class="btn small" id="chk-take" style="margin-top:6px">✓ Übernehmen</button>` : ''}
+      <div style="margin-top:6px">${glossRow(d.words, false)}</div>
+    </div>`;
+    if (changed) $('#chk-take', out).onclick = () => {
+      s.t = d.target.trim(); s.d = d.de.trim(); s.gloss = d.words; s.ts = Date.now();
+      persist();
+      toast('Übernommen');
+      onChange && onChange({ t: s.t, d: s.d });
+      $('#chk-take', out).remove();
+    };
+    btn.remove();
+  } catch (e) { toast(e.message); btn.disabled = false; btn.textContent = '🔍 Prüfen'; }
+}
+
 // Liedtexte: Zeilenumbrüche beim Kopieren liegen oft mitten im Satz. Claude bekommt nummerierte Wörter
 // und nennt nur die Wort-Nummern, an denen eine neue Lerneinheit beginnt – der Text selbst bleibt unverändert.
 const SEGMENT_SCHEMA = {
@@ -2542,6 +2628,7 @@ function islandDetail(root, isl) {
       if (t === null) return;
       const d = prompt('Deutsch:', s.d);
       if (d === null) return;
+      if (t.trim() && t.trim() !== s.t) delete s.gloss; // Wort-für-Wort-Hilfe passt nicht mehr
       if (t.trim()) s.t = t.trim();
       if (d.trim()) s.d = d.trim();
       s.ts = Date.now();

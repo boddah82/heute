@@ -1,5 +1,5 @@
 // Offline-Cache für die App-Dateien. Bei Änderungen VERSION erhöhen.
-const VERSION = 'sl-v19';
+const VERSION = 'sl-v20';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'data/it.js', 'data/en.js', 'data/it-words.js', 'data/en-words.js', 'data/builder.js', 'data/teen.js', 'vendor/anthropic-sdk.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {

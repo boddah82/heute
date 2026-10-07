@@ -379,12 +379,16 @@ function speak(text, opts = {}) {
     u.lang = 'de-DE';
     const v = voicesFor('de')[0];
     if (v) u.voice = v;
+  } else if (opts.voice) {
+    u.voice = opts.voice;
+    u.lang = opts.voice.lang;
   } else {
     u.lang = langCode();
     const v = pickVoice(settings.lang);
     if (v) u.voice = v;
   }
   u.rate = opts.rate || settings.rate;
+  if (opts.pitch) u.pitch = opts.pitch;
   let finished = false;
   const done = () => { if (!finished) { finished = true; opts.onend && opts.onend(); } };
   u.onend = done;
@@ -1244,7 +1248,8 @@ function listenSeg(active) {
   return `<div class="seg">
     <button data-go="#listen" class="${active === 'sent' ? 'on' : ''}">🏝️ Sätze</button>
     <button data-go="#listen/words" class="${active === 'words' ? 'on' : ''}">🧠 Wörter</button>
-    <button data-go="#listen/check" class="${active === 'check' ? 'on' : ''}">👂 Hör-Check</button>
+    <button data-go="#listen/check" class="${active === 'check' ? 'on' : ''}">👂 Check</button>
+    <button data-go="#listen/stories" class="${active === 'stories' ? 'on' : ''}">🎭 Dialoge</button>
   </div>`;
 }
 
@@ -1423,6 +1428,7 @@ function listenWords(root) {
 views.listen = function (root, arg) {
   if (arg === 'words') { listenWords(root); return; }
   if (arg === 'check') { listenCheck(root); return; }
+  if (arg === 'stories') { listenStories(root); return; }
   const opts = Object.assign({ island: 'weak', de: false, repeat: 2, pause: 2, loop: false }, load('sl.listen', {}));
   const weak = weakSentences();
   root.innerHTML = `
@@ -2023,7 +2029,7 @@ views.texts = function (root, id) {
     ${state.texts.map(x => `
       <a class="card step" href="#texts/${x.id}">
         <div class="num">${x.lines.length}</div>
-        <div class="grow"><b>${esc(x.title)}</b><div class="meta">${x.lines.length} Zeilen · ${x.lines.every(l => l.de) ? 'übersetzt' : 'noch nicht übersetzt'}</div></div><div>›</div>
+        <div class="grow"><b>${x.story ? '🎭 ' : ''}${esc(x.title)}</b><div class="meta">${x.lines.length} Zeilen · ${x.lines.every(l => l.de) ? 'übersetzt' : 'noch nicht übersetzt'}</div></div><div>›</div>
       </a>`).join('')}
     <div class="card">
       <b>Neuer Text</b>
@@ -2131,6 +2137,151 @@ async function translateText(tx, onProgress) {
   }
 }
 
+// ---------- Hör-Dialoge: Claude schreibt eine Alltagsszene mit mehreren Personen auf deinem Niveau ----------
+const STORY_SITUATIONS = [
+  { k: 'cafe', l: '☕ Café / Bar', it: 'ordering and chatting at a café or bar' },
+  { k: 'market', l: '🛒 Markt / Laden', it: 'shopping at a market or small shop' },
+  { k: 'restaurant', l: '🍝 Restaurant', it: 'at a restaurant: ordering, a small problem, paying' },
+  { k: 'friends', l: '👋 Freunde treffen', it: 'two or three friends meet and make plans for the weekend' },
+  { k: 'phone', l: '📞 Telefonat', it: 'a phone call to arrange something (appointment, meeting, reservation)' },
+  { k: 'doctor', l: '💊 Arzt / Apotheke', it: 'at the doctor or the pharmacy' },
+  { k: 'train', l: '🚆 Bahnhof / Zug', it: 'at the station or on the train: tickets, delays, a chat with another passenger' },
+  { k: 'neighbours', l: '🏠 Nachbarn', it: 'neighbours talking on the stairs or in the courtyard' },
+  { k: 'work', l: '💼 Arbeit', it: 'colleagues at work during a break or a small problem' },
+  { k: 'family', l: '👨‍👩‍👧 Familie', it: 'a family at dinner talking about their day' },
+];
+const STORY_SITUATIONS_TEEN = [
+  { k: 'school', l: '🏫 Schule', it: 'classmates before a lesson or during break' },
+  { k: 'friends', l: '👋 Freunde', it: 'teen friends make plans for the afternoon or weekend' },
+  { k: 'icecream', l: '🍦 Eisdiele', it: 'teens ordering at an ice cream shop' },
+  { k: 'family', l: '👨‍👩‍👧 Familie', it: 'a family at dinner talking about the day' },
+  { k: 'sport', l: '⚽ Sport', it: 'teens at sports practice or watching a match' },
+  { k: 'shopping', l: '🛍️ Einkaufen', it: 'teens shopping for clothes or a present' },
+  { k: 'exchange', l: '🌍 Austausch', it: 'a host family welcomes an exchange student' },
+];
+const STORY_LEN = [{ k: 10, l: 'Kurz (~10 Zeilen)' }, { k: 18, l: 'Mittel (~18)' }, { k: 28, l: 'Lang (~28)' }];
+const STORY_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['title', 'speakers', 'lines'],
+  properties: {
+    title: { type: 'string' },
+    speakers: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name', 'gender'], properties: { name: { type: 'string' }, gender: { type: 'string', enum: ['m', 'f'] } } } },
+    lines: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['sp', 't', 'de', 'words', 'note'], properties: {
+      sp: { type: 'integer' }, t: { type: 'string' }, de: { type: 'string' }, note: { type: 'string' },
+      words: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de'], properties: { t: { type: 'string' }, de: { type: 'string' } } } },
+    } } },
+  },
+};
+// Stimme pro Sprecher: verschiedene Gerätestimmen, falls vorhanden – sonst dieselbe Stimme mit anderer Tonhöhe
+function storyVoice(tx, sp) {
+  if (!tx.story || sp === undefined || sp === null) return {};
+  const base = pickVoice(settings.lang);
+  const order = base ? [base].concat(voicesFor(settings.lang).filter(v => v !== base)) : voicesFor(settings.lang);
+  if (sp < 0) return order[0] ? { voice: order[0] } : {};
+  const sps = tx.story.speakers;
+  const voice = order.length > 1 ? order[(sp + 1) % order.length] : order[0];
+  const distinct = order.length > sps.length; // Erzähler + alle Sprecher mit eigener Stimme
+  if (distinct) return voice ? { voice } : {};
+  const g = (sps[sp] && sps[sp].gender) || 'f';
+  const n = sps.slice(0, sp).filter(x => x.gender === g).length;
+  const pitch = g === 'm' ? [0.75, 0.6, 0.9][n % 3] : [1.25, 1.5, 1.1][n % 3];
+  return Object.assign({ pitch }, voice ? { voice } : {});
+}
+async function createStory(o) {
+  const lang = settings.lang === 'it' ? 'Italian' : 'British English';
+  const stage = talkStage();
+  const known = knownWordList(400);
+  const city = settings.lang === 'it' ? 'Italy' : 'Britain';
+  const sentence = { A0: 'very short, simple sentences (3–6 words), present tense, very common words', A1: 'short, simple sentences in the present tense, everyday words', A2: 'simple sentences; present, past (passato prossimo / simple past) and near future', B1: 'natural everyday sentences with common tenses and some idioms', B2: 'natural, fluent conversation with idioms and varied tenses' }[stage.id];
+  const r = await callClaude(
+    `You write short listening dialogues for a German-speaking learner of ${lang}. The dialogue is read aloud by text-to-speech with a different voice for each person, so it must work purely by listening.
+
+Situation: ${o.situation}. Set it in ${city}.
+People: exactly ${o.speakers} fictional characters with common ${settings.lang === 'it' ? 'Italian' : 'British'} first names; give each a gender (m/f) and mix genders where it fits.
+Length: about ${o.lines} lines.${o.narrator ? ' Add a few short narrator lines (sp = -1) in the present tense to set the scene and connect moments; most lines are dialogue.' : ' Dialogue only, no narrator (no line with sp = -1).'}
+Learner level: ${stage.id} (vocabulary-based estimate). Use ${sentence}.
+Words the learner already knows (${known.length}) – for orientation only: ${known.length ? known.join(', ') : 'almost none'}.
+
+${settings.teen ? TEEN_RULES + '\n\n' : ''}Most important rule: every line must be natural, idiomatic ${lang} exactly as native speakers would talk in this situation. Never write unnatural sentences just to use known words; keep it easy through short sentences and everyday phrasing instead. Give the scene a small story: a beginning, a little surprise or problem, and an ending. People react to each other, use typical everyday phrases, greetings and fillers.
+
+Return: "title" in ${lang} (short); "speakers" in order of appearance; "lines" with "sp" = index into speakers (or -1 for the narrator), "t" = the spoken line only (no name prefix), "de" = natural German translation, "words" = the line split into its words in original order (punctuation attached) each with a literal word-for-word German gloss keeping the ${lang} word order (several German words joined with hyphens), "note" = a short German explanation of an idiom, colloquial form or anything a learner would misunderstand, else an empty string.`,
+    [{ role: 'user', content: 'Write the dialogue.' }], STORY_SCHEMA, 16000);
+  const d = r.data;
+  const n = d.speakers.length;
+  const tx = {
+    id: 'tx' + uid(), title: d.title, ts: Date.now(),
+    story: { speakers: d.speakers, situation: o.label, stage: stage.id },
+    lines: d.lines.filter(l => l.t && l.t.trim()).map(l => ({ id: 'l' + uid(), sp: Number.isInteger(l.sp) && l.sp < n ? Math.max(-1, l.sp) : -1, t: l.t.trim(), de: l.de || '', words: l.words || [], note: l.note || '' })),
+  };
+  state.texts = state.texts || [];
+  state.texts.push(tx);
+  persist();
+  return { tx, cost: r.cost };
+}
+let storyBusy = false;
+function listenStories(root) {
+  state.texts = state.texts || [];
+  const sits = settings.teen ? STORY_SITUATIONS_TEEN : STORY_SITUATIONS;
+  const opts = Object.assign({ sit: 0, speakers: 2, len: 1, narrator: false, custom: '' }, load('sl.story', {}));
+  if (opts.sit > sits.length) opts.sit = 0;
+  const stories = state.texts.filter(x => x.story).slice().reverse();
+  const nVoices = voicesFor(settings.lang).length;
+  root.innerHTML = `
+    <h1>🎧 Hören</h1>
+    ${listenSeg('stories')}
+    ${voiceNotice()}
+    <div class="card">
+      <b>Neuer Hör-Dialog</b>
+      <p class="muted small">Claude schreibt eine Alltagsszene auf deinem Niveau (${talkStage().id}). Jede Person bekommt eine eigene Stimme. Mit Übersetzung und Wort-für-Wort-Hilfe.</p>
+      ${talkCfg.key ? `
+      <label>Situation</label>
+      ${chips('st-sit', sits.concat([{ l: '✏️ Eigene' }]), opts.sit, x => x.l)}
+      <input type="text" id="st-custom" placeholder="z. B. Streit um den letzten Parkplatz" value="${esc(opts.custom)}" ${opts.sit === sits.length ? '' : 'hidden'} style="margin-top:6px">
+      <div class="row" style="margin-top:6px">
+        <div class="grow"><label for="st-sp">Personen</label><select id="st-sp">${[2, 3, 4].map(n => `<option ${n === opts.speakers ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+        <div class="grow"><label for="st-len">Länge</label><select id="st-len">${STORY_LEN.map((x, i) => `<option value="${i}" ${i === opts.len ? 'selected' : ''}>${x.l}</option>`).join('')}</select></div>
+      </div>
+      <label class="inline"><input type="checkbox" id="st-nar" ${opts.narrator ? 'checked' : ''}> Mit Erzähler</label>
+      <button class="btn primary big" id="st-go" style="margin-top:12px" ${storyBusy ? 'disabled' : ''}>${storyBusy ? '🤖 Schreibe …' : '🎭 Dialog erstellen'}</button>
+      <p class="muted small">Kostet einmalig grob 5–15 Cent (Schätzung), danach beliebig oft anhören. ${nVoices > 1 ? `${nVoices} Stimmen auf diesem Gerät.` : nVoices === 1 ? 'Auf diesem Gerät gibt es nur eine Stimme für diese Sprache – die Personen werden über die Tonhöhe unterschieden.' : ''}</p>`
+      : `<p class="small">Dafür brauchst du einen Claude-Schlüssel: <a href="#talk/setup">Reden → ⚙️</a>.</p>`}
+    </div>
+    ${stories.map(x => `
+      <a class="card step" href="#texts/${x.id}">
+        <div class="num">🎭</div>
+        <div class="grow"><b>${esc(x.title)}</b><div class="meta">${esc(x.story.situation)} · ${x.story.speakers.length} Personen · ${x.lines.length} Zeilen · ${esc(x.story.stage)}</div></div><div>›</div>
+      </a>`).join('')}`;
+  bindGo(root);
+  if (!talkCfg.key) return;
+  const store = () => save('sl.story', opts);
+  $$('.chips[data-name="st-sit"] .chip', root).forEach(c => { c.onclick = () => { opts.sit = Number(c.dataset.i); store(); listenStories(root); }; });
+  $('#st-custom', root).onchange = e => { opts.custom = e.target.value.trim(); store(); };
+  $('#st-sp', root).onchange = e => { opts.speakers = Number(e.target.value); store(); };
+  $('#st-len', root).onchange = e => { opts.len = Number(e.target.value); store(); };
+  $('#st-nar', root).onchange = e => { opts.narrator = e.target.checked; store(); };
+  $('#st-go', root).onclick = async () => {
+    const custom = opts.sit === sits.length;
+    if (custom) opts.custom = $('#st-custom', root).value.trim();
+    if (custom && !opts.custom) { toast('Bitte Situation eingeben'); return; }
+    store();
+    storyBusy = true;
+    listenStories(root);
+    try {
+      const { tx, cost } = await createStory({
+        situation: custom ? opts.custom : sits[opts.sit].it,
+        label: custom ? opts.custom : sits[opts.sit].l.replace(/^\S+\s/, ''),
+        speakers: opts.speakers, lines: STORY_LEN[opts.len].k, narrator: opts.narrator,
+      });
+      storyBusy = false;
+      toast(`Fertig (≈ $${cost.toFixed(2)})`);
+      if (location.hash === '#listen/stories') location.hash = '#texts/' + tx.id;
+    } catch (e) {
+      storyBusy = false;
+      toast(e.message);
+      if (location.hash === '#listen/stories') listenStories(root);
+    }
+  };
+}
+
 let textPlayToken = null;
 let textBusy = null; // ID des Texts, der gerade geordnet/übersetzt wird
 function textDetail(root, tx) {
@@ -2139,20 +2290,23 @@ function textDetail(root, tx) {
   const isl = state.islands.find(i => i.id === islandId);
   const inIsland = t => !!(isl && isl.sentences.some(s => s.t === t));
   root.innerHTML = `
-    <a href="#texts" class="small">‹ Alle Texte</a>
+    <a href="${tx.story ? '#listen/stories' : '#texts'}" class="small">‹ ${tx.story ? 'Alle Dialoge' : 'Alle Texte'}</a>
     <input type="text" id="tx-name" value="${esc(tx.title)}" style="font-size:20px;font-weight:700;margin:8px 0 12px">
     ${textBusy === tx.id ? `<div class="card"><p class="typing" id="tx-status">🤖 Ordne in ganze Sätze und übersetze …</p></div>` : done ? '' : `<div class="card"><p class="small">${tx.lines.filter(l => !l.de).length} Sätze ohne Übersetzung.</p>
       ${talkCfg.key ? '<button class="btn primary" id="tx-tr">🌐 Übersetzen</button>' : '<p class="muted small">Ohne Claude-Schlüssel wird nur an Punkt/Fragezeichen geteilt und nicht übersetzt. Schlüssel unter <a href="#talk/setup">Reden → ⚙️</a>.</p>'}</div>`}
-    ${talkCfg.key && textBusy !== tx.id ? '<button class="btn small" id="tx-reseg" style="margin-bottom:8px">🔄 Neu in Sätze ordnen & übersetzen</button>' : ''}
+    ${tx.story ? `<p class="muted small">🎭 ${tx.story.speakers.map(x => esc(x.name)).join(', ')} · ${esc(tx.story.situation)} · Niveau ${esc(tx.story.stage)}</p>` : ''}
+    ${talkCfg.key && textBusy !== tx.id && !tx.story ? '<button class="btn small" id="tx-reseg" style="margin-bottom:8px">🔄 Neu in Sätze ordnen & übersetzen</button>' : ''}
     ${tx.original ? '<button class="btn small" id="tx-orig" style="margin-bottom:8px">↩ Ursprüngliche Zeilen wiederherstellen</button>' : ''}
     <div class="row" style="margin-bottom:8px">
       <button class="btn grow" id="tx-play">▶ Alles vorlesen</button>
       <label class="inline small" style="margin:0"><input type="checkbox" id="tx-show" ${tx.showDe ? 'checked' : ''}> Deutsch zeigen</label>
+      ${tx.story ? `<label class="inline small" style="margin:0"><input type="checkbox" id="tx-hide" ${tx.hideT ? 'checked' : ''}> Text verbergen</label>` : ''}
     </div>
-    <ul class="list card" id="tx-list">
+    <ul class="list card ${tx.story && tx.hideT ? 'tx-hidden' : ''}" id="tx-list">
       ${tx.lines.map((l, i) => `
         <li data-i="${i}">
           <div class="grow">
+            ${tx.story && l.sp >= 0 && tx.story.speakers[l.sp] ? `<div class="muted small">${esc(tx.story.speakers[l.sp].name)}</div>` : ''}
             <div class="t">${esc(l.t)}</div>
             <div class="tx-de" ${tx.showDe ? '' : 'hidden'}>
               ${l.de ? `<div class="d">${esc(l.de)}</div>` : ''}
@@ -2222,7 +2376,8 @@ function textDetail(root, tx) {
   }
   $('#tx-show', root).onchange = e => { tx.showDe = e.target.checked; persist(); $$('.tx-de', root).forEach(x => { x.hidden = !tx.showDe; }); };
   $$('[data-td]', root).forEach(b => { b.onclick = () => { const el = $(`li[data-i="${b.dataset.td}"] .tx-de`, root); el.hidden = !el.hidden; }; });
-  $$('[data-tp]', root).forEach(b => { b.onclick = () => speak(tx.lines[b.dataset.tp].t); });
+  $$('[data-tp]', root).forEach(b => { b.onclick = () => speak(tx.lines[b.dataset.tp].t, storyVoice(tx, tx.lines[b.dataset.tp].sp)); });
+  if ($('#tx-hide', root)) $('#tx-hide', root).onchange = e => { tx.hideT = e.target.checked; persist(); $('#tx-list', root).classList.toggle('tx-hidden', tx.hideT); };
   $$('[data-ta]', root).forEach(b => {
     b.onclick = () => {
       const l = tx.lines[b.dataset.ta];
@@ -2260,7 +2415,7 @@ function textDetail(root, tx) {
       $$('#tx-list li', root).forEach(x => x.classList.toggle('now', Number(x.dataset.i) === i));
       const li = $(`#tx-list li[data-i="${i}"]`, root);
       if (li) li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      await speakP(tx.lines[i].t);
+      await speakP(tx.lines[i].t, storyVoice(tx, tx.lines[i].sp));
       if (!token.stop) await wait(700);
     }
     if (textPlayToken === token) { textPlayToken = null; listening = false; btn.textContent = '▶ Alles vorlesen'; }

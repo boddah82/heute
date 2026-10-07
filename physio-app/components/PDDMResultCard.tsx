@@ -17,6 +17,16 @@ const STATUS_STYLE: Record<PDDMStatus, string> = {
   B: "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300",
 };
 
+// Kurzform je Domäne nur für die kompakten Profil-Kacheln – die ausführlichen
+// Labels (PDDM_DOMAIN_LABELS) bleiben überall sonst unverändert.
+const SHORT_DOMAIN_LABEL: Record<PDDMDomainId, string> = {
+  nociceptive: "Nozizeptiv",
+  nervousSystem: "Nerven­system",
+  comorbidities: "Komorbid.",
+  cognitiveEmotional: "Kognitiv",
+  contextual: "Umfeld",
+};
+
 function subtypeLabel(domain: PDDMDomainId, subtype?: "peripheral" | "central_sensitization") {
   if (domain !== "nervousSystem" || !subtype) return null;
   return subtype === "peripheral"
@@ -60,6 +70,25 @@ export default function PDDMResultCard({
           </div>
         </div>
       )}
+
+      <div className="pb-2 border-b border-slate-100 dark:border-slate-800">
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+          Domain-Profil
+        </p>
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+          {PDDM_DOMAINS.map((domain) => {
+            const status = assessment.results[domain].status;
+            return (
+              <div key={domain} className={`rounded-lg p-2 text-center ${STATUS_STYLE[status]}`}>
+                <p className="text-[10px] font-medium leading-tight">{SHORT_DOMAIN_LABEL[domain]}</p>
+                <p className="text-sm font-bold mt-0.5" aria-label={statusLabel(status)}>
+                  {status === "NONE" ? "–" : status}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="space-y-2">
         {PDDM_DOMAINS.map((domain) => {

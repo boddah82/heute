@@ -34,7 +34,7 @@ const URL = 'http://localhost:8765/';
   // Wörter hören
   await p.goto(URL + '#listen/words'); await p.waitForTimeout(200);
   console.log('words list items:', await p.$$eval('#lw-list li', x => x.length), '| first hidden target:', await p.textContent('#lw-list li .t'));
-  await p.click('.chips[data-name="lw-mode"] .chip[data-i="1"]');
+  await p.click('.chips[data-name="lw-mode"] .chip[data-i="2"]');
   console.log('repeat mode shows target:', await p.textContent('#lw-list li .t'));
   await p.click('#lw-play'); await p.waitForTimeout(500);
   console.log('playing:', await p.textContent('#lw-play'), '| now item:', !!(await p.$('#lw-list li.now')));

@@ -27,6 +27,11 @@ Karte oben auf „Heute“: 2–3 empfohlene Schritte in lerngerechter Reihenfol
 ## Gelernte Wörter anhören
 Hören → „🧠 Gelernte Wörter“: Hör-Abfrage (Deutsch → Pause zum Selbst-Sagen → Lösung, zweimal) oder Anhören & Nachsprechen; schwierige Wörter zuerst, zuletzt geübte oder alle gemischt.
 
+## Rückrichtung & Hör-Check
+- Wörter → „Verstehen“: Wort hören → Bedeutung auf Deutsch sagen → aufdecken, bewerten. Eigene Wiederholungsplanung; ein Wort kommt erst dazu, wenn es in der Hauptrichtung (Deutsch → Zielsprache) sitzt (≥ 3 Tage Abstand). Höchstens 15 neue pro Tag, 30 pro Runde.
+- Hören → Wörter: zusätzlich „Wort hören → Bedeutung sagen → Deutsch“ als Schleife.
+- Hören → „👂 Hör-Check“: Satz nur hören, verstanden? Deutsch aufdecken. Ohne Bewertung/Planung; am Ende die nicht verstandenen Sätze zum Wiederholen.
+
 ## Schwierige Sätze hören & shadowen
 In Hören und Shadowing ist „⭐ Schwierige Sätze“ der Standard: Sätze, die in der Satz-Abfrage noch nicht sitzen (oft „Nochmal“/„Schwer“, kurze Abstände), schlechteste zuerst; sicher gekonnte (≥ 3 Wochen Abstand) fehlen. Bewertet wird nur in der Satz-Abfrage.
 

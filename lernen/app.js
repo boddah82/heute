@@ -334,7 +334,7 @@ function grade(id, r) {
   if (isWordId(id)) { if (r === 0) l.wfail = (l.wfail || 0) + 1; else l.wok = (l.wok || 0) + 1; }
   if (isNew && id.startsWith('s:')) l.newSent++;
   // Punkte fürs Abrufen – gleich für jede Bewertung, damit sich ehrliches „Nochmal“ nicht rächt
-  addXP(isWordId(id) ? 2 : 3);
+  addXP(isWordId(id) || id.startsWith('r:') ? 2 : 3);
   persist();
 }
 
@@ -788,6 +788,9 @@ function todayPlan() {
   const newLeft = Math.max(0, tempo.n + (l.extraNew || 0) - l.newWords);
   if (newLeft && dueW <= REVIEW_CAP * 2) steps.push({ href: '#vocab/new', title: `${newLeft} neue Wörter`, why: tempo.reason ? `heute weniger: ${tempo.reason}` : 'mit Eselsbrücke oder Foto' });
   else if (newLeft) steps.push({ href: '#vocab/new', title: 'Neue Wörter: heute auslassen', why: 'erst den Rückstand abbauen – sonst wächst er weiter' });
+  // Rückrichtung (hören → Deutsch) nur ohne großen Rückstand in der Hauptrichtung
+  const hearN = hearQueue().length;
+  if (hearN && dueW <= REVIEW_CAP) steps.push({ href: '#vocab/hear', title: `${hearN} Wörter verstehen`, why: 'hören → Bedeutung sagen' });
   // Lücken auffüllen, falls noch nichts empfohlen ist
   if (steps.length < 2 && dueS && !steps.some(x => x.href === '#review')) steps.push({ href: '#review', title: 'Sätze wiederholen', why: `${dueS} fällig` });
   if (steps.length < 2 && (l.sec.listen || 0) < 300) steps.push({ href: '#listen/words', title: 'Gelernte Wörter anhören', why: 'nebenbei, ohne Bildschirm' });
@@ -803,7 +806,7 @@ views.home = function (root) {
   const dueS = dueIds(id => id.startsWith('s:')).length;
   const sentCount = allSentences().length;
   const info = {
-    vocab: `${l.newWords}/${newWordTempo().n} neu · ${dueW} fällig`,
+    vocab: `${l.newWords}/${newWordTempo().n} neu · ${dueW} fällig · ${hearQueue().length} verstehen`,
     review: `${dueS} fällig · bis zu ${Math.max(0, settings.newSentences - l.newSent)} neue`,
     listen: 'so viel wie möglich',
     shadow: '5–15 Minuten',
@@ -882,6 +885,7 @@ views.vocab = function (root, arg) {
     <div class="seg">
       <button data-m="new" class="${mode === 'new' ? 'on' : ''}">Neu</button>
       <button data-m="recall" class="${mode === 'recall' ? 'on' : ''}">Abfragen (${dueIds(isWordId).length})</button>
+      <button data-m="hear" class="${mode === 'hear' ? 'on' : ''}">Verstehen (${hearQueue().length})</button>
       <button data-m="own" class="${mode === 'own' ? 'on' : ''}">Eigene</button>
     </div>
     <div id="pane"></div>`;
@@ -894,17 +898,106 @@ views.vocab = function (root, arg) {
       emptyText: 'Keine Wörter fällig.',
       doneExtra: () => {
         const rest = dueIds(isWordId).length;
-        return rest ? `<div class="card"><p class="small">Noch ${rest} fällig. Für heute reicht das – der Rest verteilt sich auf die nächsten Tage.</p><button class="btn" onclick="views.vocab($('#view'), 'recall')">Trotzdem weitere ${Math.min(rest, REVIEW_CAP)}</button></div>` : '';
+        const hear = hearQueue().length;
+        return (rest ? `<div class="card"><p class="small">Noch ${rest} fällig. Für heute reicht das – der Rest verteilt sich auf die nächsten Tage.</p><button class="btn" onclick="views.vocab($('#view'), 'recall')">Trotzdem weitere ${Math.min(rest, REVIEW_CAP)}</button></div>` : '')
+          + (hear ? `<a class="btn big" href="#vocab/hear">Weiter: ${hear} Wörter verstehen (hören)</a>` : '');
       },
       correct: correctWord,
       get: id => { const w = wordById(id); return w && { t: w.t, d: w.d, note: state.notes[id] }; },
     });
+  } else if (mode === 'hear') {
+    hearSession(pane);
   } else if (mode === 'own') {
     vocabOwn(pane);
   } else {
     vocabNew(pane);
   }
 };
+
+// ---------- Rückrichtung: Wort hören → Bedeutung auf Deutsch ----------
+// Eigene Planung unter 'r:<Wort-ID>'. Ein Wort kommt erst dazu, wenn es in der Hauptrichtung
+// (Deutsch → Zielsprache) sitzt (Abstand ≥ 3 Tage) – sonst verdoppelt sich die Abfragemenge.
+const HEAR_NEW = 15; // neue Wörter in der Rückrichtung pro Tag
+const HEAR_CAP = 30; // Wiederholungen pro Runde
+function hearQueue() {
+  const words = new Map(allWords().map(w => [w.id, w]));
+  const due = dueIds(id => id.startsWith('r:') && words.has(id.slice(2))).slice(0, HEAR_CAP);
+  const l = dayLog();
+  const room = Math.max(0, Math.min(HEAR_NEW - (l.newHear || 0), HEAR_CAP - due.length));
+  const fresh = room ? allWords()
+    .filter(w => state.srs[w.id] && state.srs[w.id].iv >= 3 && !state.srs['r:' + w.id])
+    .slice(0, room).map(w => 'r:' + w.id) : [];
+  return due.concat(fresh);
+}
+function hearSession(pane) {
+  const queue = hearQueue();
+  let done = 0;
+  function show() {
+    keyHandler = null;
+    if (!queue.length) {
+      pane.innerHTML = `<div class="card flash"><div class="target">🎉</div><p>${done ? `Fertig – ${done} Wörter.` : 'Nichts zu tun. Wörter kommen hierher, sobald sie in der Abfrage sitzen (ab 3 Tagen Abstand).'}</p></div>`;
+      return;
+    }
+    const id = queue[0];
+    const wid = id.slice(2);
+    const w = wordById(wid);
+    if (!w) { queue.shift(); show(); return; }
+    const isNew = !state.srs[id];
+    pane.innerHTML = `
+      <div class="row between muted small"><span>${queue.length} übrig</span>${isNew ? '<span class="pill">neu in dieser Richtung</span>' : ''}</div>
+      <div class="card flash">
+        <button class="btn big" id="h-play">🔊 Anhören</button>
+        <div class="target" id="h-t" hidden>${esc(w.t)}</div>
+        <div id="h-answer" hidden>
+          <div class="native">${esc(w.d)}</div>
+          ${state.notes[wid] ? `<div class="hint">💡 ${esc(state.notes[wid])}</div>` : ''}
+        </div>
+      </div>
+      <p class="muted small">Hören → laut sagen, was es auf Deutsch heißt → aufdecken.</p>
+      <div class="row" id="h-pre">
+        <button class="btn" id="h-show">👁 Wort zeigen</button>
+        <button class="btn primary grow" id="h-reveal">Aufdecken</button>
+      </div>
+      <div id="h-post" hidden class="stack">
+        <div class="row"><button class="btn grow" id="h-fix">✎ Korrigieren</button></div>
+        <div class="rate">
+          <button class="btn again" data-r="0">Nochmal</button>
+          <button class="btn hard" data-r="1">Schwer</button>
+          <button class="btn good" data-r="2">Gut</button>
+          <button class="btn easy" data-r="3">Leicht</button>
+        </div>
+      </div>`;
+    let revealed = false;
+    const reveal = () => {
+      if (revealed) return;
+      revealed = true;
+      $('#h-t', pane).hidden = false;
+      $('#h-answer', pane).hidden = false;
+      $('#h-pre', pane).hidden = true;
+      $('#h-post', pane).hidden = false;
+    };
+    const rate = r => {
+      if (isNew) { const l = dayLog(); l.newHear = (l.newHear || 0) + 1; }
+      grade(id, r);
+      done++;
+      queue.shift();
+      if (r === 0) queue.push(id);
+      show();
+    };
+    speak(w.t);
+    $('#h-play', pane).onclick = () => speak(w.t);
+    $('#h-show', pane).onclick = () => { $('#h-t', pane).hidden = false; };
+    $('#h-reveal', pane).onclick = reveal;
+    $('#h-fix', pane).onclick = () => correctWord(wid, () => { const n = wordById(wid); if (n) { $('#h-t', pane).textContent = n.t; $('#h-answer .native', pane).textContent = n.d; } });
+    $$('.rate .btn', pane).forEach(b => { b.onclick = () => rate(Number(b.dataset.r)); });
+    keyHandler = e => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (!revealed && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); reveal(); }
+      else if (revealed && ['1', '2', '3', '4'].includes(e.key)) rate(Number(e.key) - 1);
+    };
+  }
+  show();
+}
 
 // ---------- Wörter ↔ Sätze ----------
 // Findet Wörter der Wortliste in Sätzen – über den Wortstamm, damit auch gebeugte Formen passen
@@ -1106,6 +1199,7 @@ function vocabOwn(pane) {
       const id = b.dataset.del;
       state.words = state.words.filter(w => w.id !== id);
       delete state.srs[id];
+      delete state.srs['r:' + id];
       delete state.notes[id];
       markDeleted(id);
       photoDB.del(photoKey(id)).catch(() => {});
@@ -1149,8 +1243,95 @@ function stopAudio() {
 function listenSeg(active) {
   return `<div class="seg">
     <button data-go="#listen" class="${active === 'sent' ? 'on' : ''}">🏝️ Sätze</button>
-    <button data-go="#listen/words" class="${active === 'words' ? 'on' : ''}">🧠 Gelernte Wörter</button>
+    <button data-go="#listen/words" class="${active === 'words' ? 'on' : ''}">🧠 Wörter</button>
+    <button data-go="#listen/check" class="${active === 'check' ? 'on' : ''}">👂 Hör-Check</button>
   </div>`;
+}
+
+// Hör-Check: Satz hören → verstanden? → Deutsch aufdecken. Ohne Bewertung/Wiederholungsplanung.
+function listenCheck(root) {
+  const opts = Object.assign({ island: 'all', count: 10 }, load('sl.listenc', {}));
+  const weak = weakSentences();
+  root.innerHTML = `
+    <h1>🎧 Hören</h1>
+    ${listenSeg('check')}
+    ${voiceNotice()}
+    <div id="hc-pane">
+      <div class="card">
+        <p class="small" style="margin-top:0">Satz nur hören – verstehst du ihn? Dann Deutsch aufdecken. Zählt nicht in die Wiederholungsplanung.</p>
+        <label for="hc-isl">Welche Sätze?</label>${islandSelect('hc-isl', opts.island, true, weak.length)}
+        <label for="hc-count">Anzahl</label><select id="hc-count">${[10, 20, 0].map(n => `<option value="${n}" ${n === opts.count ? 'selected' : ''}>${n || 'alle'}</option>`).join('')}</select>
+        <button class="btn primary big" id="hc-start" style="margin-top:12px">▶ Starten</button>
+      </div>
+    </div>`;
+  bindGo(root);
+  const pane = $('#hc-pane', root);
+  const pick = () => {
+    const v = opts.island;
+    let list = v === 'weak' ? weak.slice() : v === 'all' ? allSentences() : ((state.islands.find(i => i.id === v) || { sentences: [] }).sentences).slice();
+    if (v !== 'weak') for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+    return opts.count ? list.slice(0, opts.count) : list;
+  };
+  $('#hc-start', root).onclick = () => {
+    opts.island = $('#hc-isl', root).value;
+    opts.count = Number($('#hc-count', root).value);
+    save('sl.listenc', opts);
+    const list = pick();
+    if (!list.length) { toast('Keine Sätze in dieser Auswahl.'); return; }
+    run(list);
+  };
+  function run(list) {
+    let i = 0;
+    const missed = [];
+    function show() {
+      keyHandler = null;
+      if (i >= list.length) {
+        const ok = list.length - missed.length;
+        pane.innerHTML = `<div class="card flash"><div class="target">${ok}/${list.length}</div><p>verstanden</p></div>
+          ${missed.length ? `<div class="card"><b>Nicht verstanden</b><ul class="list">${missed.map(s => `<li><div><div class="t">${esc(s.t)}</div><div class="d">${esc(s.d)}</div></div></li>`).join('')}</ul>
+            <button class="btn" id="hc-again" style="margin-top:8px">Nur diese nochmal</button></div>` : ''}
+          <button class="btn big" id="hc-new">Neue Runde</button>`;
+        if ($('#hc-again', pane)) $('#hc-again', pane).onclick = () => run(missed.slice());
+        $('#hc-new', pane).onclick = () => listenCheck(root);
+        return;
+      }
+      const s = list[i];
+      pane.innerHTML = `
+        <div class="row between muted small"><span>${i + 1} / ${list.length}</span></div>
+        <div class="card flash">
+          <button class="btn big" id="hc-play">🔊 Nochmal hören</button>
+          <div class="sentence" id="hc-t" hidden>${esc(s.t)}</div>
+          <div class="native" id="hc-d" hidden>${esc(s.d)}</div>
+        </div>
+        <div class="row" id="hc-pre">
+          <button class="btn" id="hc-show">👁 Text zeigen</button>
+          <button class="btn primary grow" id="hc-reveal">Aufdecken</button>
+        </div>
+        <div class="row" id="hc-post" hidden>
+          <button class="btn grow" id="hc-no" style="color:var(--bad)">✗ Nicht verstanden</button>
+          <button class="btn grow" id="hc-yes" style="color:var(--good)">✓ Verstanden</button>
+        </div>`;
+      let revealed = false;
+      const reveal = () => {
+        if (revealed) return;
+        revealed = true;
+        $('#hc-t', pane).hidden = false; $('#hc-d', pane).hidden = false;
+        $('#hc-pre', pane).hidden = true; $('#hc-post', pane).hidden = false;
+      };
+      const next = ok => { if (!ok) missed.push(s); else addXP(1); i++; show(); };
+      speak(s.t);
+      $('#hc-play', pane).onclick = () => speak(s.t);
+      $('#hc-show', pane).onclick = () => { $('#hc-t', pane).hidden = false; };
+      $('#hc-reveal', pane).onclick = reveal;
+      $('#hc-yes', pane).onclick = () => next(true);
+      $('#hc-no', pane).onclick = () => next(false);
+      keyHandler = e => {
+        if (!revealed && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); reveal(); }
+        else if (revealed && (e.key === '1' || e.key === '2')) next(e.key === '2');
+      };
+    }
+    show();
+  }
 }
 
 // Gelernte Wörter anhören: Hör-Abfrage (Deutsch → Pause → Zielsprache) oder Nachsprechen
@@ -1163,7 +1344,7 @@ function listenWords(root) {
     ${voiceNotice()}
     <div class="card">
       <label>Art</label>
-      ${chips('lw-mode', [{ k: 'recall', l: 'Hör-Abfrage: Deutsch → selbst sagen → Lösung' }, { k: 'repeat', l: 'Anhören & nachsprechen' }], opts.mode === 'recall' ? 0 : 1, x => x.l)}
+      ${chips('lw-mode', [{ k: 'recall', l: 'Deutsch → selbst sagen → Lösung' }, { k: 'reverse', l: 'Wort hören → Bedeutung sagen → Deutsch' }, { k: 'repeat', l: 'Anhören & nachsprechen' }], ['recall', 'reverse', 'repeat'].indexOf(opts.mode), x => x.l)}
       <label>Welche Wörter?</label>
       ${chips('lw-pick', [{ k: 'hard', l: 'Schwierige zuerst' }, { k: 'recent', l: 'Zuletzt geübt' }, { k: 'all', l: 'Alle gemischt' }], ['hard', 'recent', 'all'].indexOf(opts.pick), x => x.l)}
       <div class="row" style="margin-top:6px">
@@ -1187,17 +1368,17 @@ function listenWords(root) {
   let list = pickList();
   // In der Hör-Abfrage bleibt die Lösung verdeckt, bis sie gesprochen wurde
   const renderList = (now = -1, shownUpTo = -1) => {
-    $('#lw-list', root).innerHTML = list.map((w, i) => `<li class="${i === now ? 'now' : ''}"><div><div class="t">${opts.mode === 'recall' && i > shownUpTo ? '…' : esc(w.t)}</div><div class="d">${esc(w.d)}</div></div></li>`).join('') || '<li class="muted">Keine Wörter.</li>';
+    $('#lw-list', root).innerHTML = list.map((w, i) => `<li class="${i === now ? 'now' : ''}"><div><div class="t">${opts.mode === 'recall' && i > shownUpTo ? '…' : esc(w.t)}</div><div class="d">${opts.mode === 'reverse' && i > shownUpTo ? '…' : esc(w.d)}</div></div></li>`).join('') || '<li class="muted">Keine Wörter.</li>';
   };
-  renderList(-1, opts.mode === 'recall' ? -1 : list.length);
-  $$('.chips[data-name="lw-mode"] .chip', root).forEach(c => { c.onclick = () => { stopAudio(); opts.mode = ['recall', 'repeat'][c.dataset.i]; store(); listenWords(root); }; });
+  renderList(-1, opts.mode !== 'repeat' ? -1 : list.length);
+  $$('.chips[data-name="lw-mode"] .chip', root).forEach(c => { c.onclick = () => { stopAudio(); opts.mode = ['recall', 'reverse', 'repeat'][c.dataset.i]; store(); listenWords(root); }; });
   $$('.chips[data-name="lw-pick"] .chip', root).forEach(c => { c.onclick = () => { stopAudio(); opts.pick = ['hard', 'recent', 'all'][c.dataset.i]; store(); listenWords(root); }; });
   $('#lw-count', root).onchange = e => { stopAudio(); opts.count = Number(e.target.value); store(); listenWords(root); };
   $('#lw-pause', root).onchange = e => { opts.pause = Number(e.target.value); store(); };
   $('#lw-loop', root).onchange = e => { opts.loop = e.target.checked; store(); };
   const btn = $('#lw-play', root);
   btn.onclick = async () => {
-    if (listenToken) { stopAudio(); btn.textContent = '▶ Abspielen'; renderList(-1, opts.mode === 'recall' ? -1 : list.length); return; }
+    if (listenToken) { stopAudio(); btn.textContent = '▶ Abspielen'; renderList(-1, opts.mode !== 'repeat' ? -1 : list.length); return; }
     if (!list.length) return;
     const token = { stop: false };
     listenToken = token;
@@ -1207,7 +1388,7 @@ function listenWords(root) {
     do {
       for (let i = 0; i < list.length && !token.stop; i++) {
         const w = list[i];
-        renderList(i, opts.mode === 'recall' ? i - 1 : list.length);
+        renderList(i, opts.mode !== 'repeat' ? i - 1 : list.length);
         const li = $('#lw-list .now', root);
         if (li) li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         if (opts.mode === 'recall') {
@@ -1219,6 +1400,13 @@ function listenWords(root) {
           if (!token.stop) await wait(Math.max(1500, ms / 2));
           if (!token.stop) await speakP(w.t);            // nochmal zum Nachsprechen
           if (!token.stop) await wait(ms);
+        } else if (opts.mode === 'reverse') {
+          await speakP(w.t);                             // Zielsprache
+          if (!token.stop) await wait(ms);               // Bedeutung selbst sagen
+          if (token.stop) break;
+          renderList(i, i);
+          await speakP(w.d, { lang: 'de' });             // Lösung
+          if (!token.stop) await wait(Math.max(1500, ms / 2));
         } else {
           for (let r = 0; r < 2 && !token.stop; r++) {
             await speakP(w.t);
@@ -1228,12 +1416,13 @@ function listenWords(root) {
       }
       if (opts.loop && !token.stop && opts.pick === 'all') list = pickList();
     } while (opts.loop && !token.stop);
-    if (listenToken === token) { listenToken = null; listening = false; btn.textContent = '▶ Abspielen'; renderList(-1, opts.mode === 'recall' ? -1 : list.length); }
+    if (listenToken === token) { listenToken = null; listening = false; btn.textContent = '▶ Abspielen'; renderList(-1, opts.mode !== 'repeat' ? -1 : list.length); }
   };
 }
 
 views.listen = function (root, arg) {
   if (arg === 'words') { listenWords(root); return; }
+  if (arg === 'check') { listenCheck(root); return; }
   const opts = Object.assign({ island: 'weak', de: false, repeat: 2, pause: 2, loop: false }, load('sl.listen', {}));
   const weak = weakSentences();
   root.innerHTML = `

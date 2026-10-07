@@ -76,6 +76,13 @@ const URL = 'http://localhost:8765/';
   await p2.goto(URL + '#texts/' + id); await p2.waitForTimeout(200);
   await p2.click('#tx-play'); await p2.waitForTimeout(3000);
   console.log('Wiedergabe mit Zuordnung:', JSON.stringify((await p2.evaluate(() => window.__spoken)).filter(x => x.t !== 'Ciao, come stai? Io sto bene.').map(x => [x.t, x.voice, x.pitch])));
+  // Endlosschleife
+  await p2.evaluate(() => { window.__spoken = []; });
+  await p2.check('#tx-loop');
+  await p2.click('#tx-play'); await p2.waitForTimeout(6500);
+  const n = await p2.evaluate(() => window.__spoken.filter(x => x.t === 'Ciao Marco!').length);
+  await p2.click('#tx-play');
+  console.log('Schleife: Zeile mehrfach gespielt:', n >= 2, '| gestoppt:', await p2.textContent('#tx-play'));
   console.log('ERRORS:', errs);
   await b.close();
 })();

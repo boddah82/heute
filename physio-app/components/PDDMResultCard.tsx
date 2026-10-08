@@ -1,7 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { PDDMAssessment, PDDMDomainId, PDDMStatus } from "@/lib/types";
 import { PDDM_DOMAINS, PDDM_DOMAIN_LABELS, PDDM_DOMAIN_HINTS, domainRecommendation, statusLabel, explainDomain } from "@/lib/pddm";
+import PDDMResultPrintable from "./PDDMResultPrintable";
+
+function printNode() {
+  requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("de-DE", {
@@ -42,16 +48,28 @@ export default function PDDMResultCard({
   onDelete?: (id: string) => void;
 }) {
   const relevantDomains = PDDM_DOMAINS.filter((d) => assessment.results[d].status !== "NONE");
+  const [printing, setPrinting] = useState(false);
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 shadow-sm space-y-3">
       <div className="flex items-start justify-between">
         <p className="text-xs text-slate-500 dark:text-slate-400">{formatDate(assessment.date)}</p>
-        {onDelete && (
-          <button onClick={() => onDelete(assessment.id)} className="text-xs text-slate-400 dark:text-slate-500">
-            Löschen
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              setPrinting(true);
+              printNode();
+            }}
+            className="text-xs text-brand-700 dark:text-brand-300 font-medium"
+          >
+            Drucken
           </button>
-        )}
+          {onDelete && (
+            <button onClick={() => onDelete(assessment.id)} className="text-xs text-slate-400 dark:text-slate-500">
+              Löschen
+            </button>
+          )}
+        </div>
       </div>
 
       {assessment.painBaseline && (
@@ -133,6 +151,12 @@ export default function PDDMResultCard({
         <p className="text-sm text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
           Aktuell kein Bereich auffällig – der Fokus kann auf der reinen Belastungssteuerung bleiben.
         </p>
+      )}
+
+      {printing && (
+        <div className="hidden print:block">
+          <PDDMResultPrintable assessment={assessment} />
+        </div>
       )}
     </div>
   );

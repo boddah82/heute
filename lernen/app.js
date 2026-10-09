@@ -86,7 +86,7 @@ function starterIslands(lang) {
 }
 function stateKey(lang) { return 'sl.data.' + lang; }
 function emptyState() {
-  return { words: [], islands: [], srs: {}, notes: {}, noteTs: {}, overrides: {}, log: {}, deleted: {}, builderVerbs: [], resetAt: 0, level: null, talkAdjust: 0, texts: [] };
+  return { words: [], islands: [], srs: {}, notes: {}, noteTs: {}, overrides: {}, log: {}, deleted: {}, builderVerbs: [], resetAt: 0, level: null, talkAdjust: 0, texts: [], grammar: {}, weekTests: {} };
 }
 function loadState(lang) {
   let s = load(stateKey(lang), null);
@@ -822,6 +822,12 @@ function todayPlan() {
   // Lücken auffüllen, falls noch nichts empfohlen ist
   if (steps.length < 2 && dueS && !steps.some(x => x.href === '#review')) steps.push({ href: '#review', title: 'Sätze wiederholen', why: `${dueS} fällig` });
   if (steps.length < 2 && (l.sec.listen || 0) < 300) steps.push({ href: '#listen/words', title: 'Gelernte Wörter anhören', why: 'nebenbei, ohne Bildschirm' });
+  // Wochen-Check ab Samstag, wenn diese Woche noch keiner gemacht wurde
+  const wk = weekStart(today());
+  if (steps.length < 3 && today() - wk >= 5 && !(state.weekTests || {})[wk] && learnedWords >= 20) steps.push({ href: '#week/test', title: 'Wochen-Check (≈ 5 Min.)', why: 'was sitzt nach dieser Woche?' });
+  // Grammatik: alle paar Tage eine Regel, wenn noch Platz ist
+  const ng = nextGrammar();
+  if (steps.length < 3 && ng && learnedWords >= 30 && grammarDaysSince() >= 3 && (talkCfg.key || (grammarState()[ng.id] || {}).lesson)) steps.push({ href: '#grammar/' + ng.id, title: 'Grammatik: ' + ng.title, why: 'eine Regel, ca. 10 Minuten' });
   return { steps: steps.slice(0, 3), pause: pauseDays() };
 }
 
@@ -875,6 +881,10 @@ ${talkLocked() ? '' : `    <a class="card step" href="#talk">
       <div class="num">🧱</div>
       <div class="grow"><b>Satzbaukasten</b><div class="meta">${learnedWords < 300 ? 'Für den Start: mit wenigen Mustern erste Gespräche führen' : 'Drill: zufällige Sätze laut bilden'} · heute ${l.drill || 0} Sätze</div></div>
       <div>›</div></a>
+    ${(() => { const ng = nextGrammar(); const gd = grammarList().filter(x => (grammarState()[x.id] || {}).done).length; return `<a class="card step" href="#grammar${ng ? '/' + ng.id : ''}">
+      <div class="num">📐</div>
+      <div class="grow"><b>Grammatik</b><div class="meta">${ng ? 'Als Nächstes: ' + esc(ng.title) : 'Alle Lektionen geschafft'} · ${gd}/${grammarList().length}</div></div>
+      <div>›</div></a>`; })()}
     <h2>Tagesablauf (~30 Min.)</h2>
     ${STEPS.map((s, i) => {
       const m = minutesToday(s.key);
@@ -1028,6 +1038,351 @@ function hearSession(pane) {
   show();
 }
 
+// ---------- Wortpakete nach Alltagssituationen ----------
+function packList() {
+  return ((window.PACKS || {})[settings.lang] || []).filter(p => (settings.teen ? !p.adult : !p.teen));
+}
+function packEntries(p) {
+  return p.words.split('\n').map(l => l.trim()).filter(Boolean)
+    .filter(l => !(settings.teen && l.startsWith('!')))
+    .map(l => splitPair(l.replace(/^!/, ''))).filter(x => x && x[0] && x[1]);
+}
+// Vergleichsschlüssel: Italienisch ohne bestimmten Artikel (il treno = treno), Englisch exakt (to work ≠ work)
+function packKey(t) {
+  const k = t.toLowerCase().replace(/[!?.…]/g, '').trim();
+  return settings.lang === 'it' ? k.replace(/^(il |lo |la |i |gli |le |l')/, '').trim() : k;
+}
+// Paketwörter: vorhandene Wörter wiederverwenden, fehlende (create) als eigene Wörter anlegen
+function packWordIds(p, create) {
+  const byKey = new Map();
+  allWords().forEach(w => { const k = packKey(w.t); if (!byKey.has(k)) byKey.set(k, w.id); });
+  let added = 0;
+  const ids = packEntries(p).map(([t, d]) => {
+    const id = byKey.get(packKey(t));
+    if (id || !create) return id || null;
+    const w = { id: 'u:' + uid(), t, d, ts: Date.now(), pack: p.k };
+    state.words.push(w);
+    byKey.set(packKey(t), w.id);
+    added++;
+    return w.id;
+  });
+  if (added) persist();
+  return ids;
+}
+function packOpen(p) { return packWordIds(p, false).filter(id => !(id && state.srs[id])).length; }
+function activePack() {
+  const k = (settings.packs || {})[settings.lang];
+  return k ? packList().find(p => p.k === k) || null : null;
+}
+
+// ---------- Grammatik: eine Regel pro Lektion ----------
+const GRAMMAR_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['intro', 'rule', 'compare', 'forms', 'examples', 'pitfall', 'exercises'],
+  properties: {
+    intro: { type: 'string' }, rule: { type: 'string' }, compare: { type: 'string' }, pitfall: { type: 'string' },
+    forms: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de'], properties: { t: { type: 'string' }, de: { type: 'string' } } } },
+    examples: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de'], properties: { t: { type: 'string' }, de: { type: 'string' } } } },
+    exercises: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['kind', 'q', 'options', 'answer', 'solution', 'explain'], properties: {
+      kind: { type: 'string', enum: ['choice', 'translate'] }, q: { type: 'string' }, options: { type: 'array', items: { type: 'string' } },
+      answer: { type: 'integer' }, solution: { type: 'string' }, explain: { type: 'string' },
+    } } },
+  },
+};
+const GRAMMAR_PASS = 0.75; // ab 6 von 8 richtig gilt die Lektion als geschafft
+function grammarList() { return (window.GRAMMAR || {})[settings.lang] || []; }
+function grammarState() { if (!state.grammar) state.grammar = {}; return state.grammar; }
+function nextGrammar() { const g = grammarState(); return grammarList().find(x => !(g[x.id] && g[x.id].done)) || null; }
+function grammarDaysSince() {
+  const last = Math.max(0, ...Object.values(grammarState()).map(x => x.doneTs || x.practiceTs || 0));
+  return last ? Math.floor((Date.now() - last) / 86400000) : 99;
+}
+function fmtRich(s) { return esc(s || '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>'); }
+async function createGrammarLesson(item) {
+  const lang = settings.lang === 'it' ? 'Italian' : 'British English';
+  const list = grammarList();
+  const before = list.slice(0, list.indexOf(item)).map(x => x.title).join('; ');
+  const known = knownWordList(300);
+  const r = await callClaude(
+    `You are a patient, friendly ${lang} teacher for a German-speaking learner. Write ONE short grammar lesson about exactly this topic: "${item.title}" (${item.what}). Teach only this one rule – nothing else.
+Earlier lessons in the course: ${before || 'none'}. You may use those structures in examples; avoid grammar from later lessons where possible.
+Learner level: ${talkStage().id} (vocabulary-based estimate).${settings.lang === 'it' ? ` The learner is ${settings.profile.gender === 'f' ? 'female' : 'male'} – use matching endings when sentences are about the learner.` : ''}
+Words the learner already knows (for orientation only): ${known.length ? known.join(', ') : 'almost none'}.
+${settings.teen ? TEEN_RULES + '\n' : ''}
+All explanations in simple, friendly German (du-Form), short sentences, no grammar jargon without a short explanation. Every ${lang} sentence must be correct and natural, exactly as a native speaker would say it; prefer known words, but naturalness always comes first.
+Fields:
+- "intro": 1–2 sentences: what the learner learns and why it is useful in everyday life.
+- "rule": the rule in 3–6 short sentences; mark key forms with **double asterisks**.
+- "compare": how it differs from or resembles German (1–3 sentences); empty string if not helpful.
+- "forms": a small table of forms (max 10 rows, t = ${lang}, de = German); empty array if the topic has no forms table.
+- "examples": 5 everyday example sentences.
+- "pitfall": the typical mistake German speakers make with this rule (1–2 sentences).
+- "exercises": exactly 8 exercises that test only this rule. First 5 with kind "choice": q = a ${lang} sentence with ___ for the gap (or a short German question about the rule), options = 3 short answers, answer = index of the correct option, solution = the complete correct ${lang} sentence. Then 3 with kind "translate": q = a short German sentence, options = [], answer = 0, solution = its natural ${lang} translation. "explain" = one short German sentence why the solution is right, naming the rule.`,
+    [{ role: 'user', content: 'Write the lesson.' }], GRAMMAR_SCHEMA, 12000);
+  const g = grammarState();
+  const prev = g[item.id] || {};
+  g[item.id] = Object.assign({}, prev, { ts: Date.now(), lesson: r.data });
+  persist();
+  return r.cost;
+}
+let grammarBusy = null;
+views.grammar = function (root, arg) {
+  const item = arg && grammarList().find(x => x.id === arg);
+  if (item) { grammarLesson(root, item); return; }
+  const g = grammarState();
+  const next = nextGrammar();
+  const done = grammarList().filter(x => g[x.id] && g[x.id].done).length;
+  root.innerHTML = `
+    ${islandsSeg('grammar')}
+    <p class="muted small">Eine Regel pro Lektion, in fester Reihenfolge: kurze Erklärung, Vergleich mit dem Deutschen, Beispiele, 8 Übungen. Ab 6 von 8 richtig gilt sie als geschafft. ${done}/${grammarList().length} geschafft.</p>
+    ${talkCfg.key ? '' : '<div class="notice small">Neue Lektionen schreibt Claude (einmalig grob 5–10 Cent pro Lektion, Schätzung). Dafür einen <a href="#talk/setup">Claude-Schlüssel</a> eintragen. Schon erstellte Lektionen gehen ohne.</div>'}
+    ${grammarList().map((x, i) => {
+      const s = g[x.id] || {};
+      const badge = s.done ? `✓ ${Math.round((s.best || 0) * 100)} %` : s.lesson ? 'begonnen' : '';
+      return `<a class="card step ${s.done ? 'done' : ''}" href="#grammar/${x.id}" ${next === x ? 'style="border-color:var(--accent)"' : ''}>
+        <div class="num">${s.done ? '✓' : i + 1}</div>
+        <div class="grow"><b>${esc(x.title)}</b>${next === x ? ' <span class="pill">als Nächstes</span>' : ''}<div class="meta">${esc(x.what)}${badge && !s.done ? ' · ' + badge : s.done ? ' · ' + badge : ''}</div></div><div>›</div></a>`;
+    }).join('')}`;
+  bindGo(root);
+};
+function grammarLesson(root, item) {
+  const g = grammarState();
+  const s = g[item.id] || {};
+  const L = s.lesson;
+  const islandId = 'gram-' + settings.lang;
+  const isl = state.islands.find(i => i.id === islandId);
+  const inIsland = t => !!(isl && isl.sentences.some(x => x.t === t));
+  if (!L) {
+    root.innerHTML = `<a href="#grammar" class="small">‹ Alle Lektionen</a>
+      <h1>📐 ${esc(item.title)}</h1>
+      <div class="card"><p class="small">${esc(item.what)}</p>
+        ${talkCfg.key ? `<button class="btn primary big" id="gr-make" ${grammarBusy ? 'disabled' : ''}>${grammarBusy === item.id ? '🤖 Claude schreibt die Lektion …' : '📐 Lektion erstellen'}</button>
+          <p class="muted small">Einmalig grob 5–10 Cent (Schätzung). Danach gespeichert und beliebig oft kostenlos.</p>`
+        : '<p class="small">Dafür brauchst du einen <a href="#talk/setup">Claude-Schlüssel</a>.</p>'}</div>`;
+    if ($('#gr-make', root)) $('#gr-make', root).onclick = async () => {
+      grammarBusy = item.id;
+      grammarLesson(root, item);
+      try { const cost = await createGrammarLesson(item); toast(`Lektion erstellt (≈ $${cost.toFixed(2)})`); }
+      catch (e) { toast(e.message); }
+      grammarBusy = null;
+      if (location.hash === '#grammar/' + item.id) grammarLesson(root, item);
+    };
+    return;
+  }
+  root.innerHTML = `<a href="#grammar" class="small">‹ Alle Lektionen</a>
+    <h1>📐 ${esc(item.title)}</h1>
+    ${s.done ? `<div class="notice small">✓ Geschafft – bestes Ergebnis ${Math.round((s.best || 0) * 100)} %. Üben geht jederzeit.</div>` : ''}
+    <div class="card stack">
+      <p>${fmtRich(L.intro)}</p>
+      <p>${fmtRich(L.rule)}</p>
+      ${L.compare ? `<p class="small">🇩🇪 ${fmtRich(L.compare)}</p>` : ''}
+    </div>
+    ${L.forms && L.forms.length ? `<div class="card"><table class="wk">${L.forms.map(f => `<tr><td><b>${esc(f.t)}</b></td><td class="muted">${esc(f.de)}</td></tr>`).join('')}</table></div>` : ''}
+    <h2>Beispiele</h2>
+    <ul class="list card">${L.examples.map((x, i) => `<li><div class="grow"><div class="t">${esc(x.t)}</div><div class="d">${esc(x.de)}</div></div>
+      <div class="stack" style="flex:none"><button class="btn small" data-gp="${i}">🔊</button><button class="btn small" data-ga="${i}" ${inIsland(x.t) ? 'disabled' : ''} title="In die Wiederholung">➕</button></div></li>`).join('')}</ul>
+    ${L.pitfall ? `<div class="notice warn small">⚠️ ${fmtRich(L.pitfall)}</div>` : ''}
+    <button class="btn primary big" id="gr-ex">✏️ Übung starten (${L.exercises.length} Aufgaben)</button>
+    ${talkCfg.key ? '<button class="btn small" id="gr-redo" style="margin-top:10px">🔄 Lektion neu erstellen</button>' : ''}
+    <p class="muted small">Inhalt von Claude erstellt – Fehler sind möglich. ➕ holt Beispielsätze in die Insel „Grammatik“ (Wiederholung & Shadowing).</p>`;
+  $$('[data-gp]', root).forEach(b => { b.onclick = () => speak(L.examples[b.dataset.gp].t); });
+  $$('[data-ga]', root).forEach(b => {
+    b.onclick = () => {
+      const x = L.examples[b.dataset.ga];
+      let target = state.islands.find(i => i.id === islandId);
+      if (!target) { target = { id: islandId, title: 'Grammatik', sentences: [], ts: Date.now() }; state.islands.push(target); }
+      if (!target.sentences.some(y => y.t === x.t)) target.sentences.push({ id: 's:' + uid(), t: x.t, d: x.de, ts: Date.now() });
+      persist();
+      b.disabled = true;
+      toast('In Insel „Grammatik“ – kommt in die Wiederholung');
+    };
+  });
+  $('#gr-ex', root).onclick = () => grammarPractice(root, item);
+  if ($('#gr-redo', root)) $('#gr-redo', root).onclick = async () => {
+    if (!confirm('Lektion neu erstellen? Kostet wieder ein paar Cent; dein Fortschritt bleibt.')) return;
+    const b = $('#gr-redo', root);
+    b.disabled = true; b.textContent = '🤖 Schreibe …';
+    try { await createGrammarLesson(item); toast('Neu erstellt'); } catch (e) { toast(e.message); }
+    if (location.hash === '#grammar/' + item.id) grammarLesson(root, item);
+  };
+}
+function grammarPractice(root, item) {
+  const s = grammarState()[item.id];
+  const ex = s.lesson.exercises.filter(x => x.kind === 'translate' || (x.options && x.options.length >= 2));
+  let i = 0, right = 0;
+  const wrong = [];
+  function finish() {
+    keyHandler = null;
+    const score = ex.length ? right / ex.length : 0;
+    const first = !s.done;
+    s.practiceTs = Date.now();
+    s.last = score;
+    s.best = Math.max(s.best || 0, score);
+    if (score >= GRAMMAR_PASS && !s.done) { s.done = true; s.doneTs = Date.now(); addXP(10); }
+    s.ts = Date.now();
+    persist();
+    const next = nextGrammar();
+    root.innerHTML = `<a href="#grammar" class="small">‹ Alle Lektionen</a>
+      <div class="card flash"><div class="target">${right}/${ex.length}</div>
+        <p>${score >= GRAMMAR_PASS ? (first && s.done ? '✓ Lektion geschafft!' : '✓ Gut gemacht.') : 'Noch nicht ganz – lies die Regel nochmal und übe erneut.'}</p></div>
+      ${wrong.length ? `<div class="card"><b>Deine Fehler</b><ul class="list">${wrong.map(w => `<li><div><div class="d">${esc(w.q)}</div><div class="t">${esc(w.solution)}</div><div class="d">💡 ${esc(w.explain)}</div></div></li>`).join('')}</ul></div>` : ''}
+      <div class="row"><button class="btn grow" id="gr-again">Nochmal üben</button><a class="btn grow" href="#grammar/${item.id}">Zur Regel</a></div>
+      ${score >= GRAMMAR_PASS && next ? `<a class="btn primary big" href="#grammar/${next.id}" style="display:block;margin-top:8px">Weiter: ${esc(next.title)}</a>` : ''}`;
+    $('#gr-again', root).onclick = () => grammarPractice(root, item);
+  }
+  function show() {
+    keyHandler = null;
+    cancelDictation();
+    if (i >= ex.length) { finish(); return; }
+    const x = ex[i];
+    const choice = x.kind === 'choice';
+    root.innerHTML = `<a href="#grammar/${item.id}" class="small">‹ ${esc(item.title)}</a>
+      <div class="row between muted small" style="margin-top:8px"><span>Aufgabe ${i + 1} / ${ex.length}</span><span>${right} richtig</span></div>
+      <div class="progress" style="margin:6px 0 12px"><div style="width:${i / ex.length * 100}%"></div></div>
+      <div class="card flash">
+        <div class="muted small">${choice ? 'Was passt?' : `Auf ${LANGS[settings.lang].name}:`}</div>
+        <div class="sentence">${esc(x.q)}</div>
+      </div>
+      ${choice ? `<div class="stack" id="gr-opts">${x.options.map((o, k) => `<button class="btn" data-o="${k}" style="width:100%">${esc(o)}</button>`).join('')}</div>`
+        : `<input type="text" id="gr-typed" placeholder="Antwort tippen (oder sprechen / im Kopf)" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <div class="row" id="gr-pre" style="margin-top:8px">${SR ? '<button class="btn" id="gr-say">🎙 Sprechen</button>' : ''}<button class="btn primary grow" id="gr-reveal">Aufdecken</button></div>`}
+      <div id="gr-res"></div>`;
+    const result = ok => {
+      const res = $('#gr-res', root);
+      res.innerHTML = `<div class="notice ${ok === false ? 'warn' : ''}" style="margin-top:10px">
+          ${ok === true ? '✓ Richtig! ' : ok === false ? '✗ Richtig wäre: ' : ''}<b>${esc(x.solution)}</b> <button class="btn small" id="gr-play">🔊</button>
+          <div class="small" style="margin-top:4px">💡 ${esc(x.explain)}</div></div>`;
+      $('#gr-play', res).onclick = () => speak(x.solution);
+    };
+    const next = ok => {
+      if (ok) { right++; addXP(1); } else wrong.push(x);
+      i++;
+      show();
+    };
+    if (choice) {
+      let answered = false;
+      $$('#gr-opts [data-o]', root).forEach(b => {
+        b.onclick = () => {
+          if (answered) return;
+          answered = true;
+          const k = Number(b.dataset.o);
+          const ok = k === x.answer;
+          $$('#gr-opts [data-o]', root).forEach(o => {
+            const n = Number(o.dataset.o);
+            if (n === x.answer) o.style.cssText += ';border-color:var(--good);color:var(--good);font-weight:600';
+            else if (n === k) o.style.cssText += ';border-color:var(--bad);color:var(--bad)';
+            o.disabled = n !== x.answer && n !== k;
+          });
+          result(ok);
+          speak(x.solution);
+          $('#gr-res', root).insertAdjacentHTML('beforeend', '<button class="btn primary big" id="gr-next" style="margin-top:8px">Weiter</button>');
+          $('#gr-next', root).onclick = () => next(ok);
+        };
+      });
+    } else {
+      let said = '';
+      const reveal = () => {
+        $('#gr-pre', root).hidden = true;
+        const attempt = said || $('#gr-typed', root).value.trim();
+        result(null);
+        const res = $('#gr-res', root);
+        if (attempt) { const c = compareWords(x.solution, attempt); res.insertAdjacentHTML('afterbegin', `<p class="small">Deine Antwort: „${esc(attempt)}“ – ${c.html} <b>${c.score}%</b></p>`); }
+        speak(x.solution);
+        res.insertAdjacentHTML('beforeend', `<p class="muted small">Stimmt deine Antwort (kleine Abweichungen sind ok)?</p><div class="row"><button class="btn grow" id="gr-no" style="color:var(--bad)">✗ Falsch</button><button class="btn grow" id="gr-yes" style="color:var(--good)">✓ Richtig</button></div>`);
+        $('#gr-yes', root).onclick = () => next(true);
+        $('#gr-no', root).onclick = () => next(false);
+      };
+      $('#gr-reveal', root).onclick = reveal;
+      $('#gr-typed', root).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); reveal(); } });
+      if ($('#gr-say', root)) micToggle($('#gr-say', root), '🎙 Sprechen', t => { said = t; reveal(); }, t => { $('#gr-typed', root).value = t; });
+    }
+  }
+  show();
+}
+
+// ---------- Wochen-Check: kurzer Test ohne KI, misst den Stand der Woche ----------
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function weekTestItems() {
+  const ws = weekStart(today()) * 86400000;
+  const learned = Object.entries(state.srs).filter(([id]) => isWordId(id)).map(([id, c]) => ({ w: wordById(id), c })).filter(x => x.w);
+  // Wörter dieser Woche zuerst, dann der Rest gemischt
+  const words = shuffle(learned.filter(x => (x.c.ts || 0) >= ws)).concat(shuffle(learned.filter(x => (x.c.ts || 0) < ws))).map(x => x.w);
+  const uniq = (list, key) => { const seen = new Set(); return list.filter(x => !seen.has(key(x)) && seen.add(key(x))); };
+  const pool = uniq(words, w => w.t.toLowerCase());
+  const opts = (right, all, key) => shuffle([right].concat(shuffle(all.filter(x => key(x) !== key(right))).slice(0, 3)));
+  const items = [];
+  pool.slice(0, 5).forEach(w => items.push({ cat: 'w', q: w.d, options: opts(w, pool, x => x.t).map(x => x.t), answer: w.t }));
+  pool.slice(5, 9).forEach(w => items.push({ cat: 'h', audio: w.t, q: '🔊 Was heißt das?', options: opts(w, uniq(pool, x => x.d), x => x.d).map(x => x.d), answer: w.d }));
+  const sents = uniq(allSentences().filter(s => state.srs[s.id]), s => s.d);
+  shuffle(sents).slice(0, 3).forEach(s => items.push({ cat: 's', audio: s.t, q: '🔊 Was bedeutet der Satz?', options: shuffle([s].concat(shuffle(sents.filter(x => x !== s)).slice(0, 2))).map(x => x.d), answer: s.d }));
+  const g = grammarState();
+  const gex = [].concat(...grammarList().filter(x => g[x.id] && g[x.id].done && g[x.id].lesson).map(x => g[x.id].lesson.exercises.filter(e => e.kind === 'choice' && e.options[e.answer])));
+  shuffle(gex).slice(0, 3).forEach(e => items.push({ cat: 'g', q: e.q, options: e.options.slice(), answer: e.options[e.answer], explain: e.explain }));
+  return items.filter(x => x.options.length >= 2);
+}
+const WT_CATS = { w: '🧠 Wörter', h: '👂 Wörter hören', s: '🎧 Sätze verstehen', g: '📐 Grammatik' };
+function weekTest(root) {
+  const items = weekTestItems();
+  if (Object.keys(state.srs).filter(isWordId).length < 8 || items.length < 6) {
+    root.innerHTML = `<a href="#week" class="small">‹ Wochenrückblick</a><div class="card"><p>Für den Wochen-Check brauchst du mindestens 8 gelernte Wörter.</p></div>`;
+    return;
+  }
+  let i = 0;
+  const cats = {};
+  const wrong = [];
+  function finish() {
+    const ok = Object.values(cats).reduce((a, c) => a + c[0], 0);
+    const pct = Math.round(ok / items.length * 100);
+    const wk = weekStart(today());
+    state.weekTests = state.weekTests || {};
+    const prev = state.weekTests[wk];
+    state.weekTests[wk] = { ts: Date.now(), last: pct, best: Math.max(pct, prev ? prev.best : 0), cats };
+    addXP(10);
+    persist();
+    const before = Object.keys(state.weekTests).map(Number).filter(k => k < wk).sort((a, b) => b - a)[0];
+    const pb = before !== undefined ? state.weekTests[before].last : null;
+    root.innerHTML = `<a href="#week" class="small">‹ Wochenrückblick</a>
+      <div class="card flash"><div class="target">${pct} %</div><p>${ok} von ${items.length} richtig${pb !== null ? ` · letzte Woche ${pb} %` : ''}</p></div>
+      <div class="card"><table class="wk">${Object.entries(cats).map(([k, c]) => `<tr><td>${WT_CATS[k]}</td><td><b>${c[0]}/${c[1]}</b></td></tr>`).join('')}</table></div>
+      ${wrong.length ? `<div class="card"><b>Das übst du nochmal</b><ul class="list">${wrong.map(w => `<li><div><div class="d">${esc(w.audio || w.q)}</div><div class="t">${esc(w.answer)}</div>${w.explain ? `<div class="d">💡 ${esc(w.explain)}</div>` : ''}</div></li>`).join('')}</ul></div>` : ''}
+      <a class="btn big" href="#week" style="display:block">Zum Wochenrückblick</a>`;
+  }
+  function show() {
+    if (i >= items.length) { finish(); return; }
+    const x = items[i];
+    root.innerHTML = `<a href="#week" class="small">‹ Wochenrückblick</a>
+      <div class="row between muted small" style="margin-top:8px"><span>${WT_CATS[x.cat]}</span><span>${i + 1} / ${items.length}</span></div>
+      <div class="progress" style="margin:6px 0 12px"><div style="width:${i / items.length * 100}%"></div></div>
+      <div class="card flash">
+        ${x.audio ? '<button class="btn big" id="wt-play">🔊 Nochmal hören</button>' : ''}
+        <div class="${x.cat === 'w' ? 'native' : 'sentence'}">${esc(x.q)}</div>
+      </div>
+      <div class="stack" id="wt-opts">${x.options.map((o, k) => `<button class="btn" data-o="${k}" style="width:100%">${esc(o)}</button>`).join('')}</div>
+      <div id="wt-res"></div>`;
+    if (x.audio) { speak(x.audio); $('#wt-play', root).onclick = () => speak(x.audio); }
+    let answered = false;
+    $$('#wt-opts [data-o]', root).forEach(b => {
+      b.onclick = () => {
+        if (answered) return;
+        answered = true;
+        const pick = x.options[b.dataset.o];
+        const ok = pick === x.answer;
+        cats[x.cat] = cats[x.cat] || [0, 0];
+        cats[x.cat][1]++;
+        if (ok) { cats[x.cat][0]++; addXP(1); } else wrong.push(x);
+        $$('#wt-opts [data-o]', root).forEach(o => {
+          const v = x.options[o.dataset.o];
+          if (v === x.answer) o.style.cssText += ';border-color:var(--good);color:var(--good);font-weight:600';
+          else if (o === b) o.style.cssText += ';border-color:var(--bad);color:var(--bad)';
+        });
+        if (x.cat === 'w') speak(x.answer);
+        $('#wt-res', root).innerHTML = `${x.explain && !ok ? `<p class="small">💡 ${esc(x.explain)}</p>` : ''}<button class="btn primary big" id="wt-next" style="margin-top:8px">Weiter</button>`;
+        $('#wt-next', root).onclick = () => { i++; show(); };
+      };
+    });
+  }
+  show();
+}
+
 // ---------- Wörter ↔ Sätze ----------
 // Findet Wörter der Wortliste in Sätzen – über den Wortstamm, damit auch gebeugte Formen passen
 // (bicchieri → bicchiere, mangiamo → mangiare). Unregelmäßige Formen (sono → essere) werden nicht erkannt.
@@ -1111,24 +1466,38 @@ function vocabNew(pane) {
   if (recallTab) recallTab.textContent = `Abfragen (${dueIds(isWordId).length})`;
   // Wörter aus deinen Sätzen (schwierige zuerst) vor der Häufigkeitsreihenfolge
   const prio = wordPriorities();
-  const pool = allWords().filter(w => !state.srs[w.id])
+  // Wortpaket gewählt: dessen Wörter in Paket-Reihenfolge, sonst nach Häufigkeit (Wörter aus deinen Sätzen zuerst)
+  const pack = activePack();
+  let pool = [];
+  if (pack) {
+    const byId = new Map(allWords().map(w => [w.id, w]));
+    pool = packWordIds(pack, true).filter(id => id && !state.srs[id]).map(id => byId.get(id)).filter(Boolean);
+  }
+  const packDone = pack && !pool.length;
+  if (!pool.length) pool = allWords().filter(w => !state.srs[w.id])
     .map((w, i) => ({ w, i, p: prio.get(w.id) }))
     .sort((a, b) => (b.p ? b.p.score : 0) - (a.p ? a.p.score : 0) || a.i - b.i)
     .map(x => x.w);
+  const packSel = `<select id="pack" style="margin-bottom:8px"><option value="">📊 Häufigste Wörter zuerst</option>${packList().map(p => { const n = packOpen(p); return `<option value="${p.k}" ${pack === p ? 'selected' : ''}>${esc(p.l)} (${n ? n + ' offen' : 'fertig'})</option>`; }).join('')}</select>
+    ${packDone ? `<div class="notice small">✓ Paket „${esc(pack.l)}“ ist komplett im Training – weiter mit den häufigsten Wörtern.</div>` : ''}`;
+  const bindPack = () => { $('#pack', pane).onchange = e => { settings.packs = Object.assign({}, settings.packs, { [settings.lang]: e.target.value }); saveSettings(); vocabNew(pane); }; };
   if (!pool.length) {
-    pane.innerHTML = `<div class="card">Alle Wörter sind im Training. Importiere weitere unter „Eigene“.</div>`;
+    pane.innerHTML = `${packSel}<div class="card">Alle Wörter sind im Training. Importiere weitere unter „Eigene“.</div>`;
+    bindPack();
     return;
   }
   if (l.newWords >= limit) {
-    pane.innerHTML = `<div class="card flash"><div class="target">✅</div><p>Tagesziel erreicht: ${l.newWords} neue Wörter.</p>
+    pane.innerHTML = `${packSel}<div class="card flash"><div class="target">✅</div><p>Tagesziel erreicht: ${l.newWords} neue Wörter.</p>
       <div class="row" style="justify-content:center"><a class="btn primary" href="#vocab/recall">Jetzt abfragen</a><button class="btn" id="more">+10 weitere</button></div></div>`;
     $('#more', pane).onclick = () => { l.extraNew = (l.extraNew || 0) + 10; persist(); vocabNew(pane); };
+    bindPack();
     return;
   }
   const w = pool[0];
-  const from = prio.get(w.id);
+  const from = pack && !packDone ? null : prio.get(w.id);
   const nudge = l.newWords > 0 && l.newWords % 10 === 0;
   pane.innerHTML = `
+    ${packSel}
     <div class="row between muted small"><span>Heute ${l.newWords}/${limit}</span><span>${pool.length} noch nicht gelernt</span></div>
     <div class="progress" style="margin:6px 0 12px"><div style="width:${l.newWords / limit * 100}%"></div></div>
     ${tempo.reason ? `<div class="notice small">Tempo angepasst: ${tempo.n} statt ${settings.newWords} neue Wörter – ${tempo.reason}</div>` : ''}
@@ -1154,6 +1523,7 @@ function vocabNew(pane) {
     </div>
     <p class="muted small">Wort 2–3× laut nachsprechen. Gelernte Wörter kommen heute noch in die Abfrage.</p>`;
   const saveNote = () => setNote(w.id, $('#note', pane).value.trim());
+  bindPack();
   bindPhotoEditors(pane);
   // Eselsbrücke auf Deutsch diktieren – wird an den vorhandenen Text angehängt
   if ($('#note-mic', pane)) {
@@ -1794,8 +2164,9 @@ function addToBuilderIsland(sent, quiet) {
 }
 function islandsSeg(active) {
   return `<div class="seg">
-    <button data-go="#islands" class="${active === 'islands' ? 'on' : ''}">🏝️ Sprachinseln</button>
-    <button data-go="#builder" class="${active === 'builder' ? 'on' : ''}">🧱 Satzbaukasten</button>
+    <button data-go="#islands" class="${active === 'islands' ? 'on' : ''}">🏝️ Inseln</button>
+    <button data-go="#builder" class="${active === 'builder' ? 'on' : ''}">🧱 Baukasten</button>
+    <button data-go="#grammar" class="${active === 'grammar' ? 'on' : ''}">📐 Grammatik</button>
     <button data-go="#texts" class="${active === 'texts' ? 'on' : ''}">📄 Texte</button>
   </div>`;
 }
@@ -3271,8 +3642,11 @@ views.awards = function (root) {
     <a class="btn big" href="#week" style="display:block;margin-top:12px">📅 Wochenrückblick</a>`;
 };
 
-views.week = function (root) {
+views.week = function (root, arg) {
+  if (arg === 'test') { weekTest(root); return; }
   const cur = weekStart(today());
+  const wt = (state.weekTests || {})[cur], wtPrev = (state.weekTests || {})[cur - 7];
+  const gDone = grammarList().filter(x => { const s = grammarState()[x.id]; return s && s.done && (s.doneTs || 0) >= cur * 86400000; });
   const a = weekStats(cur), b = weekStats(cur - 7);
   const cmp = (x, y) => (y ? (x > y ? ' <span style="color:var(--good)">▲</span>' : x < y ? ' <span style="color:var(--bad)">▼</span>' : '') : '');
   const row = (label, x, y, f = v => v) => `<tr><td>${label}</td><td><b>${f(x)}</b>${cmp(x, y)}</td><td class="muted">${f(y)}</td></tr>`;
@@ -3291,6 +3665,20 @@ views.week = function (root) {
         ${row('💬 Neue Sätze', a.newSent, b.newSent)}
         ${row('🎙️ Gespräche', a.talks, b.talks)}
       </table>
+    </div>
+    <div class="card">
+      <b>📝 Wochen-Check</b>
+      <p class="small">${wt ? `Diese Woche: <b>${wt.last} %</b>${wt.best > wt.last ? ` (bestes ${wt.best} %)` : ''}${wtPrev ? ` · Vorwoche ${wtPrev.last} %` : ''}` : 'Ca. 15 Fragen, 5 Minuten: Wörter, Hören, Sätze, Grammatik. Ohne KI.'}</p>
+      <a class="btn ${wt ? '' : 'primary'}" href="#week/test">${wt ? 'Nochmal machen' : 'Check starten'}</a>
+    </div>
+    <div class="card">
+      <b>Das kannst du jetzt</b>
+      <ul class="small" style="margin:6px 0 0;padding-left:18px">
+        <li>${secureWordCount()} Wörter sicher (Abstand ≥ 3 Tage) – Stufe ${levelInfo().stage.id}</li>
+        <li>${Object.keys(state.srs).filter(id => id.startsWith('s:')).length} Sätze im Training</li>
+        ${gDone.length ? `<li>Neu diese Woche: ${gDone.map(x => esc(x.title)).join(', ')}</li>` : ''}
+        <li>${grammarList().filter(x => (grammarState()[x.id] || {}).done).length} von ${grammarList().length} Grammatik-Lektionen geschafft</li>
+      </ul>
     </div>
     ${newBadges.length ? `<div class="card"><b>Neu diese Woche:</b> ${newBadges.map(x => x.icon + ' ' + esc(x.name)).join(', ')}</div>` : ''}
     <button class="btn primary big" id="wk-share">📤 Woche teilen</button>
@@ -3495,6 +3883,7 @@ function mergeState(a, b) {
   [a.deleted, b.deleted].forEach(d => Object.entries(d).forEach(([k, v]) => { deleted[k] = Math.max(deleted[k] || 0, v); }));
   const alive = (id, ts) => !(deleted[id] && deleted[id] >= (ts || 0));
   const newer = (x, y) => ((y.ts || 0) > (x.ts || 0) ? y : x);
+  const byTs = (x = {}, y = {}) => { const o = Object.assign({}, x); Object.entries(y || {}).forEach(([k, v]) => { if (!o[k] || (v.ts || 0) > (o[k].ts || 0)) o[k] = v; }); return o; };
   const mergeList = (la, lb) => {
     const m = new Map();
     la.concat(lb).forEach(x => m.set(x.id, m.has(x.id) ? newer(m.get(x.id), x) : x));
@@ -3539,6 +3928,8 @@ function mergeState(a, b) {
     talkAdjustTs: Math.max(a.talkAdjustTs || 0, b.talkAdjustTs || 0),
     builderVerbs: mergeList(a.builderVerbs, b.builderVerbs),
     texts: mergeList(a.texts || [], b.texts || []),
+    grammar: byTs(a.grammar, b.grammar),
+    weekTests: byTs(a.weekTests, b.weekTests),
   };
 }
 
@@ -3627,8 +4018,8 @@ function route() {
   let view = views[name] ? name : 'home';
   if (view === 'talk' && talkLocked() && arg !== 'setup') view = 'locked';
   applyLock();
-  activeStep = view === 'builder' ? 'islands' : view === 'texts' ? 'listen' : view === 'talk' ? 'talk' : STEPS.some(s => s.key === view) ? view : null;
-  const tab = view === 'builder' || view === 'texts' ? 'islands' : view;
+  activeStep = view === 'builder' || view === 'grammar' ? 'islands' : view === 'texts' ? 'listen' : view === 'talk' ? 'talk' : STEPS.some(s => s.key === view) ? view : null;
+  const tab = view === 'builder' || view === 'texts' || view === 'grammar' ? 'islands' : view === 'week' ? 'home' : view;
   $$('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
   const root = $('#view');
   views[view](root, arg);

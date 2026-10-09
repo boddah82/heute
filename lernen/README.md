@@ -21,6 +21,15 @@ Modus „🔎 Beschreiben“ unter Reden: Claude gibt eine Aufgabe („Such etwa
 Unter Inseln → „📄 Texte“: eigene Texte einfügen (z. B. Liedtexte zum Mitlesen). Claude übersetzt Zeile für Zeile, Wort für Wort und erklärt Redewendungen (einmalige Kosten pro Text). Vorlesen mit Markierung, Wörter in die Wortliste übernehmen, einzelne Zeilen per ➕ in die Insel „Texte“ (Wiederholung & Shadowing).
 Beim Speichern wird automatisch in ganze Sätze geordnet: Claude setzt kopierte Liedzeilen an echten Satzgrenzen neu zusammen (nur Wort-Nummern, der Wortlaut bleibt), übrig gebliebene Bruchstücke (≤ 2 Wörter) werden angehängt, dann wird übersetzt. Ohne Schlüssel nur Teilung an Satzzeichen. „🔄 Neu ordnen“ geht immer vom Originaltext aus; „↩ Ursprüngliche Zeilen“ stellt ihn wieder her.
 
+## Grammatik
+Inseln → „📐 Grammatik“: feste Reihenfolge (IT 29, EN 28 Lektionen, `data/grammar.js`), eine Regel pro Lektion. Claude schreibt die Lektion einmal (grob 5–10 Cent, Schätzung): Erklärung auf Deutsch, Vergleich mit dem Deutschen, Formen, Beispiele (➕ in die Insel „Grammatik“), typischer Fehler, 8 Übungen mit Erklärung. Ab 6/8 richtig geschafft. Danach gespeichert (auch im Sync) und kostenlos.
+
+## Wochen-Check
+Wochenrückblick → „📝 Wochen-Check“: ca. 15 Auswahlfragen ohne KI – Wörter (Deutsch → Zielsprache), Wörter hören, Sätze verstehen, Grammatik aus geschafften Lektionen. Ergebnis pro Bereich, Vergleich mit der Vorwoche; „Das kannst du jetzt“ mit sicheren Wörtern, Sätzen, Grammatik. „Heute zuerst“ schlägt ihn ab Samstag vor.
+
+## Wortpakete
+Wörter → Neu: Auswahl „Häufigste Wörter zuerst“ oder ein Paket nach Situation (Begrüßung, Smalltalk, Zeit, Unterwegs, Einkaufen, Essen, Arbeit, Notfall; im Jugend-Modus Schule statt Arbeit, ohne Alkohol). `data/packs.js`; vorhandene Wörter werden wiederverwendet, fehlende als eigene Wörter angelegt.
+
 ## Heute zuerst
 Karte oben auf „Heute“: 2–3 empfohlene Schritte in lerngerechter Reihenfolge, nach festen Regeln (keine KI): fällige Wiederholungen vor Neuem, höchstens 50 Wort-Wiederholungen pro Runde (Rückstand nach Pausen verteilen statt nachholen), lange vernachlässigte Sprech-Schritte (Sätze, Shadowing, Gespräch) nach vorn, neue Wörter bei großem Rückstand aussetzen.
 

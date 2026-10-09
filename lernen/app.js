@@ -32,6 +32,18 @@ const settings = Object.assign(
 );
 settings.profile = Object.assign({ name: '', gender: 'm', origin: 'de', city: '', ts: 0 }, settings.profile);
 function saveSettings() { save('sl.settings', settings); }
+// Eltern-Sperre: KI-Gespräche aus, Jugend-Modus fest an; nur mit PIN aufzuheben (nur auf diesem Gerät, nicht im Sync)
+function talkLocked() { return !!(settings.lock && settings.lock.pin); }
+async function pinHash(pin) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('sl-lock|' + pin));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function applyLock() {
+  const tab = document.querySelector('.tabs a[data-tab="talk"]');
+  if (tab) tab.hidden = talkLocked();
+  const bar = document.querySelector('.tabs');
+  if (bar) bar.style.gridTemplateColumns = `repeat(${talkLocked() ? 6 : 7}, 1fr)`;
+}
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function esc(s) {
@@ -749,6 +761,10 @@ function recallSession(root, ids, cfg) {
 
 // ---------- Ansichten ----------
 const views = {};
+views.locked = function (root) {
+  root.innerHTML = `<h1>💬 Reden</h1><div class="card"><p>Gespräche mit Claude sind auf diesem Gerät gesperrt (Eltern-Sperre).</p>
+    <p class="muted small">Freischalten unter Einstellungen → Eltern-Sperre, mit PIN.</p></div>`;
+};
 
 // ---------- „Heute zuerst“: lerngerechte Empfehlung nach festen Regeln ----------
 const REVIEW_CAP = 50; // Wort-Wiederholungen pro Runde – nach Pausen den Rückstand verteilen statt alles nachzuholen
@@ -784,7 +800,7 @@ function todayPlan() {
     { key: 'review', href: '#review', title: 'Sätze wiederholen', extra: dueS ? `${dueS} fällig` : '' },
     { key: 'shadow', href: '#shadow', title: 'Shadowing', extra: '' },
   ];
-  if (talkCfg.key) output.push({ key: 'talk', href: '#talk', title: 'Gespräch führen', extra: '' });
+  if (talkCfg.key && !talkLocked()) output.push({ key: 'talk', href: '#talk', title: 'Gespräch führen', extra: '' });
   output.forEach(o => { o.days = daysSince(o.key); o.score = o.days === null ? 99 : o.days; });
   const neglected = output.filter(o => (l.sec[o.key] || 0) < 60).sort((a, b) => b.score - a.score)[0];
   const neglectedStep = neglected && neglected.score >= 2
@@ -851,10 +867,10 @@ views.home = function (root) {
       <div class="num">${levelInfo().stage.id}</div>
       <div class="grow"><b>Dein Niveau</b><div class="meta">${levelInfo().words} sichere Wörter${levelInfo().acc.total ? ` · ${Math.round(levelInfo().acc.rate * 100)} % Treffer (7 Tage)` : ''}${state.level ? '' : ' · Einstufungstest machen'}</div></div>
       <div>›</div></a>
-    <a class="card step" href="#talk">
+${talkLocked() ? '' : `    <a class="card step" href="#talk">
       <div class="num">💬</div>
       <div class="grow"><b>Gespräch führen</b><div class="meta">${talkCfg.key ? `frei sprechen mit Claude · heute ${l.talks || 0} Gespräche · ${minutesToday('talk')} Min.` : 'KI-Gesprächspartner einrichten'}</div></div>
-      <div>›</div></a>
+      <div>›</div></a>`}
     <a class="card step" href="#builder/${learnedWords < 300 ? 'modal' : 'drill'}">
       <div class="num">🧱</div>
       <div class="grow"><b>Satzbaukasten</b><div class="meta">${learnedWords < 300 ? 'Für den Start: mit wenigen Mustern erste Gespräche führen' : 'Drill: zufällige Sätze laut bilden'} · heute ${l.drill || 0} Sätze</div></div>
@@ -2969,7 +2985,8 @@ function talkSetup(root) {
     talkCfg.key = $('#k', root).value.trim();
     saveTalkCfg();
     toast(talkCfg.key ? 'Gespeichert' : 'Kein Schlüssel');
-    if (talkCfg.key) { if (location.hash === '#talk') route(); else location.hash = '#talk'; }
+    if (talkCfg.key && talkLocked()) location.hash = '#listen/stories';
+    else if (talkCfg.key) { if (location.hash === '#talk') route(); else location.hash = '#talk'; }
   };
   if ($('#del', root)) $('#del', root).onclick = () => { talkCfg.key = ''; saveTalkCfg(); route(); };
 }
@@ -3308,12 +3325,22 @@ views.settings = function (root) {
     </div>
     <div class="card">
       <b>Über dich</b> <span class="muted small">(für Satzbaukasten & Dialoge)</span>
-      <label class="inline" style="margin-top:8px"><input type="checkbox" id="p-teen" ${settings.teen ? 'checked' : ''}> Jugend-Modus</label>
+      <label class="inline" style="margin-top:8px"><input type="checkbox" id="p-teen" ${settings.teen ? 'checked' : ''} ${talkLocked() ? 'disabled' : ''}> Jugend-Modus${talkLocked() ? ' 🔒' : ''}</label>
       <p class="muted small">Altersgerechte Gesprächsthemen und Regeln für Claude, Vorlage-Inseln „Schule“ und „Freunde & Freizeit“, passender Satzbaukasten.</p>
       <label for="p-goal">Tagesziel (Minuten)</label><select id="p-goal">${[10, 15, 20, 30, 45, 60].map(n => `<option ${n === goalMin() ? 'selected' : ''}>${n}</option>`).join('')}</select>
       <label for="p-name">Vorname</label><input type="text" id="p-name" value="${esc(settings.profile.name)}">
       <label for="p-gender">Ich bin</label>
       <select id="p-gender"><option value="m" ${settings.profile.gender === 'm' ? 'selected' : ''}>männlich (sono stanco)</option><option value="f" ${settings.profile.gender === 'f' ? 'selected' : ''}>weiblich (sono stanca)</option></select>
+    </div>
+    <div class="card" id="lock-card">
+      <b>👪 Eltern-Sperre</b>
+      ${talkLocked()
+        ? `<p class="small">Aktiv: KI-Gespräche (Reden) sind aus, Jugend-Modus ist fest an. Hör-Dialoge, Prüfen und Texte funktionieren weiter, wenn ein <a href="#talk/setup">Claude-Schlüssel</a> eingetragen ist.</p>
+          <div class="row"><input type="password" id="lk-pin" inputmode="numeric" placeholder="PIN" class="grow" autocomplete="off"><button class="btn" id="lk-off">Entsperren</button></div>`
+        : `<p class="muted small">Für Kinder: schaltet die KI-Gespräche (Reden) ab und den Jugend-Modus fest an. Aufheben nur mit PIN. Gilt nur für dieses Gerät.</p>
+          <div class="row"><input type="password" id="lk-pin" inputmode="numeric" placeholder="PIN (mind. 4 Ziffern)" class="grow" autocomplete="off"><input type="password" id="lk-pin2" inputmode="numeric" placeholder="wiederholen" class="grow" autocomplete="off"></div>
+          <button class="btn" id="lk-on" style="margin-top:8px">🔒 Sperre einschalten</button>`}
+      <p class="muted small">Hinweis: Wer die Browserdaten löscht, löscht auch die Sperre (und den Lernstand).</p>
     </div>
     <div class="card">
       <b>Sync zwischen Geräten (GitHub Gist)</b>
@@ -3357,6 +3384,23 @@ views.settings = function (root) {
     else toast('Jugend-Modus aus');
   };
   $('#p-goal', root).onchange = e => { settings.dailyGoal = Number(e.target.value); saveSettings(); };
+  if ($('#lk-on', root)) $('#lk-on', root).onclick = async () => {
+    const a = $('#lk-pin', root).value.trim(), b = $('#lk-pin2', root).value.trim();
+    if (!/^\d{4,}$/.test(a)) { toast('PIN: mindestens 4 Ziffern'); return; }
+    if (a !== b) { toast('PINs stimmen nicht überein'); return; }
+    settings.lock = { pin: await pinHash(a) };
+    if (!settings.teen) { settings.teen = true; ensureTeenIslands(); }
+    saveSettings();
+    toast('Sperre aktiv');
+    route();
+  };
+  if ($('#lk-off', root)) $('#lk-off', root).onclick = async () => {
+    if ((await pinHash($('#lk-pin', root).value.trim())) !== settings.lock.pin) { toast('Falsche PIN'); return; }
+    delete settings.lock;
+    saveSettings();
+    toast('Sperre aufgehoben');
+    route();
+  };
   $('#p-gender', root).onchange = saveProfile;
   if ($('#y-connect', root)) {
     $('#y-connect', root).onclick = async () => {
@@ -3580,7 +3624,9 @@ function route() {
   keyHandler = null;
   persist();
   const [name, arg] = location.hash.slice(1).split('/');
-  const view = views[name] ? name : 'home';
+  let view = views[name] ? name : 'home';
+  if (view === 'talk' && talkLocked() && arg !== 'setup') view = 'locked';
+  applyLock();
   activeStep = view === 'builder' ? 'islands' : view === 'texts' ? 'listen' : view === 'talk' ? 'talk' : STEPS.some(s => s.key === view) ? view : null;
   const tab = view === 'builder' || view === 'texts' ? 'islands' : view;
   $$('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));

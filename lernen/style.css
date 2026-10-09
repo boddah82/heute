@@ -198,3 +198,5 @@ table.wk td, table.wk th { padding: 6px 4px; border-bottom: 1px solid var(--line
 table.wk th { font-size: 12px; color: var(--muted); font-weight: 600; }
 .tx-hidden .t { filter: blur(6px); }
 .tx-hidden li.now .t { filter: none; }
+a.btn { text-decoration: none; display: inline-block; }
+a.btn:not(.primary) { color: var(--text); }

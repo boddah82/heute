@@ -50,6 +50,9 @@ Punkte fürs Abrufen (gleich viel für jede Bewertung), neue Wörter, Drill, Sha
 ## Jugend-Modus
 Einstellungen → „Über dich“: altersgerechte Regeln für Claude, Gesprächsthemen für Jugendliche (Schule, Hobbys, Eisdiele, Austauschschülerin …), Vorlage-Inseln „Über mich (Jugend)“, „Schule“, „Freunde & Freizeit“ (IT + EN), Satzbaukasten ohne „verheiratet“/Wein/Kaffee.
 
+## Eltern-Sperre
+Einstellungen → „👪 Eltern-Sperre“ mit PIN: KI-Gespräche (Reden) aus, Jugend-Modus fest an. Hör-Dialoge, Prüfen und Texte bleiben (mit Schlüssel unter `#talk/setup`). Nur auf diesem Gerät; die PIN wird nur als Hash gespeichert. Wer die Browserdaten löscht, löscht auch die Sperre.
+
 ## Tagesablauf (~30 Min.)
 1. **Wörter** – neue Wörter mit eigener Eselsbrücke, danach Abfrage (Deutsch → Zielsprache) mit Wiederholungsplanung (SM-2).
 2. **Sätze** – Sätze aus den Sprachinseln aktiv abrufen (sprechen, tippen oder im Kopf), aufdecken, bewerten.

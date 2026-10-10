@@ -200,3 +200,4 @@ table.wk th { font-size: 12px; color: var(--muted); font-weight: 600; }
 .tx-hidden li.now .t { filter: none; }
 a.btn { text-decoration: none; display: inline-block; }
 a.btn:not(.primary) { color: var(--text); }
+.term { color: var(--muted); font-weight: normal; font-size: .92em; }

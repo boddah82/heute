@@ -15,7 +15,7 @@ const URL = 'http://localhost:8765/';
     const ch = n => ({ kind: 'choice', q: `___ libro ${n}`, options: ['il', 'la', 'lo'], answer: 0, solution: `il libro ${n}`, explain: 'libro ist männlich → il.' });
     const tr = n => ({ kind: 'translate', q: `das Buch ${n}`, options: [], answer: 0, solution: `il libro ${n}`, explain: 'männlich → il.' });
     const data = {
-      intro: 'Artikel zeigen das Geschlecht.', rule: 'Männlich: **il**, weiblich: **la**.', compare: 'Wie der/die.',
+      intro: 'Artikel zeigen das Geschlecht.', rule: 'Männlich: **il**, weiblich: **la**.', compare: 'Wie der/die. Vor Vokal wird la zu l\'.',
       forms: [{ t: 'il libro', de: 'das Buch' }, { t: 'la casa', de: 'das Haus' }],
       examples: [{ t: 'Il libro è nuovo.', de: 'Das Buch ist neu.' }, { t: 'La casa è grande.', de: 'Das Haus ist groß.' }],
       pitfall: { wrong: 'il macchina', right: 'la macchina', de: 'das Auto', why: 'macchina ist weiblich, auch wenn „der Wagen“ männlich ist.' },
@@ -41,6 +41,7 @@ const URL = 'http://localhost:8765/';
   const sys = req.system;
   console.log('Prompt: Thema', sys.includes('Artikel & Geschlecht'), '| eine Regel', /only this one rule/.test(sys), '| Deutsch-Vergleich', /differs from or resembles German/.test(sys), '| Niveau', /Learner level: A\d/.test(sys));
   console.log('Regel fett:', await p.$eval('.card.stack', e => e.innerHTML.includes('<b>il</b>')), '| Tabelle:', await p.$$eval('table.wk tr', x => x.length), '| Beispiele:', await p.$$eval('[data-gp]', x => x.length));
+  console.log('Begriffshilfe:', await p.$$eval('.term', x => x.map(e => e.textContent).join(' ')));
   console.log('Fehler-Feld:', (await p.textContent('.notice.warn')).replace(/\s+/g, ' ').trim());
   await p.click('[data-ga="0"]');
   console.log('Beispiel in Insel Grammatik:', await p.evaluate(() => state.islands.find(i => i.id === 'gram-it').sentences.length));

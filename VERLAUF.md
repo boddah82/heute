@@ -8,6 +8,8 @@ Zusammenfassung der bisherigen Arbeit (Sept./Okt. 2026, Claude Code im Web) für
 - Nachrichten kommen oft per Spracherkennung (abgeschnitten, verdrehte Wörter) → Gemeintes zusammenfassen und bei Unklarheit nachfragen.
 - Bei größeren Ideen erst Feedback geben („was ergibt Sinn, was nicht“), wenn er danach fragt.
 - Kosten offen nennen (Claude-API kostet; alles andere soll kostenlos bleiben). Schätzungen als Schätzung kennzeichnen.
+- **Grundsatz wie ein Fußballtrainer**: keine vorgekauten Regeln, sondern Übungsformen/Spielformen, in denen er Muster selbst entdeckt und sich in seinem Tempo entwickelt; bei Unklarheit nachfragen können. Neue Funktionen von vornherein so bauen.
+- Tut sich auch mit deutscher Grammatik schwer (Vokal, Verb, Nomen, Adjektiv …) → Fachwörter immer mit einfacher Erklärung in Klammern, auch im Chat.
 - Nutzt die App auf dem Handy (PWA) und Chromebook. Lernt Italienisch (Hauptsprache) und Englisch (britisch).
 
 ## Ablauf bisher
@@ -35,6 +37,7 @@ Zusammenfassung der bisherigen Arbeit (Sept./Okt. 2026, Claude Code im Web) für
 21. **Prüfen-Knopf** (`checkWordUI`, `checkSentenceUI`, Satz-Feld `gloss`): Anlass „Sei mai stato in Germania?“ – Wort-Hilfe zeigte sei = sechs, stato = Staat (Wortliste kennt keinen Zusammenhang). Früher abgelehnter „Klingt komisch?“-Knopf damit jetzt doch gewünscht.
 22. **Eltern-Sperre** für die Tochter (`talkLocked()`, `settings.lock.pin` = SHA-256): zunächst nur KI-Gespräche gesperrt (Wunsch des Vaters), Jugend-Modus fest an; Dialoge/Prüfen bewusst weiter erlaubt.
 23. **Grammatik-Lektionen, Wochen-Check, Wortpakete** (Anlass: ein „Sprachlehrer-Prompt“ des Nutzers). Fester 90-Tage-Plan bewusst nicht übernommen (passt nicht zur täglichen Anpassung). Grammatik: `data/grammar.js`, `createGrammarLesson()`, `state.grammar`; Check: `weekTest()`, `state.weekTests`; Pakete: `data/packs.js`, `activePack()`, `settings.packs`. Nachbesserung: „Typischer Fehler“ war unverständlich („il macchina wegen der Wagen“) → jetzt strukturiert ✗ falsch → ✓ richtig (Deutsch) + ein Satz warum; Prompt verlangt Erklärungen ohne Vorwissen. Nutzer ist auch in deutscher Grammatik unsicher (Vokal, Verb …) → `explainTerms()` setzt beim ersten Vorkommen eine einfache Erklärung in Klammern dahinter (feste Liste `GRAMMAR_TERMS`, abschaltbar `settings.termHelp`).
+24. **Grammatik „Muster zuerst“ + Nachfragen**: Anlass: Regeln wirkten unlogisch („wenn dies, dann das“), keine Möglichkeit nachzufragen → demotivierend. Lektion v2: 6 ähnliche Sätze mit markiertem Wechsel, Frage „Was ändert sich?“, Auflösung erst auf Tipp; Übungen als Spielformen (Umbauen, Auswahl, Übersetzen); „❓ Frag nach“ (`askGrammar()`, `state.grammar[id].qa`) auf der Lektion und „❓ Warum?“ in jeder Übung. Alte Lektionen bleiben lesbar.
 
 ## Bewusst nicht gemacht / abgelehnt
 - KI-Übersetzung für eigene Sprachinseln (manuell gewünscht), Emoji-Bilder, KI-Merkbild als Text. (Prüfknopf zuerst abgelehnt, später gewünscht – siehe 21.)

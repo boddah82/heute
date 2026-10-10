@@ -1079,7 +1079,8 @@ function activePack() {
 const GRAMMAR_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['intro', 'rule', 'compare', 'forms', 'examples', 'pitfall', 'exercises'],
   properties: {
-    intro: { type: 'string' }, rule: { type: 'string' }, compare: { type: 'string' }, pitfall: { type: 'string' },
+    intro: { type: 'string' }, rule: { type: 'string' }, compare: { type: 'string' },
+    pitfall: { type: 'object', additionalProperties: false, required: ['wrong', 'right', 'de', 'why'], properties: { wrong: { type: 'string' }, right: { type: 'string' }, de: { type: 'string' }, why: { type: 'string' } } },
     forms: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de'], properties: { t: { type: 'string' }, de: { type: 'string' } } } },
     examples: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de'], properties: { t: { type: 'string' }, de: { type: 'string' } } } },
     exercises: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['kind', 'q', 'options', 'answer', 'solution', 'explain'], properties: {
@@ -1108,14 +1109,14 @@ Earlier lessons in the course: ${before || 'none'}. You may use those structures
 Learner level: ${talkStage().id} (vocabulary-based estimate).${settings.lang === 'it' ? ` The learner is ${settings.profile.gender === 'f' ? 'female' : 'male'} – use matching endings when sentences are about the learner.` : ''}
 Words the learner already knows (for orientation only): ${known.length ? known.join(', ') : 'almost none'}.
 ${settings.teen ? TEEN_RULES + '\n' : ''}
-All explanations in simple, friendly German (du-Form), short sentences, no grammar jargon without a short explanation. Every ${lang} sentence must be correct and natural, exactly as a native speaker would say it; prefer known words, but naturalness always comes first.
+All explanations in simple, friendly German (du-Form), short sentences, no grammar jargon without a short explanation. Write for someone without grammar knowledge: every statement must be understandable on its own, show it with a concrete example, never leave out steps of reasoning. Every ${lang} sentence must be correct and natural, exactly as a native speaker would say it; prefer known words, but naturalness always comes first.
 Fields:
 - "intro": 1–2 sentences: what the learner learns and why it is useful in everyday life.
 - "rule": the rule in 3–6 short sentences; mark key forms with **double asterisks**.
 - "compare": how it differs from or resembles German (1–3 sentences); empty string if not helpful.
 - "forms": a small table of forms (max 10 rows, t = ${lang}, de = German); empty array if the topic has no forms table.
 - "examples": 5 everyday example sentences.
-- "pitfall": the typical mistake German speakers make with this rule (1–2 sentences).
+- "pitfall": the typical mistake German speakers make with this rule, as one concrete example: "wrong" = the wrong ${lang} phrase, "right" = the correct one, "de" = what it means in German (use the most common German word, e.g. "das Auto", not a rare synonym), "why" = one plain German sentence why – no reasoning that needs extra knowledge.
 - "exercises": exactly 8 exercises that test only this rule. First 5 with kind "choice": q = a ${lang} sentence with ___ for the gap (or a short German question about the rule), options = 3 short answers, answer = index of the correct option, solution = the complete correct ${lang} sentence. Then 3 with kind "translate": q = a short German sentence, options = [], answer = 0, solution = its natural ${lang} translation. "explain" = one short German sentence why the solution is right, naming the rule.`,
     [{ role: 'user', content: 'Write the lesson.' }], GRAMMAR_SCHEMA, 12000);
   const g = grammarState();
@@ -1180,7 +1181,8 @@ function grammarLesson(root, item) {
     <h2>Beispiele</h2>
     <ul class="list card">${L.examples.map((x, i) => `<li><div class="grow"><div class="t">${esc(x.t)}</div><div class="d">${esc(x.de)}</div></div>
       <div class="stack" style="flex:none"><button class="btn small" data-gp="${i}">🔊</button><button class="btn small" data-ga="${i}" ${inIsland(x.t) ? 'disabled' : ''} title="In die Wiederholung">➕</button></div></li>`).join('')}</ul>
-    ${L.pitfall ? `<div class="notice warn small">⚠️ ${fmtRich(L.pitfall)}</div>` : ''}
+    ${!L.pitfall ? '' : typeof L.pitfall === 'string' ? `<div class="notice warn small">⚠️ ${fmtRich(L.pitfall)}</div>`
+      : `<div class="notice warn small"><b>⚠️ Typischer Fehler</b><div style="margin-top:6px">✗ <s>${esc(L.pitfall.wrong)}</s> → ✓ <b>${esc(L.pitfall.right)}</b>${L.pitfall.de ? ` <span class="muted">(${esc(L.pitfall.de)})</span>` : ''}</div><div style="margin-top:4px">${fmtRich(L.pitfall.why)}</div></div>`}
     <button class="btn primary big" id="gr-ex">✏️ Übung starten (${L.exercises.length} Aufgaben)</button>
     ${talkCfg.key ? '<button class="btn small" id="gr-redo" style="margin-top:10px">🔄 Lektion neu erstellen</button>' : ''}
     <p class="muted small">Inhalt von Claude erstellt – Fehler sind möglich. ➕ holt Beispielsätze in die Insel „Grammatik“ (Wiederholung & Shadowing).</p>`;

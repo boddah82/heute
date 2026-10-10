@@ -18,7 +18,7 @@ const URL = 'http://localhost:8765/';
       intro: 'Artikel zeigen das Geschlecht.', rule: 'Männlich: **il**, weiblich: **la**.', compare: 'Wie der/die.',
       forms: [{ t: 'il libro', de: 'das Buch' }, { t: 'la casa', de: 'das Haus' }],
       examples: [{ t: 'Il libro è nuovo.', de: 'Das Buch ist neu.' }, { t: 'La casa è grande.', de: 'Das Haus ist groß.' }],
-      pitfall: 'Deutsches Geschlecht nicht übertragen.',
+      pitfall: { wrong: 'il macchina', right: 'la macchina', de: 'das Auto', why: 'macchina ist weiblich, auch wenn „der Wagen“ männlich ist.' },
       exercises: [ch(1), ch(2), ch(3), ch(4), ch(5), tr(1), tr(2), tr(3)],
     };
     route.fulfill({ status: 200, headers: H, body: JSON.stringify({ id: 'm', type: 'message', role: 'assistant', model: req.model, content: [{ type: 'text', text: JSON.stringify(data) }], stop_reason: 'end_turn', usage: { input_tokens: 1500, output_tokens: 2500 } }) });
@@ -41,6 +41,7 @@ const URL = 'http://localhost:8765/';
   const sys = req.system;
   console.log('Prompt: Thema', sys.includes('Artikel & Geschlecht'), '| eine Regel', /only this one rule/.test(sys), '| Deutsch-Vergleich', /differs from or resembles German/.test(sys), '| Niveau', /Learner level: A\d/.test(sys));
   console.log('Regel fett:', await p.$eval('.card.stack', e => e.innerHTML.includes('<b>il</b>')), '| Tabelle:', await p.$$eval('table.wk tr', x => x.length), '| Beispiele:', await p.$$eval('[data-gp]', x => x.length));
+  console.log('Fehler-Feld:', (await p.textContent('.notice.warn')).replace(/\s+/g, ' ').trim());
   await p.click('[data-ga="0"]');
   console.log('Beispiel in Insel Grammatik:', await p.evaluate(() => state.islands.find(i => i.id === 'gram-it').sentences.length));
   await p.click('#gr-ex');

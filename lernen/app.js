@@ -1097,7 +1097,67 @@ function grammarDaysSince() {
   const last = Math.max(0, ...Object.values(grammarState()).map(x => x.doneTs || x.practiceTs || 0));
   return last ? Math.floor((Date.now() - last) / 86400000) : 99;
 }
-function fmtRich(s) { return esc(s || '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>'); }
+function fmtRich(s, terms) { const h = esc(s || '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>'); return terms ? explainTerms(h, terms) : h; }
+// Grammatik-Begriffe einfach erklären: beim ersten Vorkommen pro Seite in Klammern dahinter.
+// Längere Begriffe zuerst (Relativpronomen vor Pronomen); vor/nach dem Treffer darf kein Buchstabe stehen.
+const GRAMMAR_TERMS = [
+  ['Relativpronomen', 'Satzverbinder wie „der, die, das“ in „das Buch, das ich lese“'],
+  ['Possessivpronomen', 'mein, dein, sein …'],
+  ['Personalpronomen', 'ich, du, er, sie …'],
+  ['Objektpronomen', 'ihn, sie, ihm, ihr … – ersetzt ein Nomen'],
+  ['Subjektpronomen', 'ich, du, er, sie …'],
+  ['Pronomen', 'Fürwort, z. B. ich, du, er'],
+  ['Hilfsverb(?:en)?', 'haben, sein oder werden – helfen einem anderen Verb'],
+  ['Modalverb(?:en)?', 'wollen, können, müssen …'],
+  ['Verb(?:en|s)?', 'Tunwort, z. B. gehen, essen'],
+  ['Nomen', 'Namenwort, z. B. Haus, Freundin'],
+  ['Substantiv(?:e|en)?', 'Namenwort, z. B. Haus, Freundin'],
+  ['Adjektiv(?:e|en)?', 'Wiewort, z. B. groß, rot'],
+  ['Adverb(?:ien)?', 'sagt wie, wann oder wo, z. B. schnell, heute'],
+  ['bestimmte[nrs]? Artikel', 'der, die, das'],
+  ['unbestimmte[nrs]? Artikel', 'ein, eine'],
+  ['Artikel', 'Begleiter: der, die, das, ein, eine'],
+  ['Präposition(?:en)?', 'Verhältniswort, z. B. in, auf, mit'],
+  ['Vokal(?:e|en)?', 'a, e, i, o, u'],
+  ['Konsonant(?:en)?', 'alle anderen Buchstaben, z. B. b, k, s'],
+  ['Infinitiv(?:e)?', 'Grundform, z. B. gehen'],
+  ['Partizip(?:ien)?', 'Form wie „gegessen“, „gegangen“'],
+  ['Präsens', 'Gegenwart: ich esse'],
+  ['Perfekt', 'Vergangenheit: ich habe gegessen'],
+  ['Futur', 'Zukunft: ich werde essen'],
+  ['Imperativ', 'Befehlsform: Geh!'],
+  ['Konjunktiv', 'Möglichkeitsform: er sei, ich hätte'],
+  ['Konditional', 'würde-Form: ich würde gehen'],
+  ['Gerundium', '-ando/-ing-Form: sto mangiando = ich esse gerade'],
+  ['Singular', 'Einzahl'],
+  ['Plural', 'Mehrzahl'],
+  ['maskulin', 'männlich'],
+  ['feminin', 'weiblich'],
+  ['Subjekt', 'wer etwas tut'],
+  ['Objekt(?:e)?', 'wen/was oder wem'],
+  ['Akkusativ', 'wen oder was?'],
+  ['Dativ', 'wem?'],
+  ['Endung(?:en)?', 'das veränderliche Wortende, z. B. parl-o, parl-i'],
+  ['[Kk]onjugier\\p{L}*', 'Verb an die Person anpassen: ich gehe, du gehst'],
+  ['Konjugation', 'Verb an die Person anpassen: ich gehe, du gehst'],
+  ['Komparativ', 'Vergleichsform: größer'],
+  ['Superlativ', 'höchste Stufe: am größten'],
+  ['Passiv', 'Leideform: das Haus wird gebaut'],
+  ['[Rr]eflexiv\\p{L}*', 'mit sich/mich/dich: sich waschen'],
+  ['Verneinung', 'nicht/kein-Form'],
+];
+const TERM_RE = new RegExp(`(?<!\\p{L})(${GRAMMAR_TERMS.map(t => t[0]).join('|')})(?!\\p{L})`, 'gu');
+const TERM_LIST = GRAMMAR_TERMS.map(([p, d]) => [new RegExp(`^(?:${p})$`, 'u'), d]);
+function explainTerms(html, seen) {
+  if (settings.termHelp === false) return html;
+  // nur Text zwischen Tags bearbeiten
+  return html.split(/(<[^>]+>)/).map(part => part.startsWith('<') ? part : part.replace(TERM_RE, m => {
+    const hit = TERM_LIST.find(([re]) => re.test(m));
+    if (!hit || seen.has(hit[1])) return m;
+    seen.add(hit[1]);
+    return `${m} <span class="term">(${esc(hit[1])})</span>`;
+  })).join('');
+}
 async function createGrammarLesson(item) {
   const lang = settings.lang === 'it' ? 'Italian' : 'British English';
   const list = grammarList();
@@ -1109,7 +1169,7 @@ Earlier lessons in the course: ${before || 'none'}. You may use those structures
 Learner level: ${talkStage().id} (vocabulary-based estimate).${settings.lang === 'it' ? ` The learner is ${settings.profile.gender === 'f' ? 'female' : 'male'} – use matching endings when sentences are about the learner.` : ''}
 Words the learner already knows (for orientation only): ${known.length ? known.join(', ') : 'almost none'}.
 ${settings.teen ? TEEN_RULES + '\n' : ''}
-All explanations in simple, friendly German (du-Form), short sentences, no grammar jargon without a short explanation. Write for someone without grammar knowledge: every statement must be understandable on its own, show it with a concrete example, never leave out steps of reasoning. Every ${lang} sentence must be correct and natural, exactly as a native speaker would say it; prefer known words, but naturalness always comes first.
+All explanations in simple, friendly German (du-Form), short sentences, no grammar jargon without a short explanation. Use the usual German grammar terms (Verb, Nomen, Vokal, Artikel, Plural …) without explaining them in brackets – the app adds a plain explanation itself. Write for someone without grammar knowledge: every statement must be understandable on its own, show it with a concrete example, never leave out steps of reasoning. Every ${lang} sentence must be correct and natural, exactly as a native speaker would say it; prefer known words, but naturalness always comes first.
 Fields:
 - "intro": 1–2 sentences: what the learner learns and why it is useful in everyday life.
 - "rule": the rule in 3–6 short sentences; mark key forms with **double asterisks**.
@@ -1134,6 +1194,7 @@ views.grammar = function (root, arg) {
   const done = grammarList().filter(x => g[x.id] && g[x.id].done).length;
   root.innerHTML = `
     ${islandsSeg('grammar')}
+    <label class="inline small" style="margin:0 0 8px"><input type="checkbox" id="gr-terms" ${settings.termHelp === false ? '' : 'checked'}> Fachwörter in Klammern erklären (Vokal → a, e, i, o, u)</label>
     <p class="muted small">Eine Regel pro Lektion, in fester Reihenfolge: kurze Erklärung, Vergleich mit dem Deutschen, Beispiele, 8 Übungen. Ab 6 von 8 richtig gilt sie als geschafft. ${done}/${grammarList().length} geschafft.</p>
     ${talkCfg.key ? '' : '<div class="notice small">Neue Lektionen schreibt Claude (einmalig grob 5–10 Cent pro Lektion, Schätzung). Dafür einen <a href="#talk/setup">Claude-Schlüssel</a> eintragen. Schon erstellte Lektionen gehen ohne.</div>'}
     ${grammarList().map((x, i) => {
@@ -1141,9 +1202,10 @@ views.grammar = function (root, arg) {
       const badge = s.done ? `✓ ${Math.round((s.best || 0) * 100)} %` : s.lesson ? 'begonnen' : '';
       return `<a class="card step ${s.done ? 'done' : ''}" href="#grammar/${x.id}" ${next === x ? 'style="border-color:var(--accent)"' : ''}>
         <div class="num">${s.done ? '✓' : i + 1}</div>
-        <div class="grow"><b>${esc(x.title)}</b>${next === x ? ' <span class="pill">als Nächstes</span>' : ''}<div class="meta">${esc(x.what)}${badge && !s.done ? ' · ' + badge : s.done ? ' · ' + badge : ''}</div></div><div>›</div></a>`;
+        <div class="grow"><b>${esc(x.title)}</b>${next === x ? ' <span class="pill">als Nächstes</span>' : ''}<div class="meta">${explainTerms(esc(x.what), new Set())}${badge && !s.done ? ' · ' + badge : s.done ? ' · ' + badge : ''}</div></div><div>›</div></a>`;
     }).join('')}`;
   bindGo(root);
+  $('#gr-terms', root).onchange = e => { settings.termHelp = e.target.checked; saveSettings(); views.grammar(root); };
 };
 function grammarLesson(root, item) {
   const g = grammarState();
@@ -1169,20 +1231,21 @@ function grammarLesson(root, item) {
     };
     return;
   }
+  const seen = new Set();
   root.innerHTML = `<a href="#grammar" class="small">‹ Alle Lektionen</a>
     <h1>📐 ${esc(item.title)}</h1>
     ${s.done ? `<div class="notice small">✓ Geschafft – bestes Ergebnis ${Math.round((s.best || 0) * 100)} %. Üben geht jederzeit.</div>` : ''}
     <div class="card stack">
-      <p>${fmtRich(L.intro)}</p>
-      <p>${fmtRich(L.rule)}</p>
-      ${L.compare ? `<p class="small">🇩🇪 ${fmtRich(L.compare)}</p>` : ''}
+      <p>${fmtRich(L.intro, seen)}</p>
+      <p>${fmtRich(L.rule, seen)}</p>
+      ${L.compare ? `<p class="small">🇩🇪 ${fmtRich(L.compare, seen)}</p>` : ''}
     </div>
     ${L.forms && L.forms.length ? `<div class="card"><table class="wk">${L.forms.map(f => `<tr><td><b>${esc(f.t)}</b></td><td class="muted">${esc(f.de)}</td></tr>`).join('')}</table></div>` : ''}
     <h2>Beispiele</h2>
     <ul class="list card">${L.examples.map((x, i) => `<li><div class="grow"><div class="t">${esc(x.t)}</div><div class="d">${esc(x.de)}</div></div>
       <div class="stack" style="flex:none"><button class="btn small" data-gp="${i}">🔊</button><button class="btn small" data-ga="${i}" ${inIsland(x.t) ? 'disabled' : ''} title="In die Wiederholung">➕</button></div></li>`).join('')}</ul>
-    ${!L.pitfall ? '' : typeof L.pitfall === 'string' ? `<div class="notice warn small">⚠️ ${fmtRich(L.pitfall)}</div>`
-      : `<div class="notice warn small"><b>⚠️ Typischer Fehler</b><div style="margin-top:6px">✗ <s>${esc(L.pitfall.wrong)}</s> → ✓ <b>${esc(L.pitfall.right)}</b>${L.pitfall.de ? ` <span class="muted">(${esc(L.pitfall.de)})</span>` : ''}</div><div style="margin-top:4px">${fmtRich(L.pitfall.why)}</div></div>`}
+    ${!L.pitfall ? '' : typeof L.pitfall === 'string' ? `<div class="notice warn small">⚠️ ${fmtRich(L.pitfall, seen)}</div>`
+      : `<div class="notice warn small"><b>⚠️ Typischer Fehler</b><div style="margin-top:6px">✗ <s>${esc(L.pitfall.wrong)}</s> → ✓ <b>${esc(L.pitfall.right)}</b>${L.pitfall.de ? ` <span class="muted">(${esc(L.pitfall.de)})</span>` : ''}</div><div style="margin-top:4px">${fmtRich(L.pitfall.why, seen)}</div></div>`}
     <button class="btn primary big" id="gr-ex">✏️ Übung starten (${L.exercises.length} Aufgaben)</button>
     ${talkCfg.key ? '<button class="btn small" id="gr-redo" style="margin-top:10px">🔄 Lektion neu erstellen</button>' : ''}
     <p class="muted small">Inhalt von Claude erstellt – Fehler sind möglich. ➕ holt Beispielsätze in die Insel „Grammatik“ (Wiederholung & Shadowing).</p>`;
@@ -1226,7 +1289,7 @@ function grammarPractice(root, item) {
     root.innerHTML = `<a href="#grammar" class="small">‹ Alle Lektionen</a>
       <div class="card flash"><div class="target">${right}/${ex.length}</div>
         <p>${score >= GRAMMAR_PASS ? (first && s.done ? '✓ Lektion geschafft!' : '✓ Gut gemacht.') : 'Noch nicht ganz – lies die Regel nochmal und übe erneut.'}</p></div>
-      ${wrong.length ? `<div class="card"><b>Deine Fehler</b><ul class="list">${wrong.map(w => `<li><div><div class="d">${esc(w.q)}</div><div class="t">${esc(w.solution)}</div><div class="d">💡 ${esc(w.explain)}</div></div></li>`).join('')}</ul></div>` : ''}
+      ${wrong.length ? `<div class="card"><b>Deine Fehler</b><ul class="list">${wrong.map(w => `<li><div><div class="d">${esc(w.q)}</div><div class="t">${esc(w.solution)}</div><div class="d">💡 ${fmtRich(w.explain, new Set())}</div></div></li>`).join('')}</ul></div>` : ''}
       <div class="row"><button class="btn grow" id="gr-again">Nochmal üben</button><a class="btn grow" href="#grammar/${item.id}">Zur Regel</a></div>
       ${score >= GRAMMAR_PASS && next ? `<a class="btn primary big" href="#grammar/${next.id}" style="display:block;margin-top:8px">Weiter: ${esc(next.title)}</a>` : ''}`;
     $('#gr-again', root).onclick = () => grammarPractice(root, item);
@@ -1252,7 +1315,7 @@ function grammarPractice(root, item) {
       const res = $('#gr-res', root);
       res.innerHTML = `<div class="notice ${ok === false ? 'warn' : ''}" style="margin-top:10px">
           ${ok === true ? '✓ Richtig! ' : ok === false ? '✗ Richtig wäre: ' : ''}<b>${esc(x.solution)}</b> <button class="btn small" id="gr-play">🔊</button>
-          <div class="small" style="margin-top:4px">💡 ${esc(x.explain)}</div></div>`;
+          <div class="small" style="margin-top:4px">💡 ${fmtRich(x.explain, new Set())}</div></div>`;
       $('#gr-play', res).onclick = () => speak(x.solution);
     };
     const next = ok => {

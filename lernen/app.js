@@ -1076,18 +1076,24 @@ function activePack() {
 }
 
 // ---------- Grammatik: eine Regel pro Lektion ----------
+// Lektionen „Muster zuerst“: erst ähnliche Sätze, in denen sich nur eins ändert – selbst entdecken –, dann die Regel als Name dafür.
+// Übungen als Spielformen (Satz umbauen, auswählen, übersetzen). Ältere Lektionen (examples statt pattern) bleiben lesbar.
 const GRAMMAR_SCHEMA = {
-  type: 'object', additionalProperties: false, required: ['intro', 'rule', 'compare', 'forms', 'examples', 'pitfall', 'exercises'],
+  type: 'object', additionalProperties: false, required: ['intro', 'pattern', 'question', 'rule', 'compare', 'forms', 'pitfall', 'exercises'],
   properties: {
-    intro: { type: 'string' }, rule: { type: 'string' }, compare: { type: 'string' },
+    intro: { type: 'string' }, question: { type: 'string' }, rule: { type: 'string' }, compare: { type: 'string' },
+    pattern: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de', 'hl'], properties: { t: { type: 'string' }, de: { type: 'string' }, hl: { type: 'string' } } } },
     pitfall: { type: 'object', additionalProperties: false, required: ['wrong', 'right', 'de', 'why'], properties: { wrong: { type: 'string' }, right: { type: 'string' }, de: { type: 'string' }, why: { type: 'string' } } },
     forms: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de'], properties: { t: { type: 'string' }, de: { type: 'string' } } } },
-    examples: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de'], properties: { t: { type: 'string' }, de: { type: 'string' } } } },
-    exercises: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['kind', 'q', 'options', 'answer', 'solution', 'explain'], properties: {
-      kind: { type: 'string', enum: ['choice', 'translate'] }, q: { type: 'string' }, options: { type: 'array', items: { type: 'string' } },
+    exercises: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['kind', 'task', 'q', 'options', 'answer', 'solution', 'explain'], properties: {
+      kind: { type: 'string', enum: ['swap', 'choice', 'translate'] }, task: { type: 'string' }, q: { type: 'string' }, options: { type: 'array', items: { type: 'string' } },
       answer: { type: 'integer' }, solution: { type: 'string' }, explain: { type: 'string' },
     } } },
   },
+};
+const ASK_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['answer', 'examples'],
+  properties: { answer: { type: 'string' }, examples: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de'], properties: { t: { type: 'string' }, de: { type: 'string' } } } } },
 };
 const GRAMMAR_PASS = 0.75; // ab 6 von 8 richtig gilt die Lektion als geschafft
 function grammarList() { return (window.GRAMMAR || {})[settings.lang] || []; }
@@ -1164,26 +1170,71 @@ async function createGrammarLesson(item) {
   const before = list.slice(0, list.indexOf(item)).map(x => x.title).join('; ');
   const known = knownWordList(300);
   const r = await callClaude(
-    `You are a patient, friendly ${lang} teacher for a German-speaking learner. Write ONE short grammar lesson about exactly this topic: "${item.title}" (${item.what}). Teach only this one rule – nothing else.
-Earlier lessons in the course: ${before || 'none'}. You may use those structures in examples; avoid grammar from later lessons where possible.
+    `You are a ${lang} coach for a German-speaking learner who also finds German grammar hard. Coach like a good sports trainer: don't lecture rules – set up forms of practice in which the learner discovers the pattern himself and then uses it. Topic of this lesson (only this one pattern): "${item.title}" (${item.what}).
+Earlier lessons: ${before || 'none'} – you may use those structures; avoid grammar from later lessons where possible.
 Learner level: ${talkStage().id} (vocabulary-based estimate).${settings.lang === 'it' ? ` The learner is ${settings.profile.gender === 'f' ? 'female' : 'male'} – use matching endings when sentences are about the learner.` : ''}
 Words the learner already knows (for orientation only): ${known.length ? known.join(', ') : 'almost none'}.
 ${settings.teen ? TEEN_RULES + '\n' : ''}
-All explanations in simple, friendly German (du-Form), short sentences, no grammar jargon without a short explanation. Use the usual German grammar terms (Verb, Nomen, Vokal, Artikel, Plural …) without explaining them in brackets – the app adds a plain explanation itself. Write for someone without grammar knowledge: every statement must be understandable on its own, show it with a concrete example, never leave out steps of reasoning. Every ${lang} sentence must be correct and natural, exactly as a native speaker would say it; prefer known words, but naturalness always comes first.
+Every ${lang} sentence must be correct and natural, exactly as a native speaker would say it; prefer known words, but naturalness comes first. German texts: simple, friendly, du-Form, short sentences, no reasoning steps left out. Use the usual German grammar terms (Verb, Nomen, Vokal, Endung …) without explaining them in brackets – the app adds plain explanations itself.
 Fields:
-- "intro": 1–2 sentences: what the learner learns and why it is useful in everyday life.
-- "rule": the rule in 3–6 short sentences; mark key forms with **double asterisks**.
-- "compare": how it differs from or resembles German (1–3 sentences); empty string if not helpful.
-- "forms": a small table of forms (max 10 rows, t = ${lang}, de = German); empty array if the topic has no forms table.
-- "examples": 5 everyday example sentences.
-- "pitfall": the typical mistake German speakers make with this rule, as one concrete example: "wrong" = the wrong ${lang} phrase, "right" = the correct one, "de" = what it means in German (use the most common German word, e.g. "das Auto", not a rare synonym), "why" = one plain German sentence why – no reasoning that needs extra knowledge.
-- "exercises": exactly 8 exercises that test only this rule. First 5 with kind "choice": q = a ${lang} sentence with ___ for the gap (or a short German question about the rule), options = 3 short answers, answer = index of the correct option, solution = the complete correct ${lang} sentence. Then 3 with kind "translate": q = a short German sentence, options = [], answer = 0, solution = its natural ${lang} translation. "explain" = one short German sentence why the solution is right, naming the rule.`,
+- "intro": one sentence what the learner can DO with this in everyday life (no grammar talk).
+- "pattern": 6 short everyday sentences that are as similar as possible, so that only the one thing this lesson is about changes from sentence to sentence; order them so the pattern jumps out. "hl" = the word (exactly as written in "t") that carries the change.
+- "question": a German question that makes the learner look at the highlighted words and find the pattern himself, e.g. "Schau auf die markierten Wörter: Was passiert am Wortende, wenn die Person wechselt?".
+- "rule": the answer to that question in 2–3 short sentences – the pattern in plain words, mark key forms with **double asterisks**.
+- "compare": one or two sentences how it is in German, only if that helps; else empty.
+- "forms": a small overview table (max 8 rows, t = ${lang}, de = German); empty array if not useful.
+- "pitfall": the typical mistake German speakers make here, as one concrete example: "wrong", "right" (${lang}), "de" = its German meaning (most common German word), "why" = one plain German sentence.
+- "exercises": exactly 8 forms of practice, from easy to harder: first 3 kind "swap" (q = a ${lang} sentence, task = a very short German instruction what to change, e.g. "Sag es für „du“" or "Mach es weiblich", solution = the changed sentence; options = [], answer = 0), then 3 kind "choice" (q = a ${lang} sentence with ___, task = "", options = 3 short answers, answer = index of the correct one, solution = the full correct sentence), then 2 kind "translate" (q = a short German sentence, task = "", options = [], answer = 0, solution = its natural ${lang} translation). "explain" = one short German sentence that points back to the pattern (e.g. "Bei „du“ endet das Verb auf -i."), not a rule recital.`,
     [{ role: 'user', content: 'Write the lesson.' }], GRAMMAR_SCHEMA, 12000);
   const g = grammarState();
   const prev = g[item.id] || {};
-  g[item.id] = Object.assign({}, prev, { ts: Date.now(), lesson: r.data });
+  g[item.id] = Object.assign({}, prev, { ts: Date.now(), lesson: Object.assign({ v: 2 }, r.data) });
   persist();
   return r.cost;
+}
+// Nachfragen zur Lektion – wie beim Trainer. Bisherige Fragen gehen als Zusammenhang mit.
+async function askGrammar(item, q) {
+  const lang = settings.lang === 'it' ? 'Italian' : 'British English';
+  const s = grammarState()[item.id];
+  const L = s.lesson;
+  const sample = (L.pattern || L.examples || []).map(x => x.t).join(' / ');
+  s.qa = s.qa || [];
+  const history = [].concat(...s.qa.slice(-3).map(x => [{ role: 'user', content: x.q }, { role: 'assistant', content: x.a }]));
+  const r = await callClaude(
+    `You are a patient ${lang} coach. The German-speaking learner (who also finds German grammar hard) is working on the lesson "${item.title}" (${item.what}). Lesson rule: ${L.rule} Lesson sentences: ${sample}
+Answer the learner's question in simple, friendly German (du-Form): max 5 short sentences, concrete, no reasoning steps left out. Use the learner's own example if there is one; if it contains a mistake, say so kindly and show the right form. Use the usual German grammar terms without bracket explanations (the app adds them). "examples": 1–3 short ${lang} sentences that show the point, each with German meaning; empty if not needed. If the question is about something else, answer briefly anyway.${settings.teen ? ' ' + TEEN_RULES : ''}`,
+    history.concat([{ role: 'user', content: q }]), ASK_SCHEMA, 4000);
+  const entry = { q, a: r.data.answer, ex: r.data.examples || [], ts: Date.now() };
+  s.qa.push(entry);
+  s.ts = Date.now();
+  persist();
+  return entry;
+}
+function qaHtml(x) {
+  return `<div class="bubble me" style="margin-top:8px">${esc(x.q)}</div>
+    <div class="bubble" style="margin-top:6px">${fmtRich(x.a, new Set())}${x.ex && x.ex.length ? `<div class="small" style="margin-top:6px">${x.ex.map(e => `<div>🔹 <b>${esc(e.t)}</b> – ${esc(e.de)}</div>`).join('')}</div>` : ''}</div>`;
+}
+// Frage-Feld: auf der Lektion und direkt in der Übung („Warum?“)
+function askBox(box, item, prefill) {
+  if (!talkCfg.key) { box.innerHTML = '<p class="muted small">Nachfragen braucht einen <a href="#talk/setup">Claude-Schlüssel</a>.</p>'; return; }
+  box.innerHTML = `<div class="row between" style="margin-top:8px"><b class="small">❓ Frag nach</b>${SR ? '<button class="btn small" data-ask-mic>🎙 Sprechen</button>' : ''}</div>
+    <textarea data-ask-q style="min-height:60px" placeholder="z. B. Warum heißt es abita, wenn es um den Onkel geht?">${esc(prefill || '')}</textarea>
+    <button class="btn primary" data-ask-go style="margin-top:6px">Fragen</button> <span class="muted small">≈ 1–2 Cent</span>
+    <div data-ask-out></div>`;
+  const ta = $('[data-ask-q]', box);
+  if ($('[data-ask-mic]', box)) micToggle($('[data-ask-mic]', box), '🎙 Sprechen', t => { ta.value = (ta.value + ' ' + t).trim(); }, null, 'de-DE');
+  $('[data-ask-go]', box).onclick = async () => {
+    const q = ta.value.trim();
+    if (!q) { toast('Bitte Frage eingeben'); return; }
+    const b = $('[data-ask-go]', box);
+    b.disabled = true; b.textContent = '🤖 Denkt nach …';
+    try {
+      const x = await askGrammar(item, q);
+      $('[data-ask-out]', box).insertAdjacentHTML('beforeend', qaHtml(x));
+      ta.value = '';
+    } catch (e) { toast(e.message); }
+    b.disabled = false; b.textContent = 'Fragen';
+  };
 }
 let grammarBusy = null;
 views.grammar = function (root, arg) {
@@ -1207,6 +1258,10 @@ views.grammar = function (root, arg) {
   bindGo(root);
   $('#gr-terms', root).onchange = e => { settings.termHelp = e.target.checked; saveSettings(); views.grammar(root); };
 };
+function markWord(t, hl) {
+  const i = hl ? t.indexOf(hl) : -1;
+  return i < 0 ? esc(t) : esc(t.slice(0, i)) + `<mark>${esc(hl)}</mark>` + esc(t.slice(i + hl.length));
+}
 function grammarLesson(root, item) {
   const g = grammarState();
   const s = g[item.id] || {};
@@ -1217,7 +1272,7 @@ function grammarLesson(root, item) {
   if (!L) {
     root.innerHTML = `<a href="#grammar" class="small">‹ Alle Lektionen</a>
       <h1>📐 ${esc(item.title)}</h1>
-      <div class="card"><p class="small">${esc(item.what)}</p>
+      <div class="card"><p class="small">${explainTerms(esc(item.what), new Set())}</p>
         ${talkCfg.key ? `<button class="btn primary big" id="gr-make" ${grammarBusy ? 'disabled' : ''}>${grammarBusy === item.id ? '🤖 Claude schreibt die Lektion …' : '📐 Lektion erstellen'}</button>
           <p class="muted small">Einmalig grob 5–10 Cent (Schätzung). Danach gespeichert und beliebig oft kostenlos.</p>`
         : '<p class="small">Dafür brauchst du einen <a href="#talk/setup">Claude-Schlüssel</a>.</p>'}</div>`;
@@ -1232,27 +1287,41 @@ function grammarLesson(root, item) {
     return;
   }
   const seen = new Set();
+  const sents = L.pattern || L.examples || [];
+  const pitfall = !L.pitfall ? '' : typeof L.pitfall === 'string' ? `<div class="notice warn small">⚠️ ${fmtRich(L.pitfall, seen)}</div>`
+    : `<div class="notice warn small"><b>⚠️ Typischer Fehler</b><div style="margin-top:6px">✗ <s>${esc(L.pitfall.wrong)}</s> → ✓ <b>${esc(L.pitfall.right)}</b>${L.pitfall.de ? ` <span class="muted">(${esc(L.pitfall.de)})</span>` : ''}</div><div style="margin-top:4px">${fmtRich(L.pitfall.why, seen)}</div></div>`;
   root.innerHTML = `<a href="#grammar" class="small">‹ Alle Lektionen</a>
     <h1>📐 ${esc(item.title)}</h1>
     ${s.done ? `<div class="notice small">✓ Geschafft – bestes Ergebnis ${Math.round((s.best || 0) * 100)} %. Üben geht jederzeit.</div>` : ''}
-    <div class="card stack">
-      <p>${fmtRich(L.intro, seen)}</p>
-      <p>${fmtRich(L.rule, seen)}</p>
-      ${L.compare ? `<p class="small">🇩🇪 ${fmtRich(L.compare, seen)}</p>` : ''}
-    </div>
-    ${L.forms && L.forms.length ? `<div class="card"><table class="wk">${L.forms.map(f => `<tr><td><b>${esc(f.t)}</b></td><td class="muted">${esc(f.de)}</td></tr>`).join('')}</table></div>` : ''}
-    <h2>Beispiele</h2>
-    <ul class="list card">${L.examples.map((x, i) => `<li><div class="grow"><div class="t">${esc(x.t)}</div><div class="d">${esc(x.de)}</div></div>
+    <p>${fmtRich(L.intro, seen)}</p>
+    ${L.pattern ? '<h2>1. Hör hin und schau genau</h2>' : '<h2>Beispiele</h2>'}
+    <ul class="list card">${sents.map((x, i) => `<li><div class="grow"><div class="t">${markWord(x.t, x.hl)}</div><div class="d">${esc(x.de)}</div></div>
       <div class="stack" style="flex:none"><button class="btn small" data-gp="${i}">🔊</button><button class="btn small" data-ga="${i}" ${inIsland(x.t) ? 'disabled' : ''} title="In die Wiederholung">➕</button></div></li>`).join('')}</ul>
-    ${!L.pitfall ? '' : typeof L.pitfall === 'string' ? `<div class="notice warn small">⚠️ ${fmtRich(L.pitfall, seen)}</div>`
-      : `<div class="notice warn small"><b>⚠️ Typischer Fehler</b><div style="margin-top:6px">✗ <s>${esc(L.pitfall.wrong)}</s> → ✓ <b>${esc(L.pitfall.right)}</b>${L.pitfall.de ? ` <span class="muted">(${esc(L.pitfall.de)})</span>` : ''}</div><div style="margin-top:4px">${fmtRich(L.pitfall.why, seen)}</div></div>`}
+    ${L.pattern ? `<button class="btn" id="gr-all" style="width:100%">🔊 Alle nacheinander</button>
+    <div class="card" style="margin-top:12px"><b>🤔 ${fmtRich(L.question, seen)}</b>
+      <p class="muted small">Erst selbst überlegen (ruhig laut), dann aufdecken.</p>
+      <button class="btn" id="gr-solve">Auflösung zeigen</button>
+      <div id="gr-rule" hidden><p style="margin-top:10px">${fmtRich(L.rule, seen)}</p>${L.compare ? `<p class="small">🇩🇪 ${fmtRich(L.compare, seen)}</p>` : ''}</div>
+    </div>` : `<div class="card stack"><p>${fmtRich(L.rule, seen)}</p>${L.compare ? `<p class="small">🇩🇪 ${fmtRich(L.compare, seen)}</p>` : ''}</div>`}
+    ${L.forms && L.forms.length ? `<div class="card"><table class="wk">${L.forms.map(f => `<tr><td><b>${esc(f.t)}</b></td><td class="muted">${esc(f.de)}</td></tr>`).join('')}</table></div>` : ''}
+    ${pitfall}
+    <h2>${L.pattern ? '2. ' : ''}Jetzt du</h2>
     <button class="btn primary big" id="gr-ex">✏️ Übung starten (${L.exercises.length} Aufgaben)</button>
-    ${talkCfg.key ? '<button class="btn small" id="gr-redo" style="margin-top:10px">🔄 Lektion neu erstellen</button>' : ''}
-    <p class="muted small">Inhalt von Claude erstellt – Fehler sind möglich. ➕ holt Beispielsätze in die Insel „Grammatik“ (Wiederholung & Shadowing).</p>`;
-  $$('[data-gp]', root).forEach(b => { b.onclick = () => speak(L.examples[b.dataset.gp].t); });
+    <div class="card" style="margin-top:12px" id="gr-askcard">
+      ${(s.qa || []).length ? `<details><summary class="small"><b>Deine Fragen (${s.qa.length})</b></summary>${s.qa.map(qaHtml).join('')}</details>` : ''}
+      <div id="gr-ask"></div>
+    </div>
+    ${talkCfg.key ? `<button class="btn small" id="gr-redo">🔄 Lektion neu erstellen${L.pattern ? '' : ' (neue Form: Muster zuerst)'}</button>` : ''}
+    <p class="muted small">Inhalt von Claude erstellt – Fehler sind möglich. ➕ holt Sätze in die Insel „Grammatik“ (Wiederholung & Shadowing).</p>`;
+  askBox($('#gr-ask', root), item);
+  $$('[data-gp]', root).forEach(b => { b.onclick = () => speak(sents[b.dataset.gp].t); });
+  if ($('#gr-all', root)) $('#gr-all', root).onclick = async () => {
+    for (const x of sents) { await speakP(x.t); await wait(900); if (!location.hash.startsWith('#grammar/')) break; }
+  };
+  if ($('#gr-solve', root)) $('#gr-solve', root).onclick = e => { $('#gr-rule', root).hidden = false; e.target.remove(); };
   $$('[data-ga]', root).forEach(b => {
     b.onclick = () => {
-      const x = L.examples[b.dataset.ga];
+      const x = sents[b.dataset.ga];
       let target = state.islands.find(i => i.id === islandId);
       if (!target) { target = { id: islandId, title: 'Grammatik', sentences: [], ts: Date.now() }; state.islands.push(target); }
       if (!target.sentences.some(y => y.t === x.t)) target.sentences.push({ id: 's:' + uid(), t: x.t, d: x.de, ts: Date.now() });
@@ -1263,7 +1332,7 @@ function grammarLesson(root, item) {
   });
   $('#gr-ex', root).onclick = () => grammarPractice(root, item);
   if ($('#gr-redo', root)) $('#gr-redo', root).onclick = async () => {
-    if (!confirm('Lektion neu erstellen? Kostet wieder ein paar Cent; dein Fortschritt bleibt.')) return;
+    if (!confirm('Lektion neu erstellen? Kostet wieder ein paar Cent; dein Fortschritt und deine Fragen bleiben.')) return;
     const b = $('#gr-redo', root);
     b.disabled = true; b.textContent = '🤖 Schreibe …';
     try { await createGrammarLesson(item); toast('Neu erstellt'); } catch (e) { toast(e.message); }
@@ -1272,7 +1341,7 @@ function grammarLesson(root, item) {
 }
 function grammarPractice(root, item) {
   const s = grammarState()[item.id];
-  const ex = s.lesson.exercises.filter(x => x.kind === 'translate' || (x.options && x.options.length >= 2));
+  const ex = s.lesson.exercises.filter(x => x.kind !== 'choice' || (x.options && x.options.length >= 2));
   let i = 0, right = 0;
   const wrong = [];
   function finish() {
@@ -1288,9 +1357,9 @@ function grammarPractice(root, item) {
     const next = nextGrammar();
     root.innerHTML = `<a href="#grammar" class="small">‹ Alle Lektionen</a>
       <div class="card flash"><div class="target">${right}/${ex.length}</div>
-        <p>${score >= GRAMMAR_PASS ? (first && s.done ? '✓ Lektion geschafft!' : '✓ Gut gemacht.') : 'Noch nicht ganz – lies die Regel nochmal und übe erneut.'}</p></div>
-      ${wrong.length ? `<div class="card"><b>Deine Fehler</b><ul class="list">${wrong.map(w => `<li><div><div class="d">${esc(w.q)}</div><div class="t">${esc(w.solution)}</div><div class="d">💡 ${fmtRich(w.explain, new Set())}</div></div></li>`).join('')}</ul></div>` : ''}
-      <div class="row"><button class="btn grow" id="gr-again">Nochmal üben</button><a class="btn grow" href="#grammar/${item.id}">Zur Regel</a></div>
+        <p>${score >= GRAMMAR_PASS ? (first && s.done ? '✓ Lektion geschafft!' : '✓ Gut gemacht.') : 'Noch nicht ganz – schau dir die Sätze nochmal an, frag nach, wenn etwas unklar ist, und übe erneut.'}</p></div>
+      ${wrong.length ? `<div class="card"><b>Deine Fehler</b><ul class="list">${wrong.map(w => `<li><div><div class="d">${esc(w.task ? w.task + ': ' : '')}${esc(w.q)}</div><div class="t">${esc(w.solution)}</div><div class="d">💡 ${fmtRich(w.explain, new Set())}</div></div></li>`).join('')}</ul></div>` : ''}
+      <div class="row"><button class="btn grow" id="gr-again">Nochmal üben</button><a class="btn grow" href="#grammar/${item.id}">Zur Lektion</a></div>
       ${score >= GRAMMAR_PASS && next ? `<a class="btn primary big" href="#grammar/${next.id}" style="display:block;margin-top:8px">Weiter: ${esc(next.title)}</a>` : ''}`;
     $('#gr-again', root).onclick = () => grammarPractice(root, item);
   }
@@ -1300,23 +1369,32 @@ function grammarPractice(root, item) {
     if (i >= ex.length) { finish(); return; }
     const x = ex[i];
     const choice = x.kind === 'choice';
+    const label = choice ? 'Was passt?' : x.kind === 'swap' ? `🔁 ${x.task || 'Bau den Satz um'}` : `Auf ${LANGS[settings.lang].name}:`;
     root.innerHTML = `<a href="#grammar/${item.id}" class="small">‹ ${esc(item.title)}</a>
       <div class="row between muted small" style="margin-top:8px"><span>Aufgabe ${i + 1} / ${ex.length}</span><span>${right} richtig</span></div>
       <div class="progress" style="margin:6px 0 12px"><div style="width:${i / ex.length * 100}%"></div></div>
       <div class="card flash">
-        <div class="muted small">${choice ? 'Was passt?' : `Auf ${LANGS[settings.lang].name}:`}</div>
+        <div class="${x.kind === 'swap' ? '' : 'muted small'}" style="${x.kind === 'swap' ? 'font-weight:600;margin-bottom:6px' : ''}">${esc(label)}</div>
         <div class="sentence">${esc(x.q)}</div>
+        ${x.kind === 'swap' ? `<button class="btn small" id="gr-hear" style="margin-top:6px">🔊</button>` : ''}
       </div>
       ${choice ? `<div class="stack" id="gr-opts">${x.options.map((o, k) => `<button class="btn" data-o="${k}" style="width:100%">${esc(o)}</button>`).join('')}</div>`
         : `<input type="text" id="gr-typed" placeholder="Antwort tippen (oder sprechen / im Kopf)" autocomplete="off" autocapitalize="off" spellcheck="false">
           <div class="row" id="gr-pre" style="margin-top:8px">${SR ? '<button class="btn" id="gr-say">🎙 Sprechen</button>' : ''}<button class="btn primary grow" id="gr-reveal">Aufdecken</button></div>`}
       <div id="gr-res"></div>`;
+    if ($('#gr-hear', root)) $('#gr-hear', root).onclick = () => speak(x.q);
+    let attempt = '';
     const result = ok => {
       const res = $('#gr-res', root);
       res.innerHTML = `<div class="notice ${ok === false ? 'warn' : ''}" style="margin-top:10px">
           ${ok === true ? '✓ Richtig! ' : ok === false ? '✗ Richtig wäre: ' : ''}<b>${esc(x.solution)}</b> <button class="btn small" id="gr-play">🔊</button>
-          <div class="small" style="margin-top:4px">💡 ${fmtRich(x.explain, new Set())}</div></div>`;
+          <div class="small" style="margin-top:4px">💡 ${fmtRich(x.explain, new Set())}</div>
+          <button class="btn small" id="gr-why" style="margin-top:6px">❓ Warum?</button><div id="gr-whybox"></div></div>`;
       $('#gr-play', res).onclick = () => speak(x.solution);
+      $('#gr-why', res).onclick = e => {
+        e.target.remove();
+        askBox($('#gr-whybox', res), item, `Warum ist „${x.solution}“ richtig?${attempt && attempt !== x.solution ? ` Ich hatte „${attempt}“.` : ''}`);
+      };
     };
     const next = ok => {
       if (ok) { right++; addXP(1); } else wrong.push(x);
@@ -1331,6 +1409,7 @@ function grammarPractice(root, item) {
           answered = true;
           const k = Number(b.dataset.o);
           const ok = k === x.answer;
+          attempt = x.options[k];
           $$('#gr-opts [data-o]', root).forEach(o => {
             const n = Number(o.dataset.o);
             if (n === x.answer) o.style.cssText += ';border-color:var(--good);color:var(--good);font-weight:600';
@@ -1347,7 +1426,7 @@ function grammarPractice(root, item) {
       let said = '';
       const reveal = () => {
         $('#gr-pre', root).hidden = true;
-        const attempt = said || $('#gr-typed', root).value.trim();
+        attempt = said || $('#gr-typed', root).value.trim();
         result(null);
         const res = $('#gr-res', root);
         if (attempt) { const c = compareWords(x.solution, attempt); res.insertAdjacentHTML('afterbegin', `<p class="small">Deine Antwort: „${esc(attempt)}“ – ${c.html} <b>${c.score}%</b></p>`); }

@@ -22,7 +22,12 @@ Unter Inseln → „📄 Texte“: eigene Texte einfügen (z. B. Liedtexte zum M
 Beim Speichern wird automatisch in ganze Sätze geordnet: Claude setzt kopierte Liedzeilen an echten Satzgrenzen neu zusammen (nur Wort-Nummern, der Wortlaut bleibt), übrig gebliebene Bruchstücke (≤ 2 Wörter) werden angehängt, dann wird übersetzt. Ohne Schlüssel nur Teilung an Satzzeichen. „🔄 Neu ordnen“ geht immer vom Originaltext aus; „↩ Ursprüngliche Zeilen“ stellt ihn wieder her.
 
 ## Grammatik
-Inseln → „📐 Grammatik“: feste Reihenfolge (IT 29, EN 28 Lektionen, `data/grammar.js`), eine Regel pro Lektion. Claude schreibt die Lektion einmal (grob 5–10 Cent, Schätzung): Erklärung auf Deutsch, Vergleich mit dem Deutschen, Formen, Beispiele (➕ in die Insel „Grammatik“), typischer Fehler, 8 Übungen mit Erklärung. Ab 6/8 richtig geschafft. Fachwörter (Vokal, Verb, Plural …) bekommen beim ersten Vorkommen eine einfache Erklärung in Klammern (abschaltbar). Danach gespeichert (auch im Sync) und kostenlos.
+Inseln → „📐 Grammatik“: feste Reihenfolge (IT 29, EN 28 Lektionen, `data/grammar.js`), ein Muster pro Lektion, aufgebaut wie Training statt Vortrag:
+1. **Hör hin und schau genau** – 6 ähnliche Sätze, in denen sich nur eins ändert (markiert), dazu die Frage „Was ändert sich?“; die Auflösung (Regel in 2–3 Sätzen) erst auf Tipp.
+2. **Jetzt du** – 8 Spielformen: Satz umbauen („Sag es für ‚du‘“), Auswahl, Übersetzen; jede mit kurzer Erklärung und „❓ Warum?“.
+3. **❓ Frag nach** – eigene Frage tippen oder sprechen, Claude antwortet zur Lektion (≈ 1–2 Cent); Fragen bleiben gespeichert.
+
+Claude schreibt eine Lektion einmal (grob 5–10 Cent, Schätzung), danach gespeichert (auch im Sync). Ab 6/8 richtig geschafft. Fachwörter (Vokal, Verb, Plural …) bekommen beim ersten Vorkommen eine einfache Erklärung in Klammern (abschaltbar).
 
 ## Wochen-Check
 Wochenrückblick → „📝 Wochen-Check“: ca. 15 Auswahlfragen ohne KI – Wörter (Deutsch → Zielsprache), Wörter hören, Sätze verstehen, Grammatik aus geschafften Lektionen. Ergebnis pro Bereich, Vergleich mit der Vorwoche; „Das kannst du jetzt“ mit sicheren Wörtern, Sätzen, Grammatik. „Heute zuerst“ schlägt ihn ab Samstag vor.

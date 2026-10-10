@@ -12,14 +12,19 @@ const URL = 'http://localhost:8765/';
     const H = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'content-type': 'application/json' };
     if (r.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: H });
     req = JSON.parse(r.postData());
+    if (req.output_config.format.schema.properties.answer) {
+      const reply = { answer: 'Weil **abita** zu „er“ gehört: Das Verb zeigt die Person, nicht das Geschlecht.', examples: [{ t: 'La zia abita a Roma.', de: 'Die Tante wohnt in Rom.' }] };
+      return route.fulfill({ status: 200, headers: H, body: JSON.stringify({ id: 'm', type: 'message', role: 'assistant', model: req.model, content: [{ type: 'text', text: JSON.stringify(reply) }], stop_reason: 'end_turn', usage: { input_tokens: 500, output_tokens: 100 } }) });
+    }
+    const sw = n => ({ kind: 'swap', task: 'Sag es für „du“', q: `Io abito ${n}.`, options: [], answer: 0, solution: `Tu abiti ${n}.`, explain: 'Bei „du“ endet das Verb auf -i.' });
     const ch = n => ({ kind: 'choice', q: `___ libro ${n}`, options: ['il', 'la', 'lo'], answer: 0, solution: `il libro ${n}`, explain: 'libro ist männlich → il.' });
     const tr = n => ({ kind: 'translate', q: `das Buch ${n}`, options: [], answer: 0, solution: `il libro ${n}`, explain: 'männlich → il.' });
     const data = {
-      intro: 'Artikel zeigen das Geschlecht.', rule: 'Männlich: **il**, weiblich: **la**.', compare: 'Wie der/die. Vor Vokal wird la zu l\'.',
+      intro: 'Damit sagst du, wer etwas tut.', question: 'Was passiert am Wortende, wenn die Person wechselt?', rule: 'Männlich: **il**, weiblich: **la**.', compare: 'Wie der/die. Vor Vokal wird la zu l\'.',
       forms: [{ t: 'il libro', de: 'das Buch' }, { t: 'la casa', de: 'das Haus' }],
-      examples: [{ t: 'Il libro è nuovo.', de: 'Das Buch ist neu.' }, { t: 'La casa è grande.', de: 'Das Haus ist groß.' }],
+      pattern: [{ t: 'Io abito a Roma.', de: 'Ich wohne in Rom.', hl: 'abito' }, { t: 'Tu abiti a Roma.', de: 'Du wohnst in Rom.', hl: 'abiti' }],
       pitfall: { wrong: 'il macchina', right: 'la macchina', de: 'das Auto', why: 'macchina ist weiblich, auch wenn „der Wagen“ männlich ist.' },
-      exercises: [ch(1), ch(2), ch(3), ch(4), ch(5), tr(1), tr(2), tr(3)],
+      exercises: [sw(1), sw(2), sw(3), ch(1), ch(2), ch(3), tr(1), tr(2)],
     };
     route.fulfill({ status: 200, headers: H, body: JSON.stringify({ id: 'm', type: 'message', role: 'assistant', model: req.model, content: [{ type: 'text', text: JSON.stringify(data) }], stop_reason: 'end_turn', usage: { input_tokens: 1500, output_tokens: 2500 } }) });
   });
@@ -39,20 +44,37 @@ const URL = 'http://localhost:8765/';
   await p.click('a.card.step[href="#grammar/it-art"]'); await p.waitForTimeout(100);
   await p.click('#gr-make'); await p.waitForSelector('#gr-ex');
   const sys = req.system;
-  console.log('Prompt: Thema', sys.includes('Artikel & Geschlecht'), '| eine Regel', /only this one rule/.test(sys), '| Deutsch-Vergleich', /differs from or resembles German/.test(sys), '| Niveau', /Learner level: A\d/.test(sys));
-  console.log('Regel fett:', await p.$eval('.card.stack', e => e.innerHTML.includes('<b>il</b>')), '| Tabelle:', await p.$$eval('table.wk tr', x => x.length), '| Beispiele:', await p.$$eval('[data-gp]', x => x.length));
+  console.log('Prompt: Thema', sys.includes('Artikel & Geschlecht'), '| Muster zuerst', /discovers the pattern/.test(sys), '| Spielformen', /forms of practice/.test(sys), '| Niveau', /Learner level: A\d/.test(sys));
+  console.log('Muster markiert:', await p.$$eval('mark', x => x.map(e => e.textContent).join(',')), '| Regel verdeckt:', await p.$eval('#gr-rule', e => e.hidden));
+  await p.click('#gr-solve');
+  console.log('Regel nach Auflösung:', await p.$eval('#gr-rule', e => !e.hidden && e.innerHTML.includes('<b>il</b>')), '| Tabelle:', await p.$$eval('table.wk tr', x => x.length));
+  // Nachfragen
+  await p.fill('[data-ask-q]', 'Warum heißt es abita beim Onkel?');
+  await p.click('[data-ask-go]'); await p.waitForSelector('[data-ask-out] .bubble');
+  console.log('Antwort:', (await p.textContent('[data-ask-out]')).replace(/\s+/g, ' ').trim().slice(0, 90), '| Begriffshilfe in Antwort:', await p.$$eval('[data-ask-out] .term', x => x.length > 0));
+  console.log('Frage gespeichert:', await p.evaluate(() => state.grammar['it-art'].qa.length), '| Lektion im Prompt:', req.system.includes('Artikel & Geschlecht'));
   console.log('Begriffshilfe:', await p.$$eval('.term', x => x.map(e => e.textContent).join(' ')));
   console.log('Fehler-Feld:', (await p.textContent('.notice.warn')).replace(/\s+/g, ' ').trim());
   await p.click('[data-ga="0"]');
   console.log('Beispiel in Insel Grammatik:', await p.evaluate(() => state.islands.find(i => i.id === 'gram-it').sentences.length));
   await p.click('#gr-ex');
-  // 4 richtig, 1 falsch, Übersetzungen 2 richtig 1 falsch → 6/8
-  for (let i = 0; i < 5; i++) { await p.click(`#gr-opts [data-o="${i === 2 ? 1 : 0}"]`); await p.click('#gr-next'); }
-  for (let i = 0; i < 3; i++) { await p.fill('#gr-typed', 'il libro'); await p.click('#gr-reveal'); await p.click(i === 1 ? '#gr-no' : '#gr-yes'); }
+  // Umbauen: 3 (1 falsch), Auswahl: 3 (alle richtig), Übersetzen: 2 (1 falsch) → 6/8
+  console.log('Spielform Umbauen:', (await p.textContent('.flash')).replace(/\s+/g, ' ').trim());
+  for (let i = 0; i < 3; i++) {
+    await p.fill('#gr-typed', 'Tu abiti'); await p.click('#gr-reveal');
+    if (i === 0) { await p.click('#gr-why'); console.log('Warum vorbefüllt:', await p.$eval('#gr-whybox [data-ask-q]', e => e.value)); }
+    await p.click(i === 1 ? '#gr-no' : '#gr-yes');
+  }
+  for (let i = 0; i < 3; i++) { await p.click('#gr-opts [data-o="0"]'); await p.click('#gr-next'); }
+  for (let i = 0; i < 2; i++) { await p.fill('#gr-typed', 'il libro'); await p.click('#gr-reveal'); await p.click(i === 1 ? '#gr-no' : '#gr-yes'); }
   console.log('Ergebnis:', (await p.textContent('.flash')).replace(/\s+/g, ' ').trim(), '| Fehler gelistet:', await p.$$eval('.card .list li', x => x.length));
   const gs = await p.evaluate(() => state.grammar['it-art']);
   console.log('geschafft:', gs.done, '| best:', gs.best, '| nächste Lektion verlinkt:', !!(await p.$('a[href="#grammar/it-plural"]')));
   await p.screenshot({ path: process.env.S + '/grammar.png', fullPage: true });
+  // Alte Lektionsform (vor „Muster zuerst“) bleibt lesbar
+  await p.evaluate(() => { state.grammar['it-plural'] = { ts: 1, lesson: { intro: 'Alt.', rule: 'Regel alt.', compare: '', forms: [], examples: [{ t: 'I libri.', de: 'Die Bücher.' }], pitfall: 'Alter Text.', exercises: [{ kind: 'choice', q: '___ libri', options: ['i', 'le'], answer: 0, solution: 'i libri', explain: 'x' }] } }; persist(); });
+  await p.goto(URL + '#grammar/it-plural'); await p.waitForTimeout(200);
+  console.log('alte Lektion:', (await p.textContent('#view')).includes('Regel alt.'), '| Hinweis neue Form:', (await p.textContent('#gr-redo')).includes('Muster zuerst'));
   // --- Wortpakete
   await p.goto(URL + '#vocab/new'); await p.waitForTimeout(200);
   const opts = await p.$$eval('#pack option', x => x.map(o => o.textContent));

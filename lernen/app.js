@@ -1171,6 +1171,7 @@ async function createGrammarLesson(item) {
   const known = knownWordList(300);
   const r = await callClaude(
     `You are a ${lang} coach for a German-speaking learner who also finds German grammar hard. Coach like a good sports trainer: don't lecture rules – set up forms of practice in which the learner discovers the pattern himself and then uses it. Topic of this lesson (only this one pattern): "${item.title}" (${item.what}).
+Keep it tiny: show only the most common case of this pattern. Leave out exceptions, special cases and spelling or pronunciation variants unless the topic is exactly about them – they come in later lessons. Never contrast more than 2–4 forms. If a form is only there to make speaking easier, say so in one plain sentence instead of stating a rule.
 Earlier lessons: ${before || 'none'} – you may use those structures; avoid grammar from later lessons where possible.
 Learner level: ${talkStage().id} (vocabulary-based estimate).${settings.lang === 'it' ? ` The learner is ${settings.profile.gender === 'f' ? 'female' : 'male'} – use matching endings when sentences are about the learner.` : ''}
 Words the learner already knows (for orientation only): ${known.length ? known.join(', ') : 'almost none'}.

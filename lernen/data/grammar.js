@@ -2,14 +2,16 @@
 // erzeugt Claude einmal pro Lektion und Sprache; gespeichert in state.grammar.
 window.GRAMMAR = {
   it: [
-    { id: 'it-art', title: 'Artikel & Geschlecht', what: 'il, lo, la, l\', i, gli, le; un, uno, una, un\'; männlich/weiblich erkennen' },
-    { id: 'it-plural', title: 'Plural der Nomen', what: '-o → -i, -a → -e, -e → -i; Artikel im Plural' },
+    { id: 'it-art1', title: 'der/die: il & la, ein/eine: un & una', what: 'Wort auf -o: meist männlich → il, un. Wort auf -a: meist weiblich → la, una. Nur diese vier.' },
     { id: 'it-essere-avere', title: 'essere & avere', what: 'Präsens von essere (sein) und avere (haben), typische Ausdrücke wie ho fame, ho 30 anni' },
     { id: 'it-are', title: 'Verben auf -are (Präsens)', what: 'parlare, abitare, lavorare – Endungen -o, -i, -a, -iamo, -ate, -ano; Subjektpronomen weglassen' },
-    { id: 'it-ere-ire', title: 'Verben auf -ere und -ire', what: 'prendere, dormire; Verben mit -isc- (capire, finire)' },
     { id: 'it-neg', title: 'Verneinung', what: 'non vor dem Verb; doppelte Verneinung: non … mai, non … niente, non … nessuno' },
     { id: 'it-questions', title: 'Fragen & Fragewörter', what: 'Frage durch Betonung; chi, che cosa, dove, quando, come, perché, quanto' },
+    { id: 'it-plural1', title: 'Mehrzahl: -o → -i, -a → -e', what: 'il libro → i libri, la casa → le case. Nur diese zwei Fälle.' },
     { id: 'it-adj', title: 'Adjektive', what: 'Endung passt sich an (rosso/rossa/rossi/rosse), Adjektive auf -e, Stellung meist nach dem Nomen' },
+    { id: 'it-art2', title: 'Sprechhilfen: l\', lo, gli, uno', what: 'l\' vor a, e, i, o, u (l\'amico), lo vor z und s + Konsonant (lo zio), Mehrzahl gli; uno, un\'' },
+    { id: 'it-plural2', title: 'Mehrzahl: Wörter auf -e und Ausnahmen', what: '-e → -i (il fiore → i fiori), unveränderliche Wörter (il caffè → i caffè)' },
+    { id: 'it-ere-ire', title: 'Verben auf -ere und -ire', what: 'prendere, dormire; Verben mit -isc- (capire, finire)' },
     { id: 'it-prep-art', title: 'Präpositionen + Artikel', what: 'a, di, da, in, su + Artikel: al, del, dal, nel, sul …' },
     { id: 'it-poss', title: 'Possessivpronomen', what: 'il mio, la mia, i miei, le mie; ohne Artikel bei Familie im Singular (mia madre)' },
     { id: 'it-irr', title: 'Wichtige unregelmäßige Verben', what: 'andare, fare, venire, stare, uscire, dire im Präsens' },

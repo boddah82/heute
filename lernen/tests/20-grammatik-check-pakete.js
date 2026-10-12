@@ -41,10 +41,10 @@ const URL = 'http://localhost:8765/';
   // --- Grammatik
   await p.goto(URL + '#grammar'); await p.reload(); await p.waitForTimeout(200);
   console.log('Lektionen:', await p.$$eval('a.card.step[href^="#grammar/"]', x => x.length), '| nächste:', (await p.textContent('.pill')).trim());
-  await p.click('a.card.step[href="#grammar/it-art"]'); await p.waitForTimeout(100);
+  await p.click('a.card.step[href="#grammar/it-art1"]'); await p.waitForTimeout(100);
   await p.click('#gr-make'); await p.waitForSelector('#gr-ex');
   const sys = req.system;
-  console.log('Prompt: Thema', sys.includes('Artikel & Geschlecht'), '| Muster zuerst', /discovers the pattern/.test(sys), '| Spielformen', /forms of practice/.test(sys), '| Niveau', /Learner level: A\d/.test(sys));
+  console.log('Prompt: Thema', sys.includes('il & la'), '| Muster zuerst', /discovers the pattern/.test(sys), '| Spielformen', /forms of practice/.test(sys), '| Niveau', /Learner level: A\d/.test(sys));
   console.log('Muster markiert:', await p.$$eval('mark', x => x.map(e => e.textContent).join(',')), '| Regel verdeckt:', await p.$eval('#gr-rule', e => e.hidden));
   await p.click('#gr-solve');
   console.log('Regel nach Auflösung:', await p.$eval('#gr-rule', e => !e.hidden && e.innerHTML.includes('<b>il</b>')), '| Tabelle:', await p.$$eval('table.wk tr', x => x.length));
@@ -52,7 +52,7 @@ const URL = 'http://localhost:8765/';
   await p.fill('[data-ask-q]', 'Warum heißt es abita beim Onkel?');
   await p.click('[data-ask-go]'); await p.waitForSelector('[data-ask-out] .bubble');
   console.log('Antwort:', (await p.textContent('[data-ask-out]')).replace(/\s+/g, ' ').trim().slice(0, 90), '| Begriffshilfe in Antwort:', await p.$$eval('[data-ask-out] .term', x => x.length > 0));
-  console.log('Frage gespeichert:', await p.evaluate(() => state.grammar['it-art'].qa.length), '| Lektion im Prompt:', req.system.includes('Artikel & Geschlecht'));
+  console.log('Frage gespeichert:', await p.evaluate(() => state.grammar['it-art1'].qa.length), '| Lektion im Prompt:', req.system.includes('il & la'));
   console.log('Begriffshilfe:', await p.$$eval('.term', x => x.map(e => e.textContent).join(' ')));
   console.log('Fehler-Feld:', (await p.textContent('.notice.warn')).replace(/\s+/g, ' ').trim());
   await p.click('[data-ga="0"]');
@@ -68,12 +68,12 @@ const URL = 'http://localhost:8765/';
   for (let i = 0; i < 3; i++) { await p.click('#gr-opts [data-o="0"]'); await p.click('#gr-next'); }
   for (let i = 0; i < 2; i++) { await p.fill('#gr-typed', 'il libro'); await p.click('#gr-reveal'); await p.click(i === 1 ? '#gr-no' : '#gr-yes'); }
   console.log('Ergebnis:', (await p.textContent('.flash')).replace(/\s+/g, ' ').trim(), '| Fehler gelistet:', await p.$$eval('.card .list li', x => x.length));
-  const gs = await p.evaluate(() => state.grammar['it-art']);
-  console.log('geschafft:', gs.done, '| best:', gs.best, '| nächste Lektion verlinkt:', !!(await p.$('a[href="#grammar/it-plural"]')));
+  const gs = await p.evaluate(() => state.grammar['it-art1']);
+  console.log('geschafft:', gs.done, '| best:', gs.best, '| nächste Lektion verlinkt:', !!(await p.$('a[href="#grammar/it-essere-avere"]')));
   await p.screenshot({ path: process.env.S + '/grammar.png', fullPage: true });
   // Alte Lektionsform (vor „Muster zuerst“) bleibt lesbar
-  await p.evaluate(() => { state.grammar['it-plural'] = { ts: 1, lesson: { intro: 'Alt.', rule: 'Regel alt.', compare: '', forms: [], examples: [{ t: 'I libri.', de: 'Die Bücher.' }], pitfall: 'Alter Text.', exercises: [{ kind: 'choice', q: '___ libri', options: ['i', 'le'], answer: 0, solution: 'i libri', explain: 'x' }] } }; persist(); });
-  await p.goto(URL + '#grammar/it-plural'); await p.waitForTimeout(200);
+  await p.evaluate(() => { state.grammar['it-plural1'] = { ts: 1, lesson: { intro: 'Alt.', rule: 'Regel alt.', compare: '', forms: [], examples: [{ t: 'I libri.', de: 'Die Bücher.' }], pitfall: 'Alter Text.', exercises: [{ kind: 'choice', q: '___ libri', options: ['i', 'le'], answer: 0, solution: 'i libri', explain: 'x' }] } }; persist(); });
+  await p.goto(URL + '#grammar/it-plural1'); await p.waitForTimeout(200);
   console.log('alte Lektion:', (await p.textContent('#view')).includes('Regel alt.'), '| Hinweis neue Form:', (await p.textContent('#gr-redo')).includes('Muster zuerst'));
   // --- Wortpakete
   await p.goto(URL + '#vocab/new'); await p.waitForTimeout(200);

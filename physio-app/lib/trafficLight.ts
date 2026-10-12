@@ -7,9 +7,13 @@ function worst(lights: TrafficLight[]): TrafficLight {
   return "GREEN";
 }
 
-function intensityLight(painLevel: number): TrafficLight {
-  if (painLevel <= 2) return "GREEN";
-  if (painLevel <= 5) return "YELLOW";
+// Verbessert sich der Schmerz während der Aktivität (danach < davor), zählt
+// das unabhängig vom absoluten Niveau als Grün – analog zur Vorlage von
+// Gino Lazzaro ("Ampel 1 (Intensität)"). Sonst entscheidet der Wert danach.
+function intensityLight(entry: CheckIn): TrafficLight {
+  if (entry.painAfter < entry.painBefore) return "GREEN";
+  if (entry.painAfter <= 2) return "GREEN";
+  if (entry.painAfter <= 5) return "YELLOW";
   return "RED";
 }
 
@@ -42,14 +46,16 @@ const RECOMMENDATIONS: Record<TrafficLight, string> = {
 
 export function assess(entry: CheckIn): CheckInAssessment {
   const spikeValue = entry.painAfter - entry.painBefore;
-  const intensity = intensityLight(Math.max(entry.painBefore, entry.painAfter));
+  const intensity = intensityLight(entry);
   const spike = spikeLight(spikeValue);
   const recovery = recoveryLight(entry);
   const overall = worst([intensity, spike, recovery]);
 
   const parts: string[] = [];
   parts.push(
-    intensity === "GREEN"
+    entry.painAfter < entry.painBefore
+      ? `Der Schmerz ist während der Aktivität gesunken (von ${entry.painBefore} auf ${entry.painAfter}).`
+      : intensity === "GREEN"
       ? "Der Schmerzlevel war unauffällig (0–2)."
       : intensity === "YELLOW"
       ? "Der Schmerzlevel lag im mittleren Bereich (3–5)."

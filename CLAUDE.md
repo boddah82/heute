@@ -1,6 +1,7 @@
 # Repo „heute“
 
 - `index.html` (Root): kleines WhatsApp-artiges Widget „Was machen wir heute?“ – unabhängig von der Lern-App, nicht anfassen ohne Auftrag.
+- `BAUPLAN.md`: Gesamtüberblick (Lernprinzipien, Funktionen, Aufbau, Übertragung auf andere Lernthemen wie Physio/Trainer).
 - `VERLAUF.md`: bisheriger Verlauf, Wünsche und Arbeitsweise des Nutzers – **vor größeren Änderungen lesen**.
 - `lernen/`: **Sprachtraining-App** (Italienisch + Englisch britisch) für den Repo-Besitzer. Deutschsprachige Oberfläche.
 

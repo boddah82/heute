@@ -18,6 +18,7 @@ import PDDMResultCard from "./PDDMResultCard";
 import PSFSPanel from "./PSFSPanel";
 import GoalActionSummary from "./GoalActionSummary";
 import QuestionnairePanel from "./QuestionnairePanel";
+import ActivityReliability from "./ActivityReliability";
 
 type DataTab = "heute" | "verlauf" | "pddm" | "ziele" | "fragebogen";
 
@@ -85,6 +86,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
           <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-6">Noch keine Check-ins für diesen Bereich.</p>
         ) : (
           <div className="space-y-3">
+            <ActivityReliability entries={entries} />
             {entries.map((entry) => (
               <EntryCard key={entry.id} entry={entry} onUpdate={updateEntry} onDelete={deleteEntry} />
             ))}

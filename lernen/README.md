@@ -29,6 +29,9 @@ Inseln → „📐 Grammatik“: feste Reihenfolge (IT 31, EN 28 Lektionen, `dat
 
 Claude schreibt eine Lektion einmal (grob 5–10 Cent, Schätzung), danach gespeichert (auch im Sync). Ab 6/8 richtig geschafft. Fachwörter (Vokal, Verb, Plural …) bekommen beim ersten Vorkommen eine einfache Erklärung in Klammern (abschaltbar).
 
+## Lesen
+„📖 Lesen“ (Startseite, auch unter Texte): Claude schreibt eine Geschichte in Kapiteln zu einem Thema (Fußball, Reisen, Krimi, Alltag, Essen, Lustiges oder eigenes; Jugend-Modus eigene Themen), passend zum Wortschatz (Ziel ~95 % bekannte Wörter). Wort antippen → Bedeutung im Satz, Satzübersetzung, Anhören, ＋ Wortliste. Vorlesen mit Markierung (auch Schleife), 3 Verständnisfragen. Nachgeschlagene Wörter kommen im nächsten Kapitel wieder vor; Fortsetzung über Kapitel-Zusammenfassungen. Grob 10–20 Cent pro Kapitel (Schätzung).
+
 ## Wochen-Check
 Wochenrückblick → „📝 Wochen-Check“: ca. 15 Auswahlfragen ohne KI – Wörter (Deutsch → Zielsprache), Wörter hören, Sätze verstehen, Grammatik aus geschafften Lektionen. Ergebnis pro Bereich, Vergleich mit der Vorwoche; „Das kannst du jetzt“ mit sicheren Wörtern, Sätzen, Grammatik. „Heute zuerst“ schlägt ihn ab Samstag vor.
 

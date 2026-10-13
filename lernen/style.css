@@ -202,3 +202,9 @@ a.btn { text-decoration: none; display: inline-block; }
 a.btn:not(.primary) { color: var(--text); }
 .term { color: var(--muted); font-weight: normal; font-size: .92em; }
 mark { background: var(--accent-soft); color: var(--accent); font-weight: 700; border-radius: 4px; padding: 0 2px; }
+.reader { font-size: 19px; line-height: 1.75; }
+.reader p { margin: 0 0 12px; }
+.rw { cursor: pointer; border-radius: 4px; }
+.rw.sel { background: var(--accent); color: #fff; }
+.rs.now { background: var(--accent-soft); border-radius: 4px; }
+.rpop { position: sticky; bottom: calc(70px + env(safe-area-inset-bottom)); background: var(--card); border: 1px solid var(--accent); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.15); z-index: 4; }

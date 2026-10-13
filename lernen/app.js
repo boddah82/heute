@@ -86,7 +86,7 @@ function starterIslands(lang) {
 }
 function stateKey(lang) { return 'sl.data.' + lang; }
 function emptyState() {
-  return { words: [], islands: [], srs: {}, notes: {}, noteTs: {}, overrides: {}, log: {}, deleted: {}, builderVerbs: [], resetAt: 0, level: null, talkAdjust: 0, texts: [], grammar: {}, weekTests: {} };
+  return { words: [], islands: [], srs: {}, notes: {}, noteTs: {}, overrides: {}, log: {}, deleted: {}, builderVerbs: [], resetAt: 0, level: null, talkAdjust: 0, texts: [], grammar: {}, weekTests: {}, books: [] };
 }
 function loadState(lang) {
   let s = load(stateKey(lang), null);
@@ -885,6 +885,10 @@ ${talkLocked() ? '' : `    <a class="card step" href="#talk">
       <div class="num">📐</div>
       <div class="grow"><b>Grammatik</b><div class="meta">${ng ? 'Als Nächstes: ' + esc(ng.title) : 'Alle Lektionen geschafft'} · ${gd}/${grammarList().length}</div></div>
       <div>›</div></a>`; })()}
+    <a class="card step" href="#read">
+      <div class="num">📖</div>
+      <div class="grow"><b>Lesen</b><div class="meta">${(() => { const b = books(); const open = b.reduce((n, x) => n + x.chapters.filter(c => !c.readTs).length, 0); return b.length ? `${b.length} Geschichte${b.length > 1 ? 'n' : ''}${open ? ` · ${open} Kapitel ungelesen` : ''}` : 'Geschichten auf deinem Niveau – Wort antippen für die Bedeutung'; })()}</div></div>
+      <div>›</div></a>
     <h2>Tagesablauf (~30 Min.)</h2>
     ${STEPS.map((s, i) => {
       const m = minutesToday(s.key);
@@ -1442,6 +1446,240 @@ function grammarPractice(root, item) {
     }
   }
   show();
+}
+
+// ---------- Lesen: Geschichten in Kapiteln auf dem eigenen Niveau (extensives Lesen) ----------
+// Ziel ~95 % bekannte Wörter; Wort antippen = Bedeutung im Satz; nachgeschlagene Wörter kommen im nächsten Kapitel wieder.
+const READ_THEMES = [
+  { l: '⚽ Fußball', it: 'football: a small amateur team, matches, training, friendship' },
+  { l: '✈️ Reisen', it: 'travelling through the country: towns, people, little adventures' },
+  { l: '🔍 Krimi', it: 'a light detective story in a small town, nothing gory' },
+  { l: '🏠 Alltag & Familie', it: 'everyday family life with small problems and funny moments' },
+  { l: '🍝 Essen & Kochen', it: 'a small restaurant or cooking at home, markets, recipes' },
+  { l: '😂 Lustiges', it: 'a funny story with misunderstandings' },
+];
+const READ_THEMES_TEEN = [
+  { l: '⚽ Sport', it: 'teenagers in a sports team' },
+  { l: '🏫 Schule & Freunde', it: 'school life and friendship among 14-year-olds' },
+  { l: '🔍 Detektiv', it: 'teenagers solving a harmless mystery' },
+  { l: '🐾 Tiere', it: 'a teenager and an animal' },
+  { l: '🌍 Abenteuer', it: 'a school trip or holiday adventure' },
+];
+const READ_LEN = [{ k: 150, l: 'Kurz (~150 Wörter)' }, { k: 300, l: 'Mittel (~300)' }, { k: 450, l: 'Lang (~450)' }];
+const READ_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['book', 'title', 'sentences', 'summary', 'questions'],
+  properties: {
+    book: { type: 'string' }, title: { type: 'string' }, summary: { type: 'string' },
+    sentences: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de', 'para', 'words'], properties: {
+      t: { type: 'string' }, de: { type: 'string' }, para: { type: 'boolean' },
+      words: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de'], properties: { t: { type: 'string' }, de: { type: 'string' } } } },
+    } } },
+    questions: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['q', 'options', 'answer', 'explain'], properties: {
+      q: { type: 'string' }, options: { type: 'array', items: { type: 'string' } }, answer: { type: 'integer' }, explain: { type: 'string' },
+    } } },
+  },
+};
+function books() { if (!state.books) state.books = []; return state.books; }
+function readThemes() { return settings.teen ? READ_THEMES_TEEN : READ_THEMES; }
+async function writeChapter(book) {
+  const lang = settings.lang === 'it' ? 'Italian' : 'British English';
+  const stage = talkStage();
+  const known = knownWordList(400);
+  const prev = book.chapters.map((c, i) => `Chapter ${i + 1} "${c.title}": ${c.summary}`).join('\n');
+  const last = book.chapters[book.chapters.length - 1];
+  const lookups = last ? (last.lookups || []).slice(0, 15) : [];
+  const style = { A0: 'very short sentences (4–8 words), present tense, only very common words', A1: 'short sentences in the present tense, everyday words', A2: 'simple sentences; present, passato prossimo/simple past, near future', B1: 'natural sentences with common tenses and some idioms', B2: 'natural, fluent prose' }[stage.id];
+  const r = await callClaude(
+    `You write a graded reader in ${lang} for a German-speaking learner: one ongoing story told in chapters, read for pleasure (extensive reading). Theme: ${book.theme}.
+Level ${stage.id} (vocabulary-based estimate): ${style}. This chapter: about ${book.len} words.
+The learner should understand about 95 % without help: mostly words they already know, at most about one new word every two sentences; new words must be guessable from context and come back 2–3 times in the chapter.
+Words the learner knows (for orientation): ${known.length ? known.join(', ') : 'almost none'}.
+${lookups.length ? `Words the learner had to look up in the last chapter – reuse them naturally in this chapter: ${lookups.join(', ')}.\n` : ''}${prev ? `Story so far:\n${prev}\nWrite chapter ${book.chapters.length + 1}: continue with the same characters and keep it consistent.\n` : 'Write chapter 1: introduce 2–3 characters with names and a small goal or mystery.\n'}
+${settings.teen ? TEEN_RULES + '\n' : ''}Write natural, correct ${lang} as a good author of easy readers would – simple, never unnatural. Make it engaging: concrete scenes, some dialogue, and end the chapter with a small hook.
+Return: "book" = a short title for the whole story in ${lang} (keep it if it already exists: ${book.title ? `"${book.title}"` : 'none yet'}); "title" = chapter title in ${lang}; "sentences" = the chapter sentence by sentence in order – "t" one sentence, "de" its natural German translation, "para" = true if it starts a new paragraph, "words" = "t" split into its words in original order (punctuation attached) each with its German meaning IN THIS SENTENCE (several German words joined with hyphens); "summary" = 2–3 German sentences what happened incl. character names (used to write the next chapter); "questions" = 3 multiple-choice questions in German about the content (not grammar), each with 3 short German options, "answer" = index of the correct one, "explain" = one short German sentence pointing to the place in the text.`,
+    [{ role: 'user', content: `Write chapter ${book.chapters.length + 1}.` }], READ_SCHEMA, 16000);
+  const d = r.data;
+  if (!book.title) book.title = d.book;
+  book.chapters.push({ n: book.chapters.length + 1, title: d.title, sentences: d.sentences, summary: d.summary, questions: d.questions, lookups: [], ts: Date.now() });
+  book.ts = Date.now();
+  persist();
+  return r.cost;
+}
+let readBusy = null;
+views.read = function (root, arg) {
+  const [id, n] = (arg || '').split('~');
+  const book = id && books().find(b => b.id === id);
+  if (book && n) { const ch = book.chapters[Number(n) - 1]; if (ch) { readChapter(root, book, ch); return; } }
+  if (book) { readBook(root, book); return; }
+  const themes = readThemes();
+  const opts = Object.assign({ theme: 0, len: 1, custom: '' }, load('sl.read', {}));
+  if (opts.theme > themes.length) opts.theme = 0;
+  root.innerHTML = `<h1>📖 Lesen</h1>
+    <p class="muted small">Geschichten in Kapiteln, passend zu deinem Wortschatz (Stufe ${talkStage().id}). Einfach lesen – unbekanntes Wort antippen, dann siehst du die Bedeutung. Nachgeschlagene Wörter kommen im nächsten Kapitel wieder vor.</p>
+    ${books().slice().reverse().map(b => `<a class="card step" href="#read/${b.id}"><div class="num">📖</div>
+      <div class="grow"><b>${esc(b.title || 'Geschichte')}</b><div class="meta">${esc(b.themeLabel)} · ${b.chapters.length} Kapitel · ${b.chapters.filter(c => c.readTs).length} gelesen</div></div><div>›</div></a>`).join('')}
+    <div class="card">
+      <b>Neue Geschichte</b>
+      ${talkCfg.key ? `
+      <label>Thema</label>
+      ${chips('rd-theme', themes.concat([{ l: '✏️ Eigenes' }]), opts.theme, x => x.l)}
+      <input type="text" id="rd-custom" placeholder="z. B. Ein Hund findet einen Schatz" value="${esc(opts.custom)}" ${opts.theme === themes.length ? '' : 'hidden'} style="margin-top:6px">
+      <label for="rd-len">Länge pro Kapitel</label><select id="rd-len">${READ_LEN.map((x, i) => `<option value="${i}" ${i === opts.len ? 'selected' : ''}>${x.l}</option>`).join('')}</select>
+      <button class="btn primary big" id="rd-go" style="margin-top:12px" ${readBusy ? 'disabled' : ''}>${readBusy === 'new' ? '🤖 Claude schreibt Kapitel 1 …' : '📖 Geschichte beginnen'}</button>
+      <p class="muted small">Pro Kapitel grob 10–20 Cent (Schätzung), danach beliebig oft lesen und hören.</p>`
+      : '<p class="small">Dafür brauchst du einen <a href="#talk/setup">Claude-Schlüssel</a>.</p>'}
+    </div>`;
+  if (!talkCfg.key) return;
+  const store = () => save('sl.read', opts);
+  $$('.chips[data-name="rd-theme"] .chip', root).forEach(c => { c.onclick = () => { opts.theme = Number(c.dataset.i); store(); views.read(root); }; });
+  $('#rd-custom', root).onchange = e => { opts.custom = e.target.value.trim(); store(); };
+  $('#rd-len', root).onchange = e => { opts.len = Number(e.target.value); store(); };
+  $('#rd-go', root).onclick = async () => {
+    const custom = opts.theme === themes.length;
+    if (custom) opts.custom = $('#rd-custom', root).value.trim();
+    if (custom && !opts.custom) { toast('Bitte Thema eingeben'); return; }
+    store();
+    const book = { id: 'b' + uid(), ts: Date.now(), title: '', theme: custom ? opts.custom : themes[opts.theme].it, themeLabel: custom ? opts.custom : themes[opts.theme].l, len: READ_LEN[opts.len].k, chapters: [] };
+    readBusy = 'new';
+    views.read(root);
+    try {
+      const cost = await writeChapter(book);
+      books().push(book);
+      persist();
+      toast(`Kapitel 1 fertig (≈ $${cost.toFixed(2)})`);
+      readBusy = null;
+      if (location.hash === '#read') location.hash = `#read/${book.id}~1`;
+    } catch (e) { readBusy = null; toast(e.message); if (location.hash === '#read') views.read(root); }
+  };
+};
+function readBook(root, book) {
+  root.innerHTML = `<a href="#read" class="small">‹ Alle Geschichten</a>
+    <h1>📖 ${esc(book.title)}</h1>
+    <p class="muted small">${esc(book.themeLabel)}</p>
+    ${book.chapters.map(c => `<a class="card step ${c.readTs ? 'done' : ''}" href="#read/${book.id}~${c.n}"><div class="num">${c.readTs ? '✓' : c.n}</div>
+      <div class="grow"><b>${esc(c.title)}</b><div class="meta">${c.sentences.length} Sätze${c.score !== undefined ? ` · Fragen ${c.score}/${c.questions.length}` : ''}${(c.lookups || []).length ? ` · ${c.lookups.length} nachgeschlagen` : ''}</div></div><div>›</div></a>`).join('')}
+    ${talkCfg.key ? `<button class="btn primary big" id="rd-next" ${readBusy ? 'disabled' : ''}>${readBusy === book.id ? '🤖 Claude schreibt …' : `✍️ Kapitel ${book.chapters.length + 1} schreiben`}</button>` : ''}
+    <button class="btn danger small" id="rd-del" style="margin-top:12px">Geschichte löschen</button>`;
+  if ($('#rd-next', root)) $('#rd-next', root).onclick = () => nextChapter(root, book);
+  $('#rd-del', root).onclick = () => {
+    if (!confirm(`„${book.title}“ löschen?`)) return;
+    state.books = books().filter(b => b !== book);
+    markDeleted(book.id);
+    persist();
+    location.hash = '#read';
+  };
+}
+async function nextChapter(root, book) {
+  readBusy = book.id;
+  readBook(root, book);
+  try {
+    const cost = await writeChapter(book);
+    toast(`Kapitel ${book.chapters.length} fertig (≈ $${cost.toFixed(2)})`);
+    readBusy = null;
+    if (location.hash.startsWith('#read/' + book.id)) location.hash = `#read/${book.id}~${book.chapters.length}`;
+  } catch (e) { readBusy = null; toast(e.message); if (location.hash === '#read/' + book.id) readBook(root, book); }
+}
+let readToken = null;
+function readChapter(root, book, ch) {
+  const isLast = ch.n === book.chapters.length;
+  const clean = t => t.replace(/[.,!?;:«»"“”„()…—–]+/g, '').trim();
+  root.innerHTML = `<a href="#read/${book.id}" class="small">‹ ${esc(book.title)}</a>
+    <h1 style="margin-bottom:4px">${esc(ch.title)}</h1>
+    <p class="muted small">Kapitel ${ch.n} · Wort antippen für die Bedeutung</p>
+    <div class="row" style="margin-bottom:8px">
+      <button class="btn grow" id="rd-play">▶ Vorlesen</button>
+      <label class="inline small" style="margin:0"><input type="checkbox" id="rd-loop" ${book.loop ? 'checked' : ''}> 🔁 Schleife</label>
+    </div>
+    <div class="card reader" id="rd-text">${ch.sentences.map((s, i) => `${s.para && i ? '</p>' : ''}${s.para || !i ? '<p>' : ''}<span class="rs" data-s="${i}">${(s.words && s.words.length ? s.words : s.t.split(/\s+/).map(t => ({ t, de: '' }))).map((w, j) => `<span class="rw" data-w="${i}-${j}">${esc(w.t)}</span>`).join(' ')}</span> `).join('')}</p></div>
+    <div id="rd-pop" class="rpop" hidden></div>
+    <div class="card" id="rd-quiz"><b>✅ Hast du alles verstanden?</b><p class="muted small">3 Fragen zum Inhalt.</p><button class="btn primary" id="rd-qstart">Fragen starten</button></div>
+    ${isLast && talkCfg.key ? `<button class="btn big" id="rd-next" ${readBusy ? 'disabled' : ''}>✍️ Kapitel ${book.chapters.length + 1} schreiben</button>` : !isLast ? `<a class="btn big" href="#read/${book.id}~${ch.n + 1}" style="display:block">Weiter: Kapitel ${ch.n + 1}</a>` : ''}`;
+  const pop = $('#rd-pop', root);
+  $$('.rw', root).forEach(el => {
+    el.onclick = e => {
+      e.stopPropagation();
+      const [i, j] = el.dataset.w.split('-').map(Number);
+      const s = ch.sentences[i];
+      const w = (s.words || [])[j] || { t: el.textContent, de: '' };
+      const word = clean(w.t);
+      $$('.rw.sel', root).forEach(x => x.classList.remove('sel'));
+      el.classList.add('sel');
+      if (word && !(ch.lookups || []).includes(word)) { ch.lookups = (ch.lookups || []).concat(word); book.ts = Date.now(); persist(); }
+      const exists = allWords().some(x => x.t.toLowerCase() === word.toLowerCase());
+      pop.hidden = false;
+      pop.innerHTML = `<div class="row between"><span><b>${esc(word)}</b> – ${esc(w.de || '?')}</span><button class="btn small" data-x>✕</button></div>
+        <div class="muted small" style="margin-top:4px">${esc(s.de)}</div>
+        <div class="row" style="margin-top:6px"><button class="btn small" data-say>🔊 Wort</button><button class="btn small" data-sent>🔊 Satz</button>
+        <button class="btn small" data-add ${exists || !word ? 'disabled' : ''}>${exists ? 'schon in der Wortliste' : '＋ Wortliste'}</button></div>`;
+      $('[data-x]', pop).onclick = () => { pop.hidden = true; el.classList.remove('sel'); };
+      $('[data-say]', pop).onclick = () => speak(word);
+      $('[data-sent]', pop).onclick = () => speak(s.t);
+      $('[data-add]', pop).onclick = e2 => {
+        state.words.push({ id: 'u:' + uid(), t: word, d: (w.de || '').replace(/-/g, ' ').trim() || '?', ts: Date.now() });
+        persist();
+        e2.target.disabled = true; e2.target.textContent = '✓ in der Wortliste';
+        toast(`„${word}“ kommt zu den neuen Wörtern – Bedeutung ggf. mit ✎ anpassen`);
+      };
+    };
+  });
+  // Vorlesen Satz für Satz mit Markierung
+  const btn = $('#rd-play', root);
+  $('#rd-loop', root).onchange = e => { book.loop = e.target.checked; persist(); };
+  btn.onclick = async () => {
+    if (readToken) { readToken.stop = true; readToken = null; speechSynthesis.cancel(); listening = false; btn.textContent = '▶ Vorlesen'; $$('.rs.now', root).forEach(x => x.classList.remove('now')); return; }
+    const token = { stop: false };
+    readToken = token;
+    listening = true;
+    btn.textContent = '■ Stopp';
+    do {
+      for (let i = 0; i < ch.sentences.length && !token.stop; i++) {
+        $$('.rs', root).forEach(x => x.classList.toggle('now', Number(x.dataset.s) === i));
+        const el = $(`.rs[data-s="${i}"]`, root);
+        if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        await speakP(ch.sentences[i].t);
+        if (!token.stop) await wait(400);
+      }
+      if (book.loop && !token.stop) await wait(2500);
+    } while (book.loop && !token.stop);
+    if (readToken === token) { readToken = null; listening = false; btn.textContent = '▶ Vorlesen'; $$('.rs.now', root).forEach(x => x.classList.remove('now')); }
+  };
+  if ($('#rd-next', root)) $('#rd-next', root).onclick = () => { location.hash = '#read/' + book.id; setTimeout(() => nextChapter($('#view'), book), 50); };
+  // Verständnisfragen
+  $('#rd-qstart', root).onclick = () => {
+    const box = $('#rd-quiz', root);
+    let k = 0, right = 0;
+    const qs = (ch.questions || []).filter(q => q.options && q.options.length >= 2);
+    const show = () => {
+      if (k >= qs.length) {
+        const first = !ch.readTs;
+        ch.score = right; ch.readTs = ch.readTs || Date.now(); book.ts = Date.now();
+        if (first) addXP(5);
+        persist();
+        box.innerHTML = `<b>✅ ${right} von ${qs.length} richtig</b><p class="small">${right === qs.length ? 'Alles verstanden – stark!' : 'Schau dir die Stellen nochmal an – einfach nochmal lesen oder hören.'}</p>`;
+        return;
+      }
+      const q = qs[k];
+      box.innerHTML = `<div class="muted small">Frage ${k + 1} / ${qs.length}</div><p><b>${esc(q.q)}</b></p>
+        <div class="stack">${q.options.map((o, m) => `<button class="btn" data-o="${m}" style="width:100%">${esc(o)}</button>`).join('')}</div><div data-res></div>`;
+      let done = false;
+      $$('[data-o]', box).forEach(b => {
+        b.onclick = () => {
+          if (done) return;
+          done = true;
+          const ok = Number(b.dataset.o) === q.answer;
+          if (ok) { right++; addXP(1); }
+          $$('[data-o]', box).forEach(o => {
+            const m = Number(o.dataset.o);
+            if (m === q.answer) o.style.cssText += ';border-color:var(--good);color:var(--good);font-weight:600';
+            else if (o === b) o.style.cssText += ';border-color:var(--bad);color:var(--bad)';
+          });
+          $('[data-res]', box).innerHTML = `<p class="small">${ok ? '✓ Richtig. ' : '✗ '}${esc(q.explain)}</p><button class="btn primary" data-next>Weiter</button>`;
+          $('[data-next]', box).onclick = () => { k++; show(); };
+        };
+      });
+    };
+    show();
+  };
 }
 
 // ---------- Wochen-Check: kurzer Test ohne KI, misst den Stand der Woche ----------
@@ -2571,6 +2809,7 @@ views.texts = function (root, id) {
   if (tx) { textDetail(root, tx); return; }
   root.innerHTML = `
     ${islandsSeg('texts')}
+    <a class="card step" href="#read"><div class="num">📖</div><div class="grow"><b>Lesegeschichten</b><div class="meta">Geschichten in Kapiteln auf deinem Niveau</div></div><div>›</div></a>
     <p class="muted small">Eigene Texte verstehen lernen – z. B. Liedtexte, die du beim Hören mitliest. Claude übersetzt Zeile für Zeile, Wort für Wort und erklärt Redewendungen. Texte bleiben getrennt vom normalen Lernen; einzelne Zeilen holst du mit ➕ in die Wiederholung.</p>
     ${state.texts.map(x => `
       <a class="card step" href="#texts/${x.id}">
@@ -4074,6 +4313,7 @@ function mergeState(a, b) {
     builderVerbs: mergeList(a.builderVerbs, b.builderVerbs),
     texts: mergeList(a.texts || [], b.texts || []),
     grammar: byTs(a.grammar, b.grammar),
+    books: mergeList(a.books || [], b.books || []),
     weekTests: byTs(a.weekTests, b.weekTests),
   };
 }
@@ -4163,7 +4403,7 @@ function route() {
   let view = views[name] ? name : 'home';
   if (view === 'talk' && talkLocked() && arg !== 'setup') view = 'locked';
   applyLock();
-  activeStep = view === 'builder' || view === 'grammar' ? 'islands' : view === 'texts' ? 'listen' : view === 'talk' ? 'talk' : STEPS.some(s => s.key === view) ? view : null;
+  activeStep = view === 'builder' || view === 'grammar' ? 'islands' : view === 'texts' || view === 'read' ? 'listen' : view === 'talk' ? 'talk' : STEPS.some(s => s.key === view) ? view : null;
   const tab = view === 'builder' || view === 'texts' || view === 'grammar' ? 'islands' : view === 'week' ? 'home' : view;
   $$('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
   const root = $('#view');

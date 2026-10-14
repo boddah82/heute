@@ -1507,9 +1507,9 @@ Return: "book" = a short title for the whole story in ${lang} (keep it if it alr
 }
 let readBusy = null;
 views.read = function (root, arg) {
-  const [id, n] = (arg || '').split('~');
+  const [id, n, mode] = (arg || '').split('~');
   const book = id && books().find(b => b.id === id);
-  if (book && n) { const ch = book.chapters[Number(n) - 1]; if (ch) { readChapter(root, book, ch); return; } }
+  if (book && n) { const ch = book.chapters[Number(n) - 1]; if (ch) { if (mode === 'cards') chapterCards(root, book, ch); else readChapter(root, book, ch); return; } }
   if (book) { readBook(root, book); return; }
   const themes = readThemes();
   const opts = Object.assign({ theme: 0, len: 1, custom: '' }, load('sl.read', {}));
@@ -1557,7 +1557,7 @@ function readBook(root, book) {
     <h1>📖 ${esc(book.title)}</h1>
     <p class="muted small">${esc(book.themeLabel)}</p>
     ${book.chapters.map(c => `<a class="card step ${c.readTs ? 'done' : ''}" href="#read/${book.id}~${c.n}"><div class="num">${c.readTs ? '✓' : c.n}</div>
-      <div class="grow"><b>${esc(c.title)}</b><div class="meta">${c.sentences.length} Sätze${c.score !== undefined ? ` · Fragen ${c.score}/${c.questions.length}` : ''}${(c.lookups || []).length ? ` · ${c.lookups.length} nachgeschlagen` : ''}</div></div><div>›</div></a>`).join('')}
+      <div class="grow"><b>${esc(c.title)}</b><div class="meta">${c.sentences.length} Sätze${c.score !== undefined ? ` · Fragen ${c.score}/${c.questions.length}` : ''}${(() => { const cw = chapterWords(c); return cw.length ? ` · Wörter ${cw.filter(x => x.status === 'ok').length}/${cw.length}` : ''; })()}${(c.lookups || []).length ? ` · ${c.lookups.length} nachgeschlagen` : ''}</div></div><div>›</div></a>`).join('')}
     ${talkCfg.key ? `<button class="btn primary big" id="rd-next" ${readBusy ? 'disabled' : ''}>${readBusy === book.id ? '🤖 Claude schreibt …' : `✍️ Kapitel ${book.chapters.length + 1} schreiben`}</button>` : ''}
     <button class="btn danger small" id="rd-del" style="margin-top:12px">Geschichte löschen</button>`;
   if ($('#rd-next', root)) $('#rd-next', root).onclick = () => nextChapter(root, book);
@@ -1579,6 +1579,104 @@ async function nextChapter(root, book) {
     if (location.hash.startsWith('#read/' + book.id)) location.hash = `#read/${book.id}~${book.chapters.length}`;
   } catch (e) { readBusy = null; toast(e.message); if (location.hash === '#read/' + book.id) readBook(root, book); }
 }
+// Karteikarten nur mit den Wörtern eines Kapitels: Wort → Bedeutung im Satz. Nicht gewusste Wörter
+// kommen sofort in die normale Abfrage (SRS), gewusste werden pro Kapitel gemerkt.
+function chapterWords(ch) {
+  const clean = t => t.replace(/[.,!?;:«»"“”„()…—–]+/g, '').trim();
+  const seen = new Map();
+  ch.sentences.forEach((s, i) => (s.words || []).forEach(w => {
+    const t = clean(w.t), de = (w.de || '').replace(/-/g, ' ').trim();
+    if (!t || !de) return;
+    const k = t.toLowerCase();
+    // Namen und gleich geschriebene Wörter (Marco = Marco) brauchen keine Karte
+    if (de.toLowerCase() === k) return;
+    if (!seen.has(k)) seen.set(k, { t, de, s: i });
+  }));
+  const byT = new Map(allWords().map(w => [w.t.toLowerCase(), w]));
+  const cards = ch.cards || {};
+  return [...seen.values()].map(x => {
+    const w = byT.get(x.t.toLowerCase());
+    const c = w && state.srs[w.id];
+    x.id = w ? w.id : null;
+    x.status = cards[x.t.toLowerCase()] === 'ok' || (c && c.iv >= 3) ? 'ok' : c ? 'train' : 'new';
+    return x;
+  });
+}
+// Nicht gewusst: Wort (falls nötig) anlegen und heute in die Abfrage legen
+function cardToTraining(x) {
+  let id = x.id;
+  if (!id) {
+    id = 'u:' + uid();
+    state.words.push({ id, t: x.t, d: x.de, ts: Date.now() });
+    x.id = id;
+  }
+  const c = state.srs[id];
+  if (c) { c.due = today(); c.ts = Date.now(); }
+  else state.srs[id] = { iv: 0, ef: 2.5, reps: 0, lapses: 0, due: today(), ts: Date.now() };
+}
+function chapterCards(root, book, ch) {
+  const all = chapterWords(ch);
+  const queue = all.filter(x => x.status !== 'ok').concat(all.filter(x => x.status === 'ok'));
+  let i = 0, ok = 0, no = 0;
+  const missed = [];
+  const back = `<a href="#read/${book.id}~${ch.n}" class="small">‹ Zurück zum Text</a>`;
+  function finish() {
+    keyHandler = null;
+    persist();
+    const left = chapterWords(ch).filter(x => x.status !== 'ok').length;
+    root.innerHTML = `${back}
+      <div class="card flash"><div class="target">${ok}/${ok + no}</div><p>gewusst</p>
+        <p class="small">${left ? `Noch ${left} Wörter offen.` : '✓ Du kennst jetzt alle Wörter dieses Kapitels.'}</p></div>
+      ${missed.length ? `<div class="card"><b>Diese ${missed.length} Wörter übst du ab jetzt in der Abfrage</b><p class="muted small">Wörter → Abfragen, heute schon fällig.</p>
+        <ul class="list">${missed.map(x => `<li><div><span class="t">${esc(x.t)}</span> – <span class="d">${esc(x.de)}</span></div></li>`).join('')}</ul></div>` : ''}
+      <div class="row"><button class="btn grow" id="cd-again">Nochmal</button><a class="btn primary grow" href="#read/${book.id}~${ch.n}">Text lesen</a></div>`;
+    $('#cd-again', root).onclick = () => chapterCards(root, book, ch);
+  }
+  function show() {
+    keyHandler = null;
+    if (i >= queue.length) { finish(); return; }
+    const x = queue[i];
+    const s = ch.sentences[x.s];
+    const re = new RegExp(`(^|[^\\p{L}])(${x.t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?![\\p{L}])`, 'iu');
+    const sent = esc(s.t).replace(re, '$1<mark>$2</mark>');
+    root.innerHTML = `${back}
+      <div class="row between muted small" style="margin-top:8px"><span>Karte ${i + 1} / ${queue.length}</span><span>${x.status === 'ok' ? '✓ schon sicher' : x.status === 'train' ? 'im Training' : 'neu'}</span></div>
+      <div class="progress" style="margin:6px 0 12px"><div style="width:${i / queue.length * 100}%"></div></div>
+      <div class="card flash">
+        <div class="target">${esc(x.t)}</div>
+        <button class="btn small" id="cd-say">🔊</button>
+        <p class="small muted" style="margin-top:10px">${sent}</p>
+        <div id="cd-ans" hidden><div class="native">${esc(x.de)}</div><p class="small muted">${esc(s.de)}</p></div>
+      </div>
+      <button class="btn primary big" id="cd-reveal">Aufdecken</button>
+      <div class="row" id="cd-rate" hidden>
+        <button class="btn grow" id="cd-no" style="color:var(--bad)">✗ Wusste ich nicht</button>
+        <button class="btn grow" id="cd-yes" style="color:var(--good)">✓ Wusste ich</button>
+      </div>`;
+    speak(x.t);
+    $('#cd-say', root).onclick = () => speak(x.t);
+    const reveal = () => { $('#cd-ans', root).hidden = false; $('#cd-reveal', root).hidden = true; $('#cd-rate', root).hidden = false; };
+    const rate = known => {
+      ch.cards = ch.cards || {};
+      const k = x.t.toLowerCase();
+      if (known) { ok++; ch.cards[k] = 'ok'; addXP(1); }
+      else { no++; delete ch.cards[k]; cardToTraining(x); if (!missed.includes(x)) missed.push(x); addXP(1); }
+      book.ts = Date.now();
+      i++;
+      show();
+    };
+    $('#cd-reveal', root).onclick = reveal;
+    $('#cd-yes', root).onclick = () => rate(true);
+    $('#cd-no', root).onclick = () => rate(false);
+    keyHandler = e => {
+      if ($('#cd-rate', root).hidden && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); reveal(); }
+      else if (!$('#cd-rate', root).hidden && (e.key === '1' || e.key === '2')) rate(e.key === '2');
+    };
+  }
+  if (!queue.length) { root.innerHTML = `${back}<div class="card">In diesem Kapitel gibt es keine Wörter zum Üben.</div>`; return; }
+  show();
+}
+
 let readToken = null;
 function readChapter(root, book, ch) {
   const isLast = ch.n === book.chapters.length;
@@ -1592,6 +1690,13 @@ function readChapter(root, book, ch) {
     </div>
     <div class="card reader" id="rd-text">${ch.sentences.map((s, i) => `${s.para && i ? '</p>' : ''}${s.para || !i ? '<p>' : ''}<span class="rs" data-s="${i}">${(s.words && s.words.length ? s.words : s.t.split(/\s+/).map(t => ({ t, de: '' }))).map((w, j) => `<span class="rw" data-w="${i}-${j}">${esc(w.t)}</span>`).join(' ')}</span> `).join('')}</p></div>
     <div id="rd-pop" class="rpop" hidden></div>
+    ${(() => { const cw = chapterWords(ch); const okN = cw.filter(x => x.status === 'ok').length; return `<div class="card">
+      <b>🃏 Wörter aus diesem Kapitel</b>
+      <p class="small">${cw.length} Wörter · <b>${okN}</b> sitzen · ${cw.length - okN} offen</p>
+      <div class="progress" style="margin-bottom:8px"><div style="width:${cw.length ? okN / cw.length * 100 : 0}%"></div></div>
+      <p class="muted small">Jedes Wort als Karteikarte. Was du nicht weißt, kommt automatisch in deine Abfrage.</p>
+      <a class="btn primary" href="#read/${book.id}~${ch.n}~cards">Karteikarten starten</a>
+    </div>`; })()}
     <div class="card" id="rd-quiz"><b>✅ Hast du alles verstanden?</b><p class="muted small">3 Fragen zum Inhalt.</p><button class="btn primary" id="rd-qstart">Fragen starten</button></div>
     ${isLast && talkCfg.key ? `<button class="btn big" id="rd-next" ${readBusy ? 'disabled' : ''}>✍️ Kapitel ${book.chapters.length + 1} schreiben</button>` : !isLast ? `<a class="btn big" href="#read/${book.id}~${ch.n + 1}" style="display:block">Weiter: Kapitel ${ch.n + 1}</a>` : ''}`;
   const pop = $('#rd-pop', root);

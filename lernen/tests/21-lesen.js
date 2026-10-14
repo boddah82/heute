@@ -56,6 +56,17 @@ const URL = 'http://localhost:8765/';
   for (const a of [0, 0, 2]) { await p.click(`#rd-quiz [data-o="${a}"]`); await p.click('#rd-quiz [data-next]'); }
   console.log('Fragen:', (await p.textContent('#rd-quiz')).replace(/\s+/g, ' ').trim());
   await p.screenshot({ path: process.env.S + '/lesen.png', fullPage: true });
+  // Karteikarten mit den Wörtern des Kapitels
+  console.log('Wörter-Karte:', (await p.textContent('a[href$="~cards"]').then(() => p.$eval('a[href$="~cards"]', e => e.closest('.card').textContent))).replace(/\s+/g, ' ').trim());
+  await p.click('a[href$="~cards"]'); await p.waitForTimeout(200);
+  const total = Number((await p.textContent('.row.between span')).split('/')[1]);
+  console.log('Karten:', total, '| erste:', await p.textContent('.flash .target'), '| Satz markiert:', await p.$eval('.flash mark', e => e.textContent));
+  for (let i = 0; i < total; i++) { await p.click('#cd-reveal'); await p.click(i < 2 ? '#cd-no' : '#cd-yes'); }
+  console.log('Ergebnis:', (await p.textContent('#view')).replace(/\s+/g, ' ').trim().slice(0, 160));
+  const tr = await p.evaluate(() => { const ids = state.words.filter(w => ['gioca', 'calcio', 'squadra'].includes(w.t)).map(w => w.id); return ids.map(id => !!state.srs[id] && state.srs[id].due <= today()); });
+  console.log('Nicht gewusste in der Abfrage:', JSON.stringify(tr));
+  await p.goto(p.url().replace('~cards', '')); await p.waitForTimeout(200);
+  console.log('Fortschritt im Text:', (await p.$eval('a[href$="~cards"]', e => e.closest('.card').textContent)).replace(/\s+/g, ' ').trim().slice(0, 60));
   await p.click('#rd-next');
   await p.waitForURL(/~2$/); await p.waitForTimeout(200);
   const sys2 = reqs[1].system;

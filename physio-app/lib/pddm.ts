@@ -376,3 +376,18 @@ export function domainRecommendation(domain: PDDMDomainId, result: PDDMDomainRes
   }
   return null;
 }
+
+export const PDDM_GENERAL_NOTE_ID = "_general";
+
+// Anmerkungen des Patienten zu den Fragen einer Domäne, für die Anzeige in
+// Auswertung und Druck-Report – unabhängig vom A/B-Status, weil eine Notiz
+// eine Antwort relativieren kann (z. B. "Nie" + "nur wenn Kopf beteiligt").
+export function domainNotes(
+  domain: PDDMDomainId,
+  notes: Record<string, string> | undefined
+): { text: string; note: string }[] {
+  if (!notes) return [];
+  return PDDM_QUESTIONS.filter((q) => q.domain === domain && q.type !== "text")
+    .filter((q) => notes[q.id]?.trim())
+    .map((q) => ({ text: q.text, note: notes[q.id].trim() }));
+}

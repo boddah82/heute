@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { PDDMAssessment, PDDMDomainId, PDDMStatus } from "@/lib/types";
-import { PDDM_DOMAINS, PDDM_DOMAIN_LABELS, PDDM_DOMAIN_HINTS, domainRecommendation, statusLabel, explainDomain } from "@/lib/pddm";
+import { PDDM_DOMAINS, PDDM_DOMAIN_LABELS, PDDM_DOMAIN_HINTS, domainRecommendation, statusLabel, explainDomain, domainNotes, PDDM_GENERAL_NOTE_ID } from "@/lib/pddm";
 import PDDMResultPrintable from "./PDDMResultPrintable";
 
 function printNode() {
@@ -130,6 +130,12 @@ export default function PDDMResultCard({
                     ))}
                   </ul>
                 )}
+                {domainNotes(domain, assessment.notes).map((n) => (
+                  <p key={n.text} className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                    <span className="font-medium">Anmerkung:</span> „{n.note}“{" "}
+                    <span className="text-slate-400 dark:text-slate-500">(zu: {n.text})</span>
+                  </p>
+                ))}
               </div>
               <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${STATUS_STYLE[result.status]}`}>
                 {statusLabel(result.status)}
@@ -138,6 +144,13 @@ export default function PDDMResultCard({
           );
         })}
       </div>
+
+      {assessment.notes?.[PDDM_GENERAL_NOTE_ID] && (
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Weitere Anmerkungen</p>
+          <p className="text-sm text-slate-700 dark:text-slate-300 mt-1 whitespace-pre-line">{assessment.notes[PDDM_GENERAL_NOTE_ID]}</p>
+        </div>
+      )}
 
       {relevantDomains.length > 0 ? (
         <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5">

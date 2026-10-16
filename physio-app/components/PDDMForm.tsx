@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PDDM_QUESTIONS, PDDM_DOMAINS, PDDM_DOMAIN_LABELS, PDDM_DOMAIN_HINTS, evaluatePDDM } from "@/lib/pddm";
+import { PDDM_QUESTIONS, PDDM_DOMAINS, PDDM_DOMAIN_LABELS, PDDM_DOMAIN_HINTS, PDDM_GENERAL_NOTE_ID, evaluatePDDM } from "@/lib/pddm";
 import { PDDMAssessment } from "@/lib/types";
 import { getRegion } from "@/lib/regions";
 
@@ -45,6 +45,12 @@ export default function PDDMForm({ regionId, onSubmit, onDone, transcribe = fals
   const [afterMaxLoad, setAfterMaxLoad] = useState(0);
   const [date, setDate] = useState(today());
   const [painMissing, setPainMissing] = useState(false);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [openNotes, setOpenNotes] = useState<Record<string, boolean>>({});
+
+  function setNote(id: string, value: string) {
+    setNotes((prev) => ({ ...prev, [id]: value }));
+  }
 
   function setAnswer(id: string, value: string) {
     setAnswers((prev) => ({ ...prev, [id]: value }));
@@ -53,6 +59,11 @@ export default function PDDMForm({ regionId, onSubmit, onDone, transcribe = fals
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const results = evaluatePDDM(answers);
+    const cleanNotes = Object.fromEntries(
+      Object.entries(notes)
+        .map(([k, v]) => [k, v.trim()])
+        .filter(([, v]) => v)
+    );
     const painBaseline = transcribe && painMissing ? undefined : { current, maxLoad, afterMaxLoad };
     onSubmit({
       regionId,
@@ -60,6 +71,7 @@ export default function PDDMForm({ regionId, onSubmit, onDone, transcribe = fals
       answers,
       results,
       painBaseline,
+      ...(Object.keys(cleanNotes).length > 0 ? { notes: cleanNotes } : {}),
       ...(transcribe ? { source: "paper" as const } : {}),
     });
     onDone();
@@ -190,10 +202,44 @@ export default function PDDMForm({ regionId, onSubmit, onDone, transcribe = fals
                   className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm"
                 />
               )}
+              {q.type !== "text" &&
+                (openNotes[q.id] || notes[q.id] ? (
+                  <input
+                    type="text"
+                    value={notes[q.id] ?? ""}
+                    onChange={(e) => setNote(q.id, e.target.value)}
+                    placeholder={transcribe ? "Anmerkung vom Bogen, z. B. „nur abends beim Sitzen“" : "Anmerkung (optional)"}
+                    aria-label={`Anmerkung zu: ${q.text}`}
+                    autoFocus={openNotes[q.id] && !notes[q.id]}
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-xs bg-white dark:bg-slate-900"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setOpenNotes((prev) => ({ ...prev, [q.id]: true }))}
+                    className="text-xs text-brand-700 dark:text-brand-300"
+                  >
+                    + Anmerkung
+                  </button>
+                ))}
             </div>
           ))}
         </div>
       ))}
+
+      <div className="space-y-1 pt-3 border-t border-slate-100 dark:border-slate-800">
+        <label htmlFor="pddm-general-note" className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          Weitere Anmerkungen
+        </label>
+        <textarea
+          id="pddm-general-note"
+          rows={2}
+          value={notes[PDDM_GENERAL_NOTE_ID] ?? ""}
+          onChange={(e) => setNote(PDDM_GENERAL_NOTE_ID, e.target.value)}
+          placeholder={transcribe ? "Randnotizen ohne Bezug zu einer Frage" : "Optional"}
+          className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-900"
+        />
+      </div>
 
       <button
         type="submit"

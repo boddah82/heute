@@ -1,5 +1,5 @@
 import { PDDMAssessment, PDDMDomainId } from "@/lib/types";
-import { PDDM_DOMAINS, PDDM_DOMAIN_LABELS, domainRecommendation, statusLabel, explainDomain } from "@/lib/pddm";
+import { PDDM_DOMAINS, PDDM_DOMAIN_LABELS, domainRecommendation, statusLabel, explainDomain, domainNotes, PDDM_GENERAL_NOTE_ID } from "@/lib/pddm";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -67,13 +67,25 @@ export default function PDDMResultPrintable({ assessment }: { assessment: PDDMAs
                       {r.text} → {r.value}
                     </p>
                   ))}
-                  {result.status === "NONE" && "–"}
+                  {domainNotes(domain, assessment.notes).map((n) => (
+                    <p key={n.text} className="italic">
+                      Anmerkung: „{n.note}“ (zu: {n.text})
+                    </p>
+                  ))}
+                  {result.status === "NONE" && domainNotes(domain, assessment.notes).length === 0 && "–"}
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+
+      {assessment.notes?.[PDDM_GENERAL_NOTE_ID] && (
+        <div className="mt-6">
+          <p className="text-sm font-bold">Weitere Anmerkungen</p>
+          <p className="text-sm mt-1 whitespace-pre-line">{assessment.notes[PDDM_GENERAL_NOTE_ID]}</p>
+        </div>
+      )}
 
       <div className="mt-6">
         <p className="text-sm font-bold">Mögliche nächste Schritte</p>

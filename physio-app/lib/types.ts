@@ -75,6 +75,11 @@ export interface PDDMAssessment {
   // "paper": vom ausgehändigten Papierbogen nachträglich übertragen (Datum =
   // Ausfülldatum des Bogens, nicht Eingabedatum). Fehlt bei Eingabe in der App.
   source?: "paper";
+  // Freie Anmerkungen des Patienten je Frage (Schlüssel = Frage-ID), z. B.
+  // handschriftliche Randnotizen auf dem Papierbogen. Fließen bewusst nicht
+  // in die A/B-Einordnung ein, werden nur zur Einordnung angezeigt.
+  // Schlüssel PDDM_GENERAL_NOTE_ID = Anmerkung ohne Bezug zu einer Frage.
+  notes?: Record<string, string>;
   createdAt: string; // ISO timestamp
 }
 

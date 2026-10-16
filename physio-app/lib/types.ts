@@ -72,6 +72,9 @@ export interface PDDMAssessment {
   answers: Record<string, string>;
   results: Record<PDDMDomainId, PDDMDomainResult>;
   painBaseline?: PDDMPainBaseline;
+  // "paper": vom ausgehändigten Papierbogen nachträglich übertragen (Datum =
+  // Ausfülldatum des Bogens, nicht Eingabedatum). Fehlt bei Eingabe in der App.
+  source?: "paper";
   createdAt: string; // ISO timestamp
 }
 

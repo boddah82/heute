@@ -53,7 +53,9 @@ export default function PDDMResultCard({
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 shadow-sm space-y-3">
       <div className="flex items-start justify-between">
-        <p className="text-xs text-slate-500 dark:text-slate-400">{formatDate(assessment.date)}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{formatDate(assessment.date)}
+          {assessment.source === "paper" && " · vom Papierbogen übertragen"}
+        </p>
         <div className="flex items-center gap-3">
           <button
             onClick={() => {

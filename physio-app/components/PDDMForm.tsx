@@ -9,6 +9,9 @@ interface Props {
   regionId: string;
   onSubmit: (assessment: Omit<PDDMAssessment, "id" | "createdAt">) => void;
   onDone: () => void;
+  // Therapeuten-Modus: Antworten von einem ausgehändigten Papierbogen
+  // übertragen – mit Ausfülldatum und optional fehlenden Schmerzwerten.
+  transcribe?: boolean;
 }
 
 function today(): string {
@@ -34,12 +37,14 @@ function PainSliderRow({ label, value, onChange }: { label: string; value: numbe
   );
 }
 
-export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
+export default function PDDMForm({ regionId, onSubmit, onDone, transcribe = false }: Props) {
   const region = getRegion(regionId);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [current, setCurrent] = useState(0);
   const [maxLoad, setMaxLoad] = useState(0);
   const [afterMaxLoad, setAfterMaxLoad] = useState(0);
+  const [date, setDate] = useState(today());
+  const [painMissing, setPainMissing] = useState(false);
 
   function setAnswer(id: string, value: string) {
     setAnswers((prev) => ({ ...prev, [id]: value }));
@@ -48,19 +53,52 @@ export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const results = evaluatePDDM(answers);
-    onSubmit({ regionId, date: today(), answers, results, painBaseline: { current, maxLoad, afterMaxLoad } });
+    const painBaseline = transcribe && painMissing ? undefined : { current, maxLoad, afterMaxLoad };
+    onSubmit({
+      regionId,
+      date: transcribe ? date : today(),
+      answers,
+      results,
+      painBaseline,
+      ...(transcribe ? { source: "paper" as const } : {}),
+    });
     onDone();
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 bg-white dark:bg-slate-800 rounded-lg p-5 shadow-sm border border-slate-200 dark:border-slate-700">
       <div>
-        <h2 className="font-semibold text-slate-900 dark:text-slate-100">Bereichs-Einschätzung (PDDM)</h2>
+        <h2 className="font-semibold text-slate-900 dark:text-slate-100">
+          {transcribe ? "Papierbogen übertragen (PDDM)" : "Bereichs-Einschätzung (PDDM)"}
+        </h2>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Es gibt kein &quot;richtig&quot; oder &quot;falsch&quot; – die Antworten helfen nur dabei zu sehen, welche
-          Bereiche neben der reinen Belastung noch eine Rolle spielen könnten.
+          {transcribe ? (
+            <>Antworten so übernehmen, wie sie auf dem Bogen stehen. Unbeantwortete Fragen einfach leer lassen.</>
+          ) : (
+            <>
+              Es gibt kein &quot;richtig&quot; oder &quot;falsch&quot; – die Antworten helfen nur dabei zu sehen, welche
+              Bereiche neben der reinen Belastung noch eine Rolle spielen könnten.
+            </>
+          )}
         </p>
       </div>
+
+      {transcribe && (
+        <div className="space-y-1">
+          <label htmlFor="pddm-date" className="text-sm text-slate-700 dark:text-slate-300">
+            Ausgefüllt am
+          </label>
+          <input
+            id="pddm-date"
+            type="date"
+            value={date}
+            max={today()}
+            required
+            onChange={(e) => setDate(e.target.value)}
+            className="block rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-900"
+          />
+        </div>
+      )}
 
       <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
         <div>
@@ -69,6 +107,14 @@ export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
             Bezogen nur auf {region.label} – nicht auf Deinen ganzen Körper.
           </p>
         </div>
+        {transcribe && (
+          <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+            <input type="checkbox" checked={painMissing} onChange={(e) => setPainMissing(e.target.checked)} />
+            Schmerzwerte auf dem Bogen nicht ausgefüllt
+          </label>
+        )}
+        {!(transcribe && painMissing) && (
+        <>
         <PainSliderRow label="Schmerz aktuell" value={current} onChange={setCurrent} />
         <div>
           <PainSliderRow label="Schmerz bei maximaler Belastung" value={maxLoad} onChange={setMaxLoad} />
@@ -85,6 +131,8 @@ export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
           value={afterMaxLoad}
           onChange={setAfterMaxLoad}
         />
+        </>
+        )}
       </div>
 
       {PDDM_DOMAINS.map((domain) => (
@@ -151,7 +199,7 @@ export default function PDDMForm({ regionId, onSubmit, onDone }: Props) {
         type="submit"
         className="w-full rounded-lg bg-brand-700 text-white font-semibold py-2.5 text-sm hover:bg-brand-800 transition"
       >
-        Auswertung anzeigen
+        {transcribe ? "Übertragen & auswerten" : "Auswertung anzeigen"}
       </button>
     </form>
   );

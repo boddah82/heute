@@ -28,11 +28,14 @@ type DataTab = "heute" | "verlauf" | "pddm" | "ziele" | "fragebogen";
 // unabhängig vom eigenen Tracking-Stand dieses Geräts.
 export default function PatientDataEntry({ patientId }: { patientId: string }) {
   const [regionId, setRegionId] = useState("knie");
-  const [showPDDMForm, setShowPDDMForm] = useState(false);
+  const [pddmMode, setPddmMode] = useState<null | "live" | "paper">(null);
 
   const { entries, updateEntry, deleteEntry, addEntry } = usePatientCheckIns(patientId, regionId);
   const otherRegionIds = usePatientOtherRegionsWithEntries(patientId, regionId);
   const { assessments, addAssessment, deleteAssessment } = usePatientPDDMAssessments(patientId, regionId);
+  // Nach Ausfülldatum sortiert (neueste zuerst) – ein nachträglich
+  // übertragener Papierbogen kann älter sein als eine schon erfasste Einschätzung.
+  const sortedAssessments = [...assessments].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   const { goals, addGoal, deleteGoal } = usePatientPSFSGoals(patientId, regionId);
   const { ratings, addRating } = usePatientPSFSRatings(patientId, regionId);
   const { results, addResult, deleteResult } = usePatientQuestionnaireResults(patientId, regionId);
@@ -94,14 +97,16 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
         ))}
 
       {tab === "pddm" &&
-        (showPDDMForm ? (
+        (pddmMode ? (
           <PDDMForm
+            key={pddmMode}
             regionId={regionId}
+            transcribe={pddmMode === "paper"}
             onSubmit={(a) => {
               addAssessment(a);
-              setShowPDDMForm(false);
+              setPddmMode(null);
             }}
-            onDone={() => setShowPDDMForm(false)}
+            onDone={() => setPddmMode(null)}
           />
         ) : (
           <div className="space-y-3">
@@ -110,12 +115,20 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
                 Schritt 1 von 3 – Bestandsaufnahme
               </p>
             )}
-            <button
-              onClick={() => setShowPDDMForm(true)}
-              className="w-full rounded-lg bg-brand-700 text-white font-semibold py-2.5 text-sm hover:bg-brand-800 transition"
-            >
-              Neue Einschätzung starten
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setPddmMode("live")}
+                className="rounded-lg bg-brand-700 text-white font-semibold py-2.5 text-sm hover:bg-brand-800 transition"
+              >
+                Im Termin ausfüllen
+              </button>
+              <button
+                onClick={() => setPddmMode("paper")}
+                className="rounded-lg border border-brand-700 dark:border-brand-400 text-brand-700 dark:text-brand-300 bg-white dark:bg-slate-800 font-semibold py-2.5 text-sm hover:bg-brand-50 dark:hover:bg-slate-700 transition"
+              >
+                Papierbogen übertragen
+              </button>
+            </div>
             {assessments.length > 0 && goals.length === 0 && (
               <div className="bg-brand-50 dark:bg-brand-900/40 border border-brand-200 dark:border-brand-700 rounded-lg p-3 flex items-center justify-between gap-3">
                 <p className="text-sm text-brand-900 dark:text-brand-100">
@@ -129,7 +142,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
                 </button>
               </div>
             )}
-            {assessments.map((a) => (
+            {sortedAssessments.map((a) => (
               <PDDMResultCard key={a.id} assessment={a} onDelete={deleteAssessment} />
             ))}
           </div>
@@ -142,7 +155,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
               Schritt 2 von 3 – Ziele festlegen
             </p>
           )}
-          <GoalActionSummary latestAssessment={assessments[0]} goals={goals} />
+          <GoalActionSummary latestAssessment={sortedAssessments[0]} goals={goals} />
           <PSFSPanel goals={goals} ratings={ratings} onAddGoal={addGoal} onDeleteGoal={deleteGoal} onRate={addRating} />
         </div>
       )}

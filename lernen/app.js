@@ -664,13 +664,14 @@ function recallSession(root, ids, cfg) {
       <div class="row between muted small"><span>${queue.length} übrig</span>${it.isNew ? '<span class="pill">neu</span>' : ''}</div>
       <div class="card flash">
         <img data-photo="${esc(id)}" class="photo" hidden alt="">
-        <div class="native">${esc(it.d)}</div>
+        ${cfg.rev ? `<div class="${cfg.big}">${esc(it.t)}</div><button class="btn small" id="q-say">🔊</button>` : `<div class="native">${esc(it.d)}</div>`}
         ${it.note ? `<button class="btn small" id="hint" style="margin-top:8px">💡 Eselsbrücke</button><div class="hint" id="hint-t" hidden>${esc(it.note)}</div>` : ''}
-        <div id="answer" hidden><div class="${cfg.big}">${esc(it.t)}</div><div id="cmp" class="small"></div><div id="wordhelp"></div></div>
+        <div id="answer" hidden>${cfg.rev ? `<div class="native">${esc(it.d)}</div>` : `<div class="${cfg.big}">${esc(it.t)}</div>`}<div id="cmp" class="small"></div><div id="wordhelp"></div></div>
       </div>
-      ${cfg.typing ? `<input type="text" id="typed" placeholder="Antwort tippen (optional)" autocomplete="off" autocapitalize="off" spellcheck="false">` : ''}
+      ${cfg.rev ? '<p class="muted small">Laut sagen, was es auf Deutsch heißt → aufdecken.</p>' : ''}
+      ${cfg.typing && !cfg.rev ? `<input type="text" id="typed" placeholder="Antwort tippen (optional)" autocomplete="off" autocapitalize="off" spellcheck="false">` : ''}
       <div class="row" id="pre" style="margin-top:8px">
-        ${SR ? '<button class="btn" id="say">🎙 Sprechen</button>' : ''}
+        ${SR && !cfg.rev ? '<button class="btn" id="say">🎙 Sprechen</button>' : ''}
         <button class="btn primary grow" id="reveal">Aufdecken</button>
       </div>
       <div id="post" hidden class="stack">
@@ -696,7 +697,7 @@ function recallSession(root, ids, cfg) {
     fillPhotos(root);
     // Eselsbrücke/Foto auch bei bekannten Karten anlegen oder ändern
     const memo = $('#memo-t', root);
-    const saveMemo = () => { setNote(id, memo.value.trim()); it.note = memo.value.trim(); persist(); };
+    const saveMemo = () => { setNote(cfg.noteId ? cfg.noteId(id) : id, memo.value.trim()); it.note = memo.value.trim(); persist(); };
     memo.onchange = saveMemo;
     bindPhotoEditors(root);
     if ($('#memo-mic', root)) {
@@ -714,7 +715,7 @@ function recallSession(root, ids, cfg) {
       $('#answer', root).hidden = false;
       $('#pre', root).hidden = true;
       $('#post', root).hidden = false;
-      const typed = cfg.typing ? $('#typed', root).value.trim() : '';
+      const typed = cfg.typing && !cfg.rev ? $('#typed', root).value.trim() : '';
       const attempt = said || typed;
       if (attempt) {
         const c = compareWords(it.t, attempt);
@@ -727,9 +728,11 @@ function recallSession(root, ids, cfg) {
         const ws = wordsInSentence(it.t).map(wid => wordById(wid)).filter(w => w && !(state.srs[w.id] && state.srs[w.id].iv >= 3));
         if (ws.length) $('#wordhelp', root).innerHTML = `<div class="wordhelp">${ws.map(w => `<span><b>${esc(w.t)}</b> – ${esc(w.d)}${state.srs[w.id] ? '' : ' <span class="pill">neu</span>'}</span>`).join('')}</div><div class="muted small">aus der Wortliste – im Satz kann ein Wort etwas anderes heißen${talkCfg.key ? ' (🔍 Prüfen)' : ''}</div>`;
       }
-      speak(it.t);
+      if (!cfg.rev) speak(it.t);
     };
+    if (cfg.rev) { speak(it.t); $('#q-say', root).onclick = () => speak(it.t); }
     const rate = r => {
+      cfg.onRate && cfg.onRate(id, r, it.isNew);
       grade(id, r);
       done++;
       queue.shift();
@@ -743,11 +746,11 @@ function recallSession(root, ids, cfg) {
       $('#answer .' + cfg.big, root).textContent = n.t;
       $('.native', root).textContent = n.d;
     });
-    if (cfg.correct) $('#fix', root).onclick = () => cfg.correct(id, () => { const n = cfg.get(id); if (n) { it.t = n.t; it.d = n.d; $('#answer .' + cfg.big, root).textContent = n.t; $('.native', root).textContent = n.d; } });
+    if (cfg.correct) $('#fix', root).onclick = () => cfg.correct(id, () => { const n = cfg.get(id); if (n) { it.t = n.t; it.d = n.d; $$('.flash .' + cfg.big, root).forEach(e => { e.textContent = n.t; }); $('.native', root).textContent = n.d; } });
     $$('.rate .btn', root).forEach(b => { b.onclick = () => rate(Number(b.dataset.r)); });
     if ($('#hint', root)) $('#hint', root).onclick = () => { $('#hint-t', root).hidden = false; };
     if ($('#say', root)) micToggle($('#say', root), '🎙 Sprechen', t => { said = t; reveal(); }, t => { if (cfg.typing) $('#typed', root).value = t; });
-    if (cfg.typing) {
+    if (cfg.typing && !cfg.rev) {
       $('#typed', root).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); reveal(); } });
     }
     keyHandler = e => {
@@ -1581,8 +1584,8 @@ async function nextChapter(root, book) {
 }
 // Karteikarten nur mit den Wörtern eines Kapitels: Wort → Bedeutung im Satz. Nicht gewusste Wörter
 // kommen sofort in die normale Abfrage (SRS), gewusste werden pro Kapitel gemerkt.
-function chapterWords(ch, key = 'cards') {
-  const sents = ch.sentences || ch.lines; // Lesekapitel oder eigener Text
+function chapterWords(ch) {
+  const sents = ch.sentences;
   const clean = t => t.replace(/[.,!?;:«»"“”„()…—–]+/g, '').trim();
   const seen = new Map();
   sents.forEach((s, i) => (s.words || []).forEach(w => {
@@ -1594,7 +1597,7 @@ function chapterWords(ch, key = 'cards') {
     if (!seen.has(k)) seen.set(k, { t, de, s: i });
   }));
   const byT = new Map(allWords().map(w => [w.t.toLowerCase(), w]));
-  const cards = ch[key] || {};
+  const cards = ch.cards || {};
   return [...seen.values()].map(x => {
     const w = byT.get(x.t.toLowerCase());
     const c = w && state.srs[w.id];
@@ -1618,12 +1621,10 @@ function cardToTraining(x) {
 function chapterCards(root, book, ch) {
   wordCards(root, ch, `#read/${book.id}~${ch.n}`, () => { book.ts = Date.now(); }, 'Kapitels');
 }
-// ch: Kapitel oder Text (sentences/lines mit words); touch(): Zeitstempel fürs Sync setzen
-// rev: Deutsch → Zielsprache (eigener Merker cardsR); nicht gewusst landet in derselben Abfrage
-function wordCards(root, ch, backHref, touch, what, rev) {
-  const key = rev ? 'cardsR' : 'cards';
-  const sents = ch.sentences || ch.lines;
-  const all = chapterWords(ch, key);
+// touch(): Zeitstempel fürs Sync setzen
+function wordCards(root, ch, backHref, touch, what) {
+  const sents = ch.sentences;
+  const all = chapterWords(ch);
   const queue = all.filter(x => x.status !== 'ok').concat(all.filter(x => x.status === 'ok'));
   let i = 0, ok = 0, no = 0;
   const missed = [];
@@ -1631,14 +1632,14 @@ function wordCards(root, ch, backHref, touch, what, rev) {
   function finish() {
     keyHandler = null;
     persist();
-    const left = chapterWords(ch, key).filter(x => x.status !== 'ok').length;
+    const left = chapterWords(ch).filter(x => x.status !== 'ok').length;
     root.innerHTML = `${back}
       <div class="card flash"><div class="target">${ok}/${ok + no}</div><p>gewusst</p>
         <p class="small">${left ? `Noch ${left} Wörter offen.` : `✓ Du kennst jetzt alle Wörter dieses ${what}.`}</p></div>
       ${missed.length ? `<div class="card"><b>Diese ${missed.length} Wörter übst du ab jetzt in der Abfrage</b><p class="muted small">Wörter → Abfragen, heute schon fällig.</p>
         <ul class="list">${missed.map(x => `<li><div><span class="t">${esc(x.t)}</span> – <span class="d">${esc(x.de)}</span></div></li>`).join('')}</ul></div>` : ''}
       <div class="row"><button class="btn grow" id="cd-again">Nochmal</button><a class="btn primary grow" href="${backHref}">Text lesen</a></div>`;
-    $('#cd-again', root).onclick = () => wordCards(root, ch, backHref, touch, what, rev);
+    $('#cd-again', root).onclick = () => wordCards(root, ch, backHref, touch, what);
   }
   function show() {
     keyHandler = null;
@@ -1647,22 +1648,7 @@ function wordCards(root, ch, backHref, touch, what, rev) {
     const s = sents[x.s];
     const re = new RegExp(`(^|[^\\p{L}])(${x.t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?![\\p{L}])`, 'iu');
     const sent = esc(s.t).replace(re, '$1<mark>$2</mark>');
-    const gap = esc(s.t).replace(re, (m, a, w) => a + '<mark>' + esc(gapWord(w)) + '</mark>');
-    root.innerHTML = rev ? `${back}
-      <div class="row between muted small" style="margin-top:8px"><span>Karte ${i + 1} / ${queue.length}</span><span>${x.status === 'ok' ? '✓ schon sicher' : x.status === 'train' ? 'im Training' : 'neu'}</span></div>
-      <div class="progress" style="margin:6px 0 12px"><div style="width:${i / queue.length * 100}%"></div></div>
-      <div class="card flash">
-        <div class="native">${esc(x.de)}</div>
-        <p class="small muted" style="margin-top:10px">${esc(s.de)}</p>
-        <button class="btn small" id="cd-tip">💡 Tipp</button>
-        <p class="small muted" id="cd-gap" hidden>${gap}</p>
-        <div id="cd-ans" hidden><div class="target">${esc(x.t)}</div><p class="small muted">${sent}</p></div>
-      </div>
-      <button class="btn primary big" id="cd-reveal">Aufdecken</button>
-      <div class="row" id="cd-rate" hidden>
-        <button class="btn grow" id="cd-no" style="color:var(--bad)">✗ Wusste ich nicht</button>
-        <button class="btn grow" id="cd-yes" style="color:var(--good)">✓ Wusste ich</button>
-      </div>` : `${back}
+    root.innerHTML = `${back}
       <div class="row between muted small" style="margin-top:8px"><span>Karte ${i + 1} / ${queue.length}</span><span>${x.status === 'ok' ? '✓ schon sicher' : x.status === 'train' ? 'im Training' : 'neu'}</span></div>
       <div class="progress" style="margin:6px 0 12px"><div style="width:${i / queue.length * 100}%"></div></div>
       <div class="card flash">
@@ -1676,14 +1662,14 @@ function wordCards(root, ch, backHref, touch, what, rev) {
         <button class="btn grow" id="cd-no" style="color:var(--bad)">✗ Wusste ich nicht</button>
         <button class="btn grow" id="cd-yes" style="color:var(--good)">✓ Wusste ich</button>
       </div>`;
-    if (rev) $('#cd-tip', root).onclick = () => { $('#cd-gap', root).hidden = false; $('#cd-tip', root).hidden = true; };
-    else { speak(x.t); $('#cd-say', root).onclick = () => speak(x.t); }
-    const reveal = () => { $('#cd-ans', root).hidden = false; $('#cd-reveal', root).hidden = true; $('#cd-rate', root).hidden = false; if (rev) speak(x.t); };
+    speak(x.t);
+    $('#cd-say', root).onclick = () => speak(x.t);
+    const reveal = () => { $('#cd-ans', root).hidden = false; $('#cd-reveal', root).hidden = true; $('#cd-rate', root).hidden = false; };
     const rate = known => {
-      ch[key] = ch[key] || {};
+      ch.cards = ch.cards || {};
       const k = x.t.toLowerCase();
-      if (known) { ok++; ch[key][k] = 'ok'; addXP(1); }
-      else { no++; delete ch[key][k]; cardToTraining(x); if (!missed.includes(x)) missed.push(x); addXP(1); }
+      if (known) { ok++; ch.cards[k] = 'ok'; addXP(1); }
+      else { no++; delete ch.cards[k]; cardToTraining(x); if (!missed.includes(x)) missed.push(x); addXP(1); }
       touch();
       i++;
       show();
@@ -2935,8 +2921,7 @@ views.texts = function (root, arg) {
   state.texts = state.texts || [];
   const [id, mode] = (arg || '').split('~');
   const tx = id && findText(id);
-  if (tx && mode === 'cards') { wordCards(root, tx, '#texts/' + tx.id, () => { tx.ts = Date.now(); }, 'Texts', !!settings.cardRev); return; }
-  if (tx && mode === 'sents') { textSentenceCards(root, tx); return; }
+  if (tx && (mode === 'cards' || mode === 'sents')) { textRound(root, tx, mode === 'sents'); return; }
   if (tx) { textDetail(root, tx); return; }
   root.innerHTML = `
     ${islandsSeg('texts')}
@@ -3319,82 +3304,81 @@ function lineToIsland(tx, l) {
   isl.ts = Date.now();
   return s.id;
 }
-// Satz-Karteikarten: fremder Satz → verstehen → aufdecken. Nicht gewusst = in die Insel und heute in der Satz-Abfrage.
-function textSentenceCards(root, tx) {
-  const rev = !!settings.cardRev, key = rev ? 'scardsR' : 'scards';
-  const lines = tx.lines.filter(l => l.de);
-  const isOk = l => (tx[key] || {})[l.t] === 'ok' || (() => { const s = sentenceKnown(l.t); const c = s && state.srs[s.id]; return !!(c && c.iv >= 3); })();
-  const queue = lines.filter(l => !isOk(l)).concat(lines.filter(isOk));
-  let i = 0, ok = 0;
-  const missed = [];
-  const backHref = '#texts/' + tx.id;
-  const back = `<a href="${backHref}" class="small">‹ Zurück zum Text</a>`;
-  if (!queue.length) { root.innerHTML = `${back}<div class="card">Noch keine übersetzten Sätze.</div>`; return; }
-  function finish() {
-    keyHandler = null;
-    persist();
-    const isl = textIsland(tx);
-    root.innerHTML = `${back}
-      <div class="card flash"><div class="target">${ok}/${queue.length}</div><p>${rev ? 'gewusst' : 'verstanden'}</p></div>
-      ${missed.length ? `<div class="card"><b>${missed.length} Sätze übst du ab jetzt in der Satz-Abfrage</b><p class="muted small">Insel „${esc(isl ? isl.title : 'Texte')}“, heute schon fällig.</p>
-        <ul class="list">${missed.map(l => `<li><div class="grow"><div class="t">${esc(l.t)}</div><div class="d">${esc(l.de)}</div></div></li>`).join('')}</ul></div>` : ''}
-      <div class="row"><button class="btn grow" id="cd-again">Nochmal</button><a class="btn primary grow" href="${missed.length ? '#review' : backHref}">${missed.length ? 'Zur Satz-Abfrage' : 'Text lesen'}</a></div>`;
-    $('#cd-again', root).onclick = () => textSentenceCards(root, tx);
+// Text lernen wie die normale Abfrage: 4 Bewertungen, SM-2, kleine Runden.
+// Dieselben Karten wie in Wörter → Abfragen / Satz-Abfrage (keine Doppelten); Gegenrichtung der Wörter = r:<Wort-ID> wie „Verstehen“.
+const TEXT_NEW_W = 10, TEXT_NEW_S = 5; // neue Karten pro Runde
+function textWordItems(tx) {
+  const byT = new Map(allWords().map(w => [w.t.toLowerCase(), w]));
+  return chapterWords({ sentences: tx.lines }).map(x => { const w = byT.get(x.t.toLowerCase()); return { t: x.t, de: x.de, id: w ? w.id : null }; });
+}
+function textStats(tx) {
+  const key = settings.cardRev ? id => 'r:' + id : id => id;
+  const st = (ids, total) => {
+    const c = ids.map(id => state.srs[id]).filter(Boolean);
+    return { total, train: c.length, sure: c.filter(x => x.iv >= 3).length, due: c.filter(x => x.due <= today()).length };
+  };
+  const words = textWordItems(tx);
+  const sents = tx.lines.filter(l => l.de);
+  return {
+    w: st(words.filter(x => x.id).map(x => key(x.id)), words.length),
+    s: st(sents.map(l => sentenceKnown(l.t)).filter(Boolean).map(s => s.id), sents.length),
+  };
+}
+// Runde: fällige Karten des Texts (max. REVIEW_CAP) + wenige neue in Textreihenfolge
+function textQueue(tx, sents) {
+  const t = today();
+  if (sents) {
+    const lines = tx.lines.filter(l => l.de);
+    const ids = lines.map(l => (sentenceKnown(l.t) || {}).id);
+    const due = ids.filter(id => id && state.srs[id] && state.srs[id].due <= t).slice(0, REVIEW_CAP);
+    const fresh = lines.filter((l, k) => !(ids[k] && state.srs[ids[k]])).slice(0, TEXT_NEW_S).map(l => lineToIsland(tx, l));
+    return due.concat(fresh);
   }
-  function show() {
-    keyHandler = null;
-    if (i >= queue.length) { finish(); return; }
-    const l = queue[i];
-    root.innerHTML = `${back}
-      <div class="row between muted small" style="margin-top:8px"><span>Satz ${i + 1} / ${queue.length}</span><span>${isOk(l) ? '✓ schon sicher' : ''}</span></div>
-      <div class="progress" style="margin:6px 0 12px"><div style="width:${i / queue.length * 100}%"></div></div>
-      ${rev ? `<div class="card flash">
-        <div class="native">${esc(l.de)}</div>
-        <p class="muted small">Sag es auf ${LANGS[settings.lang].name}.</p>
-        ${l.words && l.words.length ? `<button class="btn small" id="cd-tip">💡 Tipp</button><div id="cd-gap" hidden>${glossRow(l.words.map(w => ({ t: w.t, de: w.de })), true)}</div>` : ''}
-        <div id="cd-ans" hidden><div class="target">${esc(l.t)}</div><button class="btn small" id="cd-say">🔊</button></div>
-      </div>` : `<div class="card flash">
-        <div class="target">${esc(l.t)}</div>
-        <button class="btn small" id="cd-say">🔊</button>
-        <div id="cd-ans" hidden><div class="native">${esc(l.de)}</div>
-          ${l.words && l.words.length ? glossRow(l.words.map(w => ({ t: w.t, de: w.de })), false) : ''}
-          ${l.note ? `<p class="small muted">💬 ${esc(l.note)}</p>` : ''}</div>
-      </div>`}
-      <button class="btn primary big" id="cd-reveal">Aufdecken</button>
-      <div class="row" id="cd-rate" hidden>
-        <button class="btn grow" id="cd-no" style="color:var(--bad)">✗ ${rev ? 'Wusste ich nicht' : 'Nicht verstanden'}</button>
-        <button class="btn grow" id="cd-yes" style="color:var(--good)">✓ ${rev ? 'Wusste ich' : 'Verstanden'}</button>
-      </div>`;
-    const say = () => speak(l.t, storyVoice(tx, l.sp));
-    if (!rev) say();
-    $('#cd-say', root).onclick = say;
-    if ($('#cd-tip', root)) $('#cd-tip', root).onclick = () => { $('#cd-gap', root).hidden = false; $('#cd-tip', root).hidden = true; };
-    const reveal = () => { $('#cd-ans', root).hidden = false; $('#cd-reveal', root).hidden = true; $('#cd-rate', root).hidden = false; if (rev) say(); };
-    const rate = known => {
-      tx[key] = tx[key] || {};
-      if (known) { ok++; tx[key][l.t] = 'ok'; }
-      else {
-        delete tx[key][l.t];
-        const id = lineToIsland(tx, l);
-        const c = state.srs[id];
-        if (c) { c.due = today(); c.ts = Date.now(); }
-        else state.srs[id] = { iv: 0, ef: 2.5, reps: 0, lapses: 0, due: today(), ts: Date.now() };
-        if (!missed.includes(l)) missed.push(l);
-      }
-      addXP(1);
-      tx.ts = Date.now();
-      i++;
-      show();
-    };
-    $('#cd-reveal', root).onclick = reveal;
-    $('#cd-yes', root).onclick = () => rate(true);
-    $('#cd-no', root).onclick = () => rate(false);
-    keyHandler = e => {
-      if ($('#cd-rate', root).hidden && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); reveal(); }
-      else if (!$('#cd-rate', root).hidden && (e.key === '1' || e.key === '2')) rate(e.key === '2');
-    };
-  }
-  show();
+  const key = id => settings.cardRev ? 'r:' + id : id;
+  const items = textWordItems(tx);
+  const due = items.filter(x => x.id && state.srs[key(x.id)] && state.srs[key(x.id)].due <= t).map(x => key(x.id)).slice(0, REVIEW_CAP);
+  const fresh = items.filter(x => !(x.id && state.srs[key(x.id)])).slice(0, TEXT_NEW_W).map(x => {
+    if (!x.id) { x.id = 'u:' + uid(); state.words.push({ id: x.id, t: x.t, d: x.de, ts: Date.now() }); }
+    return key(x.id);
+  });
+  return due.concat(fresh);
+}
+function textRound(root, tx, sents) {
+  const back = '#texts/' + tx.id;
+  const rev = !sents && !!settings.cardRev;
+  const lang = LANGS[settings.lang].name;
+  const ids = textQueue(tx, sents);
+  persist();
+  root.innerHTML = `<a href="${back}" class="small">‹ ${esc(tx.title)}</a>
+    <h1>${sents ? '🃏 Sätze' : '🃏 Wörter'} <span class="muted small">${rev ? `${lang} → Deutsch` : `Deutsch → ${lang}`}</span></h1>
+    <div id="pane"></div>`;
+  const l = dayLog();
+  recallSession($('#pane', root), ids, {
+    big: sents ? 'sentence' : 'target',
+    rev,
+    typing: true,
+    wordHelp: sents,
+    emptyText: 'Aus diesem Text ist gerade nichts fällig. Die Karten kommen wieder, wenn sie dran sind.',
+    get: id => {
+      const wid = rev ? id.slice(2) : id;
+      const x = sents ? findSentence(id) : wordById(wid);
+      return x && { t: x.t, d: x.d, isNew: !state.srs[id], note: state.notes[wid] };
+    },
+    gloss: sents ? id => { const s = findSentence(id); return s && s.gloss && s.gloss.length ? s.gloss : null; } : null,
+    check: sents ? checkSentenceUI : rev ? null : checkWordUI,
+    correct: sents ? null : (id, done) => correctWord(rev ? id.slice(2) : id, done),
+    noteId: id => rev ? id.slice(2) : id,
+    // neue Sätze zählt grade() selbst
+    onRate: (id, r, isNew) => { if (isNew && !sents) { if (rev) l.newHear = (l.newHear || 0) + 1; else l.newWords++; } },
+    doneExtra: () => {
+      const st = textStats(tx)[sents ? 's' : 'w'];
+      const open = st.total - st.train;
+      return `<div class="card"><p class="small">${st.total} ${sents ? 'Sätze' : 'Wörter'} · ${st.train} im Training · ${st.sure} sitzen · ${open} noch neu</p>
+        <p class="muted small">Fällige Karten kommen von selbst wieder – hier und in der normalen ${sents ? 'Satz-Abfrage' : 'Wort-Abfrage'}.</p></div>
+        <div class="row">${open ? `<button class="btn grow" id="tr-more">Noch eine Runde (${Math.min(open, sents ? TEXT_NEW_S : TEXT_NEW_W)} neue)</button>` : ''}<a class="btn primary grow" href="${back}">Zum Text</a></div>`;
+    },
+    onDone: pane => { const b = $('#tr-more', pane); if (b) b.onclick = () => textRound(root, tx, sents); },
+  });
 }
 
 let textPlayToken = null;
@@ -3406,9 +3390,9 @@ function textDetail(root, tx) {
   const withDe = tx.lines.filter(l => l.de);
   const openS = withDe.filter(l => !inIsland(l.t)).length;
   const rev = !!settings.cardRev;
-  const cw = chapterWords(tx, rev ? 'cardsR' : 'cards'), okW = cw.filter(x => x.status === 'ok').length;
-  const okS = withDe.filter(l => (tx[rev ? 'scardsR' : 'scards'] || {})[l.t] === 'ok').length;
+  const st = withDe.length && !tx.story ? textStats(tx) : null;
   const lang = LANGS[settings.lang].name;
+  const statLine = (x, what) => `${x.total} ${what} · ${x.train} im Training · <b>${x.sure}</b> sitzen${x.due ? ` · <b>${x.due} fällig</b>` : ''}`;
   root.innerHTML = `
     <a href="${tx.story ? '#listen/stories' : '#texts'}" class="small">‹ ${tx.story ? 'Alle Dialoge' : 'Alle Texte'}</a>
     <input type="text" id="tx-name" value="${esc(tx.title)}" style="font-size:20px;font-weight:700;margin:8px 0 12px">
@@ -3446,16 +3430,17 @@ function textDetail(root, tx) {
     </ul>
     ${withDe.length && !tx.story ? `<div class="card" id="tx-learn">
       <b>🃏 Diesen Text lernen</b>
-      <div class="chips" style="margin:6px 0">
-        <button class="chip ${rev ? '' : 'on'}" data-dir="0">${lang} → Deutsch</button>
-        <button class="chip ${rev ? 'on' : ''}" data-dir="1">Deutsch → ${lang}</button>
+      <p class="muted small">Wie die normale Abfrage: ehrlich bewerten (Nochmal / Schwer / Gut / Leicht). Pro Runde nur ${TEXT_NEW_W} neue Wörter bzw. ${TEXT_NEW_S} neue Sätze plus alles, was fällig ist. Die Karten kommen danach auch in Wörter → Abfragen und in der Satz-Abfrage.</p>
+      <b class="small">Wörter</b>
+      <div class="chips" style="margin:4px 0">
+        <button class="chip ${rev ? '' : 'on'}" data-dir="0">Deutsch → ${lang}</button>
+        <button class="chip ${rev ? 'on' : ''}" data-dir="1">${lang} → Deutsch</button>
       </div>
-      <p class="small">${cw.length} Wörter · <b>${okW}</b> sitzen &nbsp;|&nbsp; ${withDe.length} Sätze · <b>${okS}</b> ${rev ? 'gewusst' : 'verstanden'}</p>
-      <div class="row" style="margin:8px 0">
-        ${cw.length ? `<a class="btn primary grow" href="#texts/${tx.id}~cards">Wörter (${cw.length})</a>` : ''}
-        <a class="btn primary grow" href="#texts/${tx.id}~sents">Sätze (${withDe.length})</a>
-      </div>
-      <p class="muted small">${rev ? `Deutsch sehen → selbst auf ${lang} sagen (💡 Tipp hilft) → aufdecken.` : `${lang} sehen und hören → verstehen → aufdecken.`} Was du nicht weißt, kommt automatisch in deine Abfrage (Wörter → Abfragen, Sätze → Satz-Abfrage).</p>
+      <p class="small">${statLine(st.w, 'Wörter')}</p>
+      ${st.w.total ? `<a class="btn primary" href="#texts/${tx.id}~cards" style="margin-bottom:10px">Wörter-Runde starten</a>` : ''}
+      <div><b class="small">Sätze</b> <span class="muted small">(Deutsch → ${lang}, wie die Satz-Abfrage)</span></div>
+      <p class="small">${statLine(st.s, 'Sätze')}</p>
+      <a class="btn primary" href="#texts/${tx.id}~sents" style="margin-bottom:10px">Sätze-Runde starten</a>
       <label for="tx-isl">Sätze kommen in die Insel</label>
       <select id="tx-isl">
         <option value="">Texte (Sammelinsel)</option>

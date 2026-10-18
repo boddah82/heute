@@ -660,13 +660,15 @@ function recallSession(root, ids, cfg) {
     const id = queue[0];
     const it = cfg.get(id);
     if (!it) { queue.shift(); show(); return; }
+    const cx = cfg.ctx && cfg.ctx(id);
     root.innerHTML = `
       <div class="row between muted small"><span>${queue.length} übrig</span>${it.isNew ? '<span class="pill">neu</span>' : ''}</div>
       <div class="card flash">
         <img data-photo="${esc(id)}" class="photo" hidden alt="">
         ${cfg.rev ? `<div class="${cfg.big}">${esc(it.t)}</div><button class="btn small" id="q-say">🔊</button>` : `<div class="native">${esc(it.d)}</div>`}
         ${it.note ? `<button class="btn small" id="hint" style="margin-top:8px">💡 Eselsbrücke</button><div class="hint" id="hint-t" hidden>${esc(it.note)}</div>` : ''}
-        <div id="answer" hidden>${cfg.rev ? `<div class="native">${esc(it.d)}</div>` : `<div class="${cfg.big}">${esc(it.t)}</div>`}<div id="cmp" class="small"></div><div id="wordhelp"></div></div>
+        ${cx ? `<button class="btn small" id="cx-b" style="margin-top:8px">📖 Satz zeigen</button><div class="small muted" id="cx-f" hidden style="margin-top:6px">${cx.front}</div>` : ''}
+        <div id="answer" hidden>${cfg.rev ? `<div class="native">${esc(it.d)}</div>` : `<div class="${cfg.big}">${esc(it.t)}</div>`}<div id="cmp" class="small"></div><div id="wordhelp"></div>${cx ? `<div style="margin-top:8px">${cx.back}</div>` : ''}</div>
       </div>
       ${cfg.rev ? '<p class="muted small">Laut sagen, was es auf Deutsch heißt → aufdecken.</p>' : ''}
       ${cfg.typing && !cfg.rev ? `<input type="text" id="typed" placeholder="Antwort tippen (optional)" autocomplete="off" autocapitalize="off" spellcheck="false">` : ''}
@@ -749,6 +751,7 @@ function recallSession(root, ids, cfg) {
     if (cfg.correct) $('#fix', root).onclick = () => cfg.correct(id, () => { const n = cfg.get(id); if (n) { it.t = n.t; it.d = n.d; $$('.flash .' + cfg.big, root).forEach(e => { e.textContent = n.t; }); $('.native', root).textContent = n.d; } });
     $$('.rate .btn', root).forEach(b => { b.onclick = () => rate(Number(b.dataset.r)); });
     if ($('#hint', root)) $('#hint', root).onclick = () => { $('#hint-t', root).hidden = false; };
+    if ($('#cx-b', root)) $('#cx-b', root).onclick = () => { $('#cx-f', root).hidden = false; $('#cx-b', root).hidden = true; };
     if ($('#say', root)) micToggle($('#say', root), '🎙 Sprechen', t => { said = t; reveal(); }, t => { if (cfg.typing) $('#typed', root).value = t; });
     if (cfg.typing && !cfg.rev) {
       $('#typed', root).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); reveal(); } });
@@ -1469,13 +1472,29 @@ const READ_THEMES_TEEN = [
   { l: '🌍 Abenteuer', it: 'a school trip or holiday adventure' },
 ];
 const READ_LEN = [{ k: 150, l: 'Kurz (~150 Wörter)' }, { k: 300, l: 'Mittel (~300)' }, { k: 450, l: 'Lang (~450)' }];
+// Wort für Wort mit Zusammenhang: ctx = Hinweis, welche Bedeutung gemeint ist (z. B. suono = „spiele – ein Instrument“), base = Grundform
+const WORD_ITEMS = { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de', 'ctx', 'base'], properties: { t: { type: 'string' }, de: { type: 'string' }, ctx: { type: 'string' }, base: { type: 'string' } } } };
+function wordCtxRule() {
+  return `For every word also give "ctx" and "base". "ctx" = a very short German hint whenever the German meaning alone could be misunderstood when the word is learned later on a flashcard without the sentence: which meaning is meant here (e.g. Italian "suono" → de "spiele", ctx "ein Instrument spielen – nicht Sport/Spiel"), what a small word refers to (article, preposition, pronoun, e.g. "lo" → de "ihn", ctx "bezieht sich auf den Brief"; "la" → de "die", ctx "Artikel, weiblich Einzahl"), or that a form is special (e.g. "hier: Vergangenheit"); empty string if the meaning is clear on its own. "base" = the dictionary form when it differs from the word (infinitive for verbs, masculine singular for nouns/adjectives, e.g. "suono" → "suonare"), else empty string. Write ctx simply – the learner struggles with grammar terms, so add a plain explanation in brackets after any grammar word.`;
+}
+// Bedeutung fürs Lernen ohne Satz: „spiele (ein Instrument …) · Grundform: suonare“
+function wordMeaning(w) {
+  const de = (w.de || '').replace(/-/g, ' ').trim();
+  return de + (w.ctx ? ` (${w.ctx})` : '') + (w.base ? ` · Grundform: ${w.base}` : '');
+}
+// Wort im Satz markieren (HTML)
+function markWord(txt, w) {
+  const re = new RegExp(`(^|[^\\p{L}])(${esc(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?![\\p{L}])`, 'iu');
+  return esc(txt).replace(re, '$1<mark>$2</mark>');
+}
+
 const READ_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['book', 'title', 'sentences', 'summary', 'questions'],
   properties: {
     book: { type: 'string' }, title: { type: 'string' }, summary: { type: 'string' },
     sentences: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de', 'para', 'words'], properties: {
       t: { type: 'string' }, de: { type: 'string' }, para: { type: 'boolean' },
-      words: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de'], properties: { t: { type: 'string' }, de: { type: 'string' } } } },
+      words: WORD_ITEMS,
     } } },
     questions: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['q', 'options', 'answer', 'explain'], properties: {
       q: { type: 'string' }, options: { type: 'array', items: { type: 'string' } }, answer: { type: 'integer' }, explain: { type: 'string' },
@@ -1499,7 +1518,7 @@ The learner should understand about 95 % without help: mostly words they already
 Words the learner knows (for orientation): ${known.length ? known.join(', ') : 'almost none'}.
 ${lookups.length ? `Words the learner had to look up in the last chapter – reuse them naturally in this chapter: ${lookups.join(', ')}.\n` : ''}${prev ? `Story so far:\n${prev}\nWrite chapter ${book.chapters.length + 1}: continue with the same characters and keep it consistent.\n` : 'Write chapter 1: introduce 2–3 characters with names and a small goal or mystery.\n'}
 ${settings.teen ? TEEN_RULES + '\n' : ''}Write natural, correct ${lang} as a good author of easy readers would – simple, never unnatural. Make it engaging: concrete scenes, some dialogue, and end the chapter with a small hook.
-Return: "book" = a short title for the whole story in ${lang} (keep it if it already exists: ${book.title ? `"${book.title}"` : 'none yet'}); "title" = chapter title in ${lang}; "sentences" = the chapter sentence by sentence in order – "t" one sentence, "de" its natural German translation, "para" = true if it starts a new paragraph, "words" = "t" split into its words in original order (punctuation attached) each with its German meaning IN THIS SENTENCE (several German words joined with hyphens); "summary" = 2–3 German sentences what happened incl. character names (used to write the next chapter); "questions" = 3 multiple-choice questions in German about the content (not grammar), each with 3 short German options, "answer" = index of the correct one, "explain" = one short German sentence pointing to the place in the text.`,
+Return: "book" = a short title for the whole story in ${lang} (keep it if it already exists: ${book.title ? `"${book.title}"` : 'none yet'}); "title" = chapter title in ${lang}; "sentences" = the chapter sentence by sentence in order – "t" one sentence, "de" its natural German translation, "para" = true if it starts a new paragraph, "words" = "t" split into its words in original order (punctuation attached) each with its German meaning IN THIS SENTENCE (several German words joined with hyphens); ${wordCtxRule()} "summary" = 2–3 German sentences what happened incl. character names (used to write the next chapter); "questions" = 3 multiple-choice questions in German about the content (not grammar), each with 3 short German options, "answer" = index of the correct one, "explain" = one short German sentence pointing to the place in the text.`,
     [{ role: 'user', content: `Write chapter ${book.chapters.length + 1}.` }], READ_SCHEMA, 16000);
   const d = r.data;
   if (!book.title) book.title = d.book;
@@ -1586,13 +1605,13 @@ async function nextChapter(root, book) {
 function chapterWords(ch) {
   const clean = t => t.replace(/[.,!?;:«»"“”„()…—–]+/g, '').trim();
   const seen = new Map();
-  ch.sentences.forEach(s => (s.words || []).forEach(w => {
+  ch.sentences.forEach((s, i) => (s.words || []).forEach(w => {
     const t = clean(w.t), de = (w.de || '').replace(/-/g, ' ').trim();
     if (!t || !de) return;
     const k = t.toLowerCase();
     // Namen und gleich geschriebene Wörter (Marco = Marco) brauchen keine Karte
     if (de.toLowerCase() === k) return;
-    if (!seen.has(k)) seen.set(k, { t, de });
+    if (!seen.has(k)) seen.set(k, { t, de, ctx: w.ctx || '', base: w.base || '', s: i });
   }));
   return [...seen.values()];
 }
@@ -1639,6 +1658,7 @@ function readChapter(root, book, ch) {
       const exists = allWords().some(x => x.t.toLowerCase() === word.toLowerCase());
       pop.hidden = false;
       pop.innerHTML = `<div class="row between"><span><b>${esc(word)}</b> – ${esc(w.de || '?')}</span><button class="btn small" data-x>✕</button></div>
+        ${w.ctx || w.base ? `<div class="small" style="margin-top:4px">${w.ctx ? '💡 ' + esc(w.ctx) : ''}${w.base ? ` · Grundform: <b>${esc(w.base)}</b>` : ''}</div>` : ''}
         <div class="muted small" style="margin-top:4px">${esc(s.de)}</div>
         <div class="row" style="margin-top:6px"><button class="btn small" data-say>🔊 Wort</button><button class="btn small" data-sent>🔊 Satz</button>
         <button class="btn small" data-add ${exists || !word ? 'disabled' : ''}>${exists ? 'schon in der Wortliste' : '＋ Wortliste'}</button></div>`;
@@ -1646,7 +1666,7 @@ function readChapter(root, book, ch) {
       $('[data-say]', pop).onclick = () => speak(word);
       $('[data-sent]', pop).onclick = () => speak(s.t);
       $('[data-add]', pop).onclick = e2 => {
-        state.words.push({ id: 'u:' + uid(), t: word, d: (w.de || '').replace(/-/g, ' ').trim() || '?', ts: Date.now() });
+        state.words.push({ id: 'u:' + uid(), t: word, d: wordMeaning(w) || '?', ts: Date.now() });
         persist();
         e2.target.disabled = true; e2.target.textContent = '✓ in der Wortliste';
         toast(`„${word}“ kommt zu den neuen Wörtern – Bedeutung ggf. mit ✎ anpassen`);
@@ -2817,7 +2837,7 @@ const TEXT_SCHEMA = {
         properties: {
           i: { type: 'integer' },
           de: { type: 'string' },
-          words: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de'], properties: { t: { type: 'string' }, de: { type: 'string' } } } },
+          words: WORD_ITEMS,
           note: { type: 'string' },
         },
       },
@@ -3016,7 +3036,7 @@ async function translateText(tx, onProgress) {
     onProgress && onProgress(k, todo.length);
     const listing = chunk.map(i => `${i}: ${tx.lines[i].t}`).join('\n');
     const r = await callClaude(
-      `You help a German-speaking learner understand a ${lang} text they pasted for private study (for example song lyrics). For every numbered line, return an object with the same "i" and: "de" = a natural German translation of the line (keep the meaning and tone; for song lyrics a faithful, readable translation, not a rhyming one); "words" = the line split into its words in original order (punctuation attached) with a literal word-for-word German gloss for each, keeping the ${lang} word order, several German words joined with hyphens; "note" = a short German explanation of idioms, slang, contractions, poetic or dialect forms, or anything a learner would misunderstand in this line – empty string if nothing needs explaining. Use the surrounding lines for context. Return all lines, in order.`,
+      `You help a German-speaking learner understand a ${lang} text they pasted for private study (for example song lyrics). For every numbered line, return an object with the same "i" and: "de" = a natural German translation of the line (keep the meaning and tone; for song lyrics a faithful, readable translation, not a rhyming one); "words" = the line split into its words in original order (punctuation attached) with a literal word-for-word German gloss for each, keeping the ${lang} word order, several German words joined with hyphens, always the meaning IN THIS LINE; ${wordCtxRule()} "note" = a short German explanation of idioms, slang, contractions, poetic or dialect forms, or anything a learner would misunderstand in this line – empty string if nothing needs explaining. Use the surrounding lines for context. Return all lines, in order.`,
       [{ role: 'user', content: listing }], TEXT_SCHEMA, 16000);
     r.data.lines.forEach(x => {
       const line = tx.lines[x.i];
@@ -3058,7 +3078,7 @@ const STORY_SCHEMA = {
     speakers: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name', 'gender'], properties: { name: { type: 'string' }, gender: { type: 'string', enum: ['m', 'f'] } } } },
     lines: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['sp', 't', 'de', 'words', 'note'], properties: {
       sp: { type: 'integer' }, t: { type: 'string' }, de: { type: 'string' }, note: { type: 'string' },
-      words: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de'], properties: { t: { type: 'string' }, de: { type: 'string' } } } },
+      words: WORD_ITEMS,
     } } },
   },
 };
@@ -3106,7 +3126,7 @@ Words the learner already knows (${known.length}) – for orientation only: ${kn
 
 ${settings.teen ? TEEN_RULES + '\n\n' : ''}Most important rule: every line must be natural, idiomatic ${lang} exactly as native speakers would talk in this situation. Never write unnatural sentences just to use known words; keep it easy through short sentences and everyday phrasing instead. Give the scene a small story: a beginning, a little surprise or problem, and an ending. People react to each other, use typical everyday phrases, greetings and fillers.
 
-Return: "title" in ${lang} (short); "speakers" in order of appearance; "lines" with "sp" = index into speakers (or -1 for the narrator), "t" = the spoken line only (no name prefix), "de" = natural German translation, "words" = the line split into its words in original order (punctuation attached) each with a literal word-for-word German gloss keeping the ${lang} word order (several German words joined with hyphens), "note" = a short German explanation of an idiom, colloquial form or anything a learner would misunderstand, else an empty string.`,
+Return: "title" in ${lang} (short); "speakers" in order of appearance; "lines" with "sp" = index into speakers (or -1 for the narrator), "t" = the spoken line only (no name prefix), "de" = natural German translation, "words" = the line split into its words in original order (punctuation attached) each with a literal word-for-word German gloss keeping the ${lang} word order (several German words joined with hyphens), always the meaning IN THIS LINE; ${wordCtxRule()} "note" = a short German explanation of an idiom, colloquial form or anything a learner would misunderstand, else an empty string.`,
     [{ role: 'user', content: 'Write the dialogue.' }], STORY_SCHEMA, 16000);
   const d = r.data;
   const n = d.speakers.length;
@@ -3228,7 +3248,7 @@ const TEXT_NEW_W = 10, TEXT_NEW_S = 5; // neue Karten pro Runde
 // tx: eigener Text oder chapterSrc() – braucht lines (mit words), title, ggf. back
 function textWordItems(tx) {
   const byT = new Map(allWords().map(w => [w.t.toLowerCase(), w]));
-  return chapterWords({ sentences: tx.lines }).map(x => { const w = byT.get(x.t.toLowerCase()); return { t: x.t, de: x.de, id: w ? w.id : null }; });
+  return chapterWords({ sentences: tx.lines }).map(x => { const w = byT.get(x.t.toLowerCase()); return Object.assign(x, { id: w ? w.id : null }); });
 }
 function textStats(tx) {
   const key = settings.cardRev ? id => 'r:' + id : id => id;
@@ -3257,7 +3277,7 @@ function textQueue(tx, sents) {
   const items = textWordItems(tx);
   const due = items.filter(x => x.id && state.srs[key(x.id)] && state.srs[key(x.id)].due <= t).map(x => key(x.id)).slice(0, REVIEW_CAP);
   const fresh = items.filter(x => !(x.id && state.srs[key(x.id)])).slice(0, TEXT_NEW_W).map(x => {
-    if (!x.id) { x.id = 'u:' + uid(); state.words.push({ id: x.id, t: x.t, d: x.de, ts: Date.now() }); }
+    if (!x.id) { x.id = 'u:' + uid(); state.words.push({ id: x.id, t: x.t, d: wordMeaning(x), ts: Date.now() }); }
     return key(x.id);
   });
   return due.concat(fresh);
@@ -3272,7 +3292,19 @@ function textRound(root, tx, sents) {
     <h1>${sents ? '🃏 Sätze' : '🃏 Wörter'} <span class="muted small">${rev ? `${lang} → Deutsch` : `Deutsch → ${lang}`}</span></h1>
     <div id="pane"></div>`;
   const l = dayLog();
+  // Wort → Stelle im Text: Satz + Bedeutung dort (die Wortliste kennt keinen Zusammenhang)
+  const ctxOf = new Map(sents ? [] : textWordItems(tx).filter(x => x.id).map(x => [x.id, x]));
   recallSession($('#pane', root), ids, {
+    ctx: sents ? null : id => {
+      const x = ctxOf.get(rev ? id.slice(2) : id);
+      const line = x && tx.lines[x.s];
+      if (!line) return null;
+      return {
+        front: rev ? markWord(line.t, x.t) : esc(line.de),
+        // „Im Text“ nur, wenn die Wortkarte etwas anderes sagt (z. B. Grundwortliste: suono = Klang)
+        back: `${(wordById(x.id) || {}).d === wordMeaning(x) ? '' : `<div class="small"><b>Im Text:</b> ${esc(wordMeaning(x))}</div>`}<div class="small muted">${markWord(line.t, x.t)}<br>${esc(line.de)}</div>`,
+      };
+    },
     big: sents ? 'sentence' : 'target',
     rev,
     typing: true,
@@ -3337,6 +3369,7 @@ function textDetail(root, tx) {
               ${l.de ? `<div class="d">${esc(l.de)}</div>` : ''}
               ${l.words && l.words.length ? glossRow(l.words.map(w => ({ t: w.t, de: w.de })), false) : ''}
               ${l.note ? `<div class="d" style="margin-top:4px">💬 ${esc(l.note)}</div>` : ''}
+              ${(l.words || []).filter(w => w.ctx || w.base).map(w => `<div class="small muted">💡 <b>${esc(w.t.replace(/[.,!?;:«»"“”()…]+/g, ''))}</b>: ${esc(w.ctx)}${w.base ? `${w.ctx ? ' · ' : ''}Grundform ${esc(w.base)}` : ''}</div>`).join('')}
               ${l.words && l.words.length ? `<details style="margin-top:6px"><summary class="small">＋ Wörter übernehmen</summary><div class="tools" style="margin-top:6px">${l.words.map((w, j) => `<button class="btn small" data-tw="${i}-${j}">＋ ${esc(w.t.replace(/[.,!?;:«»"“”()…]+/g, ''))}</button>`).join('')}</div></details>` : ''}
             </div>
           </div>
@@ -3461,7 +3494,7 @@ function textDetail(root, tx) {
       const [i, j] = b.dataset.tw.split('-').map(Number);
       const w = tx.lines[i].words[j];
       const t = w.t.replace(/[.,!?;:«»"“”()…]+/g, '').trim();
-      const d = w.de.replace(/[.,!?;:]+$/g, '').replace(/-/g, ' ').trim();
+      const d = wordMeaning(Object.assign({}, w, { de: w.de.replace(/[.,!?;:]+$/g, '') }));
       if (!t) return;
       if (allWords().some(x => x.t.toLowerCase() === t.toLowerCase())) { toast('Wort gibt es schon'); return; }
       state.words.push({ id: 'u:' + uid(), t, d, ts: Date.now() });

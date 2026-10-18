@@ -49,7 +49,7 @@ Die App folgt wenigen Grundsätzen. Sie gelten für jedes Lernthema, nicht nur f
 | **Inseln** | Satzsammlungen pro Thema (eigene und Vorlagen); Satzbaukasten mit Drill; Grammatik; eigene Texte | Grammatik und Texte: ja |
 | **Grammatik** | feste Reihenfolge; „Muster zuerst“ → Frage → Auflösung → 8 Spielformen (umbauen, auswählen, übersetzen); „❓ Frag nach“ und „❓ Warum?“ | ja, einmal pro Lektion, Fragen extra |
 | **Lesen** | Geschichten in Kapiteln auf dem eigenen Niveau; Wort antippen; Vorlesen; 3 Verständnisfragen; Karteikarten mit allen Wörtern des Kapitels; nachgeschlagene Wörter kommen wieder | ja, pro Kapitel |
-| **Texte** | eigene Texte (z. B. Liedtexte) automatisch in Sätze ordnen und übersetzen, Wort für Wort, Redewendungen; darunter Karteikarten für alle Wörter und Sätze, alle Sätze mit einem Tipp in eine Insel (→ Satz-Abfrage) | ja, einmal pro Text |
+| **Texte** | eigene Texte (z. B. Liedtexte) automatisch in Sätze ordnen und übersetzen, Wort für Wort, Redewendungen; darunter Wörter und Sätze in kleinen Runden mit der normalen Abfrage (4 Bewertungen, SM-2), alle Sätze mit einem Tipp in eine Insel (→ Satz-Abfrage) | ja, einmal pro Text |
 | **Reden** | Gespräche und Rollenspiele per Sprache, Korrektur, Antworthilfe in Stufen, Beschreiben-Modus mit Foto, Auswertung | ja |
 | **🔍 Prüfen** | Wort- oder Satzkarte prüfen lassen, Vorschlag übernehmen, Wort für Wort im Zusammenhang | ja, pro Prüfung |
 | **Niveau** | Einstufungstest (5 Min.), Stufe A0–B2 aus den sicheren Wörtern, Tempo neuer Wörter passt sich an | nein |

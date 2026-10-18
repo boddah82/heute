@@ -37,37 +37,41 @@ const URL = 'http://localhost:8765/';
   await p.click('#tx-all');
   let st = await p.evaluate(() => { const tx = state.texts[0]; const isl = state.islands.find(i => i.id === tx.island); return { title: isl.title, n: isl.sentences.length, gloss: !!isl.sentences[0].gloss, btn: document.querySelector('#tx-all').textContent }; });
   console.log('island:', JSON.stringify(st));
-  // Wort-Karteikarten: 1. nicht gewusst, Rest gewusst
+  const tid = await p.evaluate(() => state.texts[0].id);
+  // Runde rated wie die normale Abfrage: erste Karte „Nochmal“ (kommt in der Runde wieder), Rest „Gut“
+  const round = async () => {
+    let n = 0, first = true;
+    while (await p.$('#reveal')) {
+      await p.click('#reveal');
+      await p.click(first ? '.rate [data-r="0"]' : '.rate [data-r="2"]');
+      first = false; n++;
+    }
+    return n;
+  };
+  // Wörter-Runde: höchstens 10 neue
   await p.click('a[href$="~cards"]');
-  await p.click('#cd-reveal'); await p.click('#cd-no');
-  while (await p.$('#cd-reveal')) { await p.click('#cd-reveal'); await p.click('#cd-yes'); }
-  console.log('word cards done:', (await p.textContent('.card.flash')).replace(/\s+/g, ' ').trim(), '| words in SRS:', await p.evaluate(() => state.words.filter(w => state.srs[w.id]).length));
-  // Satz-Karteikarten: 1. nicht verstanden → heute fällig in Satz-Abfrage
-  await p.goto(URL + '#texts/' + await p.evaluate(() => state.texts[0].id) + '~sents');
-  await p.click('#cd-reveal'); await p.click('#cd-no');
-  while (await p.$('#cd-reveal')) { await p.click('#cd-reveal'); await p.click('#cd-yes'); }
-  console.log('sent cards done:', (await p.textContent('#view')).replace(/\s+/g, ' ').trim().slice(0, 160));
-  st = await p.evaluate(() => { const ids = allSentences().map(s => s.id); return { due: ids.filter(id => state.srs[id] && state.srs[id].due <= today()).length, scards: Object.keys(state.texts[0].scards || {}).length }; });
-  console.log('srs:', JSON.stringify(st));
-  await p.goto(URL + '#texts/' + await p.evaluate(() => state.texts[0].id));
-  console.log('after:', (await p.textContent('#tx-learn')).replace(/\s+/g, ' ').trim().slice(0, 140));
+  console.log('word front:', (await p.textContent('.card.flash')).replace(/\s+/g, ' ').trim().slice(0, 40), '| buttons:', await p.$$eval('.rate .btn', x => x.map(b => b.textContent).join('/')));
+  console.log('round1 grades:', await round(), '| srs words:', await p.evaluate(() => state.words.filter(w => state.srs[w.id]).length), '| newWords today:', await p.evaluate(() => dayLog().newWords));
+  console.log('done:', (await p.textContent('#pane')).replace(/\s+/g, ' ').trim().slice(0, 160));
+  await p.click('#tr-more');
+  console.log('round2 grades:', await round(), '| srs words:', await p.evaluate(() => state.words.filter(w => state.srs[w.id]).length), '| more btn:', !!(await p.$('#tr-more')));
+  // Gleich nochmal: nur fällige (die „Nochmal“-Karten sind nach der Runde mit „Gut“ morgen dran) → leer
+  await p.goto(URL + '#texts/' + tid); await p.click('a[href$="~cards"]');
+  console.log('round3:', (await p.textContent('#pane')).replace(/\s+/g, ' ').trim().slice(0, 90));
+  // Sätze-Runde
+  await p.goto(URL + '#texts/' + tid + '~sents');
+  console.log('sent front:', (await p.textContent('.card.flash')).replace(/\s+/g, ' ').trim().slice(0, 50));
+  console.log('sent grades:', await round(), '| sentences in srs:', await p.evaluate(() => allSentences().filter(s => state.srs[s.id]).length));
+  await p.goto(URL + '#texts/' + tid);
+  console.log('after:', (await p.textContent('#tx-learn')).replace(/\s+/g, ' ').trim().slice(0, 400));
   await p.screenshot({ path: process.env.S + '/text-lernen.png', fullPage: true });
-  // Gegenrichtung Deutsch → Zielsprache
+  // Gegenrichtung Zielsprache → Deutsch (r:<Wort-ID>)
   await p.click('#tx-golearn');
   await p.click('[data-dir="1"]');
-  console.log('rev card:', (await p.textContent('#tx-learn')).replace(/\s+/g, ' ').trim().slice(0, 120), '| setting:', await p.evaluate(() => settings.cardRev));
   await p.click('a[href$="~cards"]');
-  const front = (await p.textContent('.card.flash')).replace(/\s+/g, ' ').trim();
-  await p.click('#cd-tip');
-  console.log('rev word front:', front.slice(0, 80), '| tip:', (await p.textContent('#cd-gap')).trim().slice(0, 60));
-  await p.click('#cd-reveal'); await p.click('#cd-yes');
-  await p.goto(URL + '#texts/' + await p.evaluate(() => state.texts[0].id) + '~sents');
-  console.log('rev sent front:', (await p.textContent('.card.flash')).replace(/\s+/g, ' ').trim().slice(0, 80));
-  await p.click('#cd-tip');
-  console.log('rev sent tip:', (await p.textContent('#cd-gap')).replace(/\s+/g, ' ').trim().slice(0, 80));
+  console.log('rev front:', (await p.textContent('.card.flash')).replace(/\s+/g, ' ').trim().slice(0, 40), '| typing field:', !!(await p.$('#typed')));
   await p.screenshot({ path: process.env.S + '/text-rev.png', fullPage: true });
-  await p.click('#cd-reveal'); await p.click('#cd-no');
-  console.log('rev stores:', await p.evaluate(() => { const t = state.texts[0]; return JSON.stringify({ cardsR: Object.keys(t.cardsR || {}).length, scardsR: Object.keys(t.scardsR || {}).length, scards: Object.keys(t.scards || {}).length }); }));
+  console.log('rev grades:', await round(), '| r: cards:', await p.evaluate(() => Object.keys(state.srs).filter(k => k.startsWith('r:')).length));
   await p.goto(URL + '#review');
   console.log('review first:', (await p.textContent('#view')).replace(/\s+/g, ' ').trim().slice(0, 120));
   console.log('ERRORS:', errs);

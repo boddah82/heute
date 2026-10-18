@@ -15,7 +15,7 @@ const URL = 'http://localhost:8765/';
     // Satzordnung: jede Zeile ist ein ganzer Satz (je 6 Wörter)
     if (body.output_config.format.schema.properties.starts) return reply({ starts: [0, 6, 12] });
     reqBody = body;
-    const lines = reqBody.messages[0].content.split('\n').map(l => { const [i, ...t] = l.split(': '); return { i: Number(i), de: 'DE: ' + t.join(': '), words: t.join(': ').split(' ').map(w => ({ t: w, de: 'x-' + w })), note: Number(i) === 1 ? 'Redewendung: heißt eigentlich …' : '' }; });
+    const lines = reqBody.messages[0].content.split('\n').map(l => { const [i, ...t] = l.split(': '); return { i: Number(i), de: 'DE: ' + t.join(': '), words: t.join(': ').split(' ').map(w => ({ t: w, de: 'x-' + w, ctx: w === 'cammino' ? 'gehen zu Fuß – nicht der Weg' : '', base: w === 'cammino' ? 'camminare' : '' })), note: Number(i) === 1 ? 'Redewendung: heißt eigentlich …' : '' }; });
     reply({ lines });
   });
   const p = await ctx.newPage();
@@ -49,8 +49,19 @@ const URL = 'http://localhost:8765/';
     return n;
   };
   // Wörter-Runde: höchstens 10 neue
+  console.log('ctx in Zeile:', (await p.textContent('#tx-list')).includes('gehen zu Fuß'));
   await p.click('a[href$="~cards"]');
   console.log('word front:', (await p.textContent('.card.flash')).replace(/\s+/g, ' ').trim().slice(0, 40), '| buttons:', await p.$$eval('.rate .btn', x => x.map(b => b.textContent).join('/')));
+  // Karte mit Zusammenhang: „cammino“ ist die 3. Karte
+  await p.click('#reveal'); await p.click('.rate [data-r="0"]');
+  await p.click('#reveal'); await p.click('.rate [data-r="2"]');
+  await p.click('#cx-b');
+  console.log('ctx front:', (await p.textContent('#cx-f')).trim(), '| native:', (await p.textContent('.flash .native')).trim());
+  await p.click('#reveal');
+  console.log('ctx back:', (await p.textContent('#answer')).replace(/\s+/g, ' ').trim().slice(0, 160));
+  await p.screenshot({ path: process.env.S + '/text-ctx.png', fullPage: true });
+  await p.click('.rate [data-r="2"]');
+  console.log('word d:', await p.evaluate(() => (state.words.find(w => w.t === 'cammino') || {}).d));
   console.log('round1 grades:', await round(), '| srs words:', await p.evaluate(() => state.words.filter(w => state.srs[w.id]).length), '| newWords today:', await p.evaluate(() => dayLog().newWords));
   console.log('done:', (await p.textContent('#pane')).replace(/\s+/g, ' ').trim().slice(0, 160));
   await p.click('#tr-more');

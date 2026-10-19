@@ -678,7 +678,7 @@ function recallSession(root, ids, cfg) {
         <button class="btn primary grow" id="reveal">Aufdecken</button>
       </div>
       <div id="post" hidden class="stack">
-        <div class="row"><button class="btn grow" id="replay">🔊 Nochmal hören</button>${cfg.correct ? '<button class="btn" id="fix">✎ Korrigieren</button>' : ''}${cfg.check && talkCfg.key ? '<button class="btn" id="chk" title="Mit Claude prüfen (≈ 1–3 Cent)">🔍 Prüfen</button>' : ''}</div>
+        <div class="row"><button class="btn grow" id="replay">🔊 Nochmal hören</button>${cfg.correct ? '<button class="btn" id="fix">✎ Korrigieren</button>' : ''}${cfg.check && talkCfg.key ? '<button class="btn" id="chk" title="Mit Claude prüfen (≈ 1–3 Cent)">🔍 Prüfen</button>' : ''}${cfg.split && talkCfg.key && canSplit(id) ? '<button class="btn" id="split" title="Langen Satz in Teile zerlegen (≈ 1–3 Cent)">✂️ Aufteilen</button>' : ''}</div>
         <div id="chk-out"></div>
         <div class="rate">
           <button class="btn again" data-r="0">Nochmal</button>
@@ -754,6 +754,15 @@ function recallSession(root, ids, cfg) {
       $('#answer .' + cfg.big, root).textContent = n.t;
       setMeaning(n.d);
     });
+    // Teile kommen sofort dran, der ganze Satz danach
+    if ($('#split', root)) $('#split', root).onclick = async () => {
+      const parts = await splitSentenceUI(id, $('#split', root));
+      if (!parts) return;
+      queue.shift();
+      parts.forEach(p => { const k = queue.indexOf(p); if (k >= 0) queue.splice(k, 1); });
+      queue.unshift(...parts, id);
+      show();
+    };
     if (cfg.correct) $('#fix', root).onclick = () => cfg.correct(id, () => { const n = cfg.get(id); if (n) { it.t = n.t; it.d = n.d; $$('.flash .' + cfg.big, root).forEach(e => { e.textContent = n.t; }); setMeaning(n.d); } });
     $$('.rate .btn', root).forEach(b => { b.onclick = () => rate(Number(b.dataset.r)); });
     if ($('#hint', root)) $('#hint', root).onclick = () => { $('#hint-t', root).hidden = false; };
@@ -2085,18 +2094,20 @@ views.review = function (root) {
   const byId = Object.fromEntries(sentences.map(s => [s.id, s]));
   const due = dueIds(id => id.startsWith('s:') && byId[id]);
   const newOnes = sentences.filter(s => !state.srs[s.id]).slice(0, Math.max(0, settings.newSentences - l.newSent)).map(s => s.id);
+  const ids = withParts(due.concat(newOnes));
   root.innerHTML = `
     <h1>🔁 Sätze wiederholen</h1>
     ${voiceNotice()}
     <p class="muted small">Deutschen Satz sehen → selbst auf ${LANGS[settings.lang].name} sagen → aufdecken → laut nachsprechen.</p>
     <div id="pane"></div>`;
-  recallSession($('#pane', root), due.concat(newOnes), {
+  recallSession($('#pane', root), ids, {
     big: 'sentence',
     wordHelp: true,
     typing: true,
+    split: true,
     emptyText: 'Nichts fällig. Neue Sätze kommen aus deinen Sprachinseln.',
     doneExtra: `<a class="btn big" href="#shadow">Weiter zum Shadowing</a>`,
-    get: id => { const s = byId[id]; return s && { t: s.t, d: s.d, isNew: !state.srs[id], note: state.notes[id] }; },
+    get: id => { const s = byId[id] || findSentence(id); return s && { t: s.t, d: s.d, isNew: !state.srs[id], note: state.notes[id] }; },
     gloss: id => { const s = findSentence(id); return s && s.gloss && s.gloss.length ? s.gloss : null; },
     check: checkSentenceUI,
   });
@@ -2941,6 +2952,60 @@ function findSentence(id) {
   for (const isl of state.islands) { const s = isl.sentences.find(x => x.id === id); if (s) return s; }
   return null;
 }
+// ---------- Lange Sätze in Teile zerlegen (Knopf ✂️ auf der Satz-Karte) ----------
+// Teile sind wörtliche Stücke des Satzes und eigene Satz-Karten (partOf); der ganze Satz bleibt und kommt nach seinen Teilen.
+const SPLIT_MIN = 7; // ab so vielen Wörtern gibt es den Knopf
+const SPLIT_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['parts'],
+  properties: { parts: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['start', 'de'], properties: { start: { type: 'integer' }, de: { type: 'string' } } } } },
+};
+function canSplit(id) {
+  const s = findSentence(id);
+  return !!s && !s.partOf && !(s.parts && s.parts.length) && s.t.split(/\s+/).length >= SPLIT_MIN;
+}
+// Vor jeden Satz seine Teile, die neu oder fällig sind
+function withParts(ids) {
+  const out = [], seen = new Set();
+  const add = id => { if (!seen.has(id)) { seen.add(id); out.push(id); } };
+  ids.forEach(id => {
+    const s = findSentence(id);
+    (s && s.parts || []).forEach(p => { if (findSentence(p) && (!state.srs[p] || state.srs[p].due <= today())) add(p); });
+    add(id);
+  });
+  return out;
+}
+async function splitSentenceUI(id, btn) {
+  const s = findSentence(id);
+  if (!s) return null;
+  const words = s.t.split(/\s+/).filter(Boolean);
+  const lang = settings.lang === 'it' ? 'Italian' : 'British English';
+  btn.disabled = true; btn.textContent = '✂️ Teile …';
+  try {
+    const r = await callClaude(
+      `A German-speaking learner of ${lang} finds this sentence too long to learn in one go. Split it into 2–4 consecutive parts that each make sense on their own and are easy to say, e.g. one clause or one action each (a part may lack its subject when the language allows that). Never cut inside a phrase that belongs together. Every word below is prefixed with its index. Return "parts" in order: "start" = the word index where the part begins (the first is 0), "de" = a natural German translation of just this part, as it is meant in this sentence. The parts must cover the whole sentence; do not change or add any words.`,
+      [{ role: 'user', content: `${words.map((w, i) => `${i}:${w}`).join(' ')}\n\nGerman translation of the whole sentence: ${s.d}` }], SPLIT_SCHEMA, 4000);
+    const ps = (r.data.parts || []).filter(x => Number.isInteger(x.start) && x.start >= 0 && x.start < words.length).sort((a, b) => a.start - b.start);
+    if (ps.length) ps[0].start = 0;
+    const uniq = ps.filter((x, k) => !k || x.start !== ps[k - 1].start);
+    if (uniq.length < 2) { toast('Dieser Satz lässt sich nicht sinnvoll teilen'); btn.remove(); return null; }
+    const gloss = s.gloss && s.gloss.length === words.length ? s.gloss : null;
+    const isl = state.islands.find(i => i.sentences.includes(s));
+    const ids = uniq.map((x, k) => {
+      const end = uniq[k + 1] ? uniq[k + 1].start : words.length;
+      const t = words.slice(x.start, end).join(' ').replace(/[,;:–-]+$/, '').trim();
+      const old = isl.sentences.find(o => o.t === t);
+      if (old) return old.id;
+      const p = { id: 's:' + uid(), t, d: x.de, partOf: s.id, ts: Date.now() };
+      if (gloss) p.gloss = gloss.slice(x.start, end);
+      isl.sentences.push(p);
+      return p.id;
+    });
+    s.parts = ids; s.ts = Date.now(); isl.ts = Date.now();
+    persist();
+    toast(`${ids.length} Teile – erst die Teile, dann der ganze Satz`);
+    return ids;
+  } catch (e) { toast(e.message); btn.disabled = false; btn.textContent = '✂️ Aufteilen'; return null; }
+}
 function setWordCard(id, t, d) {
   if (id.startsWith('u:')) {
     const own = state.words.find(x => x.id === id);
@@ -3313,7 +3378,7 @@ function textQueue(tx, sents) {
     const ids = lines.map(l => (sentenceKnown(l.t) || {}).id);
     const due = ids.filter(id => id && state.srs[id] && state.srs[id].due <= t).slice(0, REVIEW_CAP);
     const fresh = lines.filter((l, k) => !(ids[k] && state.srs[ids[k]])).slice(0, TEXT_NEW_S).map(l => lineToIsland(tx, l));
-    return due.concat(fresh);
+    return withParts(due.concat(fresh));
   }
   const key = id => settings.cardRev ? 'r:' + id : id;
   const items = textWordItems(tx);
@@ -3351,6 +3416,7 @@ function textRound(root, tx, sents) {
     rev,
     typing: true,
     wordHelp: sents,
+    split: sents,
     emptyText: 'Aus diesem Text ist gerade nichts fällig. Die Karten kommen wieder, wenn sie dran sind.',
     get: id => {
       const wid = rev ? id.slice(2) : id;

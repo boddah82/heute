@@ -1672,7 +1672,7 @@ function readChapter(root, book, ch) {
       </div>
       <p class="small">${w.total} Wörter · ${w.train} im Training · <b>${w.sure}</b> sitzen${w.due ? ` · <b>${w.due} fällig</b>` : ''}</p>
       <div class="progress" style="margin-bottom:8px"><div style="width:${w.sure / w.total * 100}%"></div></div>
-      <p class="muted small">Wie die normale Abfrage: Nochmal / Schwer / Gut / Leicht, pro Runde ${TEXT_NEW_W} neue Wörter plus alles Fällige.</p>
+      <p class="muted small">Wie die normale Abfrage: Nochmal / Schwer / Gut / Leicht, pro Runde ${TEXT_NEW_W} neue Wörter plus alles Fällige. Kleine Wörter (der, die, ihn, von …) kommen nicht einzeln, die lernst du in den Sätzen.</p>
       <a class="btn primary" href="#read/${book.id}~${ch.n}~cards">Wörter-Runde starten</a>
     </div>` : ''; })()}
     <div class="card" id="rd-quiz"><b>✅ Hast du alles verstanden?</b><p class="muted small">3 Fragen zum Inhalt.</p><button class="btn primary" id="rd-qstart">Fragen starten</button></div>
@@ -3279,9 +3279,18 @@ function lineToIsland(tx, l) {
 // Dieselben Karten wie in Wörter → Abfragen / Satz-Abfrage (keine Doppelten); Gegenrichtung der Wörter = r:<Wort-ID> wie „Verstehen“.
 const TEXT_NEW_W = 10, TEXT_NEW_S = 5; // neue Karten pro Runde
 // tx: eigener Text oder chapterSrc() – braucht lines (mit words), title, ggf. back
+// Kleine Wörter (der/die/das, ihn, von …) ändern sich ständig – sie kommen nicht als eigene Wortkarte, sondern über die Satz-Karten
+const SMALL_WORDS = {
+  it: 'il lo la l i gli le un uno una di a da in con su per tra fra del dello della dei degli delle al allo alla ai agli alle dal dallo dalla dai dagli dalle nel nello nella nei negli nelle sul sullo sulla sui sugli sulle col dell all dall nell sull mi ti si ci vi li ne me te ce ve se e ed o od ma che',
+  en: 'the a an of to in on at for with by from and or but it him her them me us i he she we they my your his its our their',
+};
+function isSmallWord(t) {
+  const w = (t || '').toLowerCase().replace(/['’]$/, '');
+  return (SMALL_WORDS[settings.lang] || '').split(' ').includes(w);
+}
 function textWordItems(tx) {
   const byT = new Map(allWords().map(w => [w.t.toLowerCase(), w]));
-  return chapterWords({ sentences: tx.lines }).map(x => { const w = byT.get(x.t.toLowerCase()); return Object.assign(x, { id: w ? w.id : null }); });
+  return chapterWords({ sentences: tx.lines }).filter(x => !isSmallWord(x.t)).map(x => { const w = byT.get(x.t.toLowerCase()); return Object.assign(x, { id: w ? w.id : null }); });
 }
 function textStats(tx) {
   const key = settings.cardRev ? id => 'r:' + id : id => id;
@@ -3415,7 +3424,7 @@ function textDetail(root, tx) {
     </ul>
     ${withDe.length && !tx.story ? `<div class="card" id="tx-learn">
       <b>🃏 Diesen Text lernen</b>
-      <p class="muted small">Wie die normale Abfrage: ehrlich bewerten (Nochmal / Schwer / Gut / Leicht). Pro Runde nur ${TEXT_NEW_W} neue Wörter bzw. ${TEXT_NEW_S} neue Sätze plus alles, was fällig ist. Die Karten kommen danach auch in Wörter → Abfragen und in der Satz-Abfrage.</p>
+      <p class="muted small">Wie die normale Abfrage: ehrlich bewerten (Nochmal / Schwer / Gut / Leicht). Pro Runde nur ${TEXT_NEW_W} neue Wörter bzw. ${TEXT_NEW_S} neue Sätze plus alles, was fällig ist. Kleine Wörter (der, die, ihn, von …) kommen nicht als Wortkarte, die lernst du in den Satz-Karten. Die Karten kommen danach auch in Wörter → Abfragen und in der Satz-Abfrage.</p>
       <b class="small">Wörter</b>
       <div class="chips" style="margin:4px 0">
         <button class="chip ${rev ? '' : 'on'}" data-dir="0">Deutsch → ${lang}</button>

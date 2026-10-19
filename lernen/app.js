@@ -723,7 +723,7 @@ function recallSession(root, ids, cfg) {
         <button class="btn primary grow" id="reveal">Aufdecken</button>
       </div>
       <div id="post" hidden class="stack">
-        <div class="row"><button class="btn grow" id="replay">🔊 Nochmal hören</button>${cfg.correct ? '<button class="btn" id="fix">✎ Korrigieren</button>' : ''}${cfg.check && talkCfg.key ? '<button class="btn" id="chk" title="Mit Claude prüfen (≈ 1–3 Cent)">🔍 Prüfen</button>' : ''}${cfg.split && talkCfg.key && canSplit(id) ? '<button class="btn" id="split" title="Langen Satz in Teile zerlegen (≈ 1–3 Cent)">✂️ Aufteilen</button>' : ''}</div>
+        <div class="row"><button class="btn" id="cover" title="Lösung wieder verstecken, dann ohne Hilfe nochmal sagen">🙈 Zudecken</button><button class="btn grow" id="replay">🔊 Nochmal hören</button>${cfg.correct ? '<button class="btn" id="fix">✎ Korrigieren</button>' : ''}${cfg.check && talkCfg.key ? '<button class="btn" id="chk" title="Mit Claude prüfen (≈ 1–3 Cent)">🔍 Prüfen</button>' : ''}${cfg.split && talkCfg.key && canSplit(id) ? '<button class="btn" id="split" title="Langen Satz in Teile zerlegen (≈ 1–3 Cent)">✂️ Aufteilen</button>' : ''}</div>
         <div id="chk-out"></div>
         <div class="rate">
           <button class="btn again" data-r="0">Nochmal</button>
@@ -731,7 +731,7 @@ function recallSession(root, ids, cfg) {
           <button class="btn good" data-r="2">Gut</button>
           <button class="btn easy" data-r="3">Leicht</button>
         </div>
-        <p class="muted small">Laut nachsprechen, dann ehrlich bewerten. Tasten 1–4 gehen auch.</p>
+        <p class="muted small">Laut nachsprechen, dann ehrlich bewerten. Tasten 1–4 gehen auch. Zum Einprägen: 🙈 zudecken und ohne Lösung nochmal sagen.</p>
         <details class="card" id="memo" style="margin-top:4px">
           <summary><b>🧠 ${it.note ? 'Eselsbrücke & Foto bearbeiten' : 'Eselsbrücke & Foto hinzufügen'}</b></summary>
           <div class="row between" style="margin-top:8px"><span class="muted small">Welches Bild, welche Geschichte verbindet Klang und Bedeutung?</span>
@@ -778,6 +778,19 @@ function recallSession(root, ids, cfg) {
       }
       if (!cfg.rev) speak(it.t);
     };
+    // Lösung wieder verstecken: einprägen, zudecken, ohne Hilfe nochmal sagen, erneut aufdecken
+    const cover = () => {
+      if (!revealed) return;
+      revealed = false;
+      said = '';
+      cancelDictation();
+      if (window.speechSynthesis) speechSynthesis.cancel();
+      $('#answer', root).hidden = true;
+      $('#post', root).hidden = true;
+      $('#pre', root).hidden = false;
+      $('#cmp', root).innerHTML = '';
+      if ($('#typed', root)) $('#typed', root).value = '';
+    };
     if (cfg.rev) { speak(it.t); $('#q-say', root).onclick = () => speak(it.t); }
     const rate = r => {
       cfg.onRate && cfg.onRate(id, r, it.isNew);
@@ -794,6 +807,7 @@ function recallSession(root, ids, cfg) {
     };
     $('#reveal', root).onclick = reveal;
     $('#replay', root).onclick = () => speak(it.t);
+    $('#cover', root).onclick = cover;
     if ($('#chk', root)) $('#chk', root).onclick = () => cfg.check(id, $('#chk', root), $('#chk-out', root), n => {
       it.t = n.t; it.d = n.d;
       $('#answer .' + cfg.big, root).textContent = n.t;

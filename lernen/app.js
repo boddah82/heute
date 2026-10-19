@@ -27,7 +27,7 @@ function save(key, val) {
 }
 
 const settings = Object.assign(
-  { lang: 'it', newWords: 30, newSentences: 10, rate: 0.9, enVariant: 'en-GB', voices: {}, voiceGender: {}, autoTempo: true, talkModel: 'claude-opus-5-5', teen: false, dailyGoal: 30 },
+  { lang: 'it', newWords: 30, newSentences: 10, rate: 0.9, enVariant: 'en-GB', voices: {}, voiceGender: {}, sentRep: 3, autoTempo: true, talkModel: 'claude-opus-5-5', teen: false, dailyGoal: 30 },
   load('sl.settings', {})
 );
 settings.profile = Object.assign({ name: '', gender: 'm', origin: 'de', city: '', ts: 0 }, settings.profile);
@@ -414,6 +414,18 @@ function speak(text, opts = {}) {
 }
 function speakP(text, opts = {}) { return new Promise(res => speak(text, Object.assign({}, opts, { onend: res }))); }
 function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
+// Einen Satz mehrmals hintereinander (settings.sentRep, 0 = endlos), dazwischen Zeit zum Nachsprechen
+const SENT_REPS = [1, 3, 5, 0];
+function sentRepSelect(id) {
+  return `<label class="inline small" style="margin:0 0 8px">🔊 Einzelner Satz: <select id="${id}" style="width:auto;padding:4px 6px">${SENT_REPS.map(n => `<option value="${n}" ${n === settings.sentRep ? 'selected' : ''}>${n ? n + '× hintereinander' : 'endlos (bis Stopp)'}</option>`).join('')}</select></label>`;
+}
+async function repeatSentence(text, opts, token) {
+  const n = settings.sentRep;
+  for (let r = 0; (!n || r < n) && !token.stop; r++) {
+    await speakP(text, opts);
+    if (!token.stop && (!n || r < n - 1)) await wait(Math.min(6000, 1200 + text.length * 50));
+  }
+}
 
 // ---------- Spracherkennung & Vergleich ----------
 // Diktat ohne automatisches Ende: Pausen zum Nachdenken sind erlaubt. Die Browser-Erkennung
@@ -1730,6 +1742,7 @@ function readChapter(root, book, ch) {
       <button class="btn grow" id="rd-play">▶ Vorlesen</button>
       <label class="inline small" style="margin:0"><input type="checkbox" id="rd-loop" ${book.loop ? 'checked' : ''}> 🔁 Schleife</label>
     </div>
+    ${sentRepSelect('rd-rep')}
     <div class="card reader" id="rd-text">${ch.sentences.map((s, i) => `${s.para && i ? '</p>' : ''}${s.para || !i ? '<p>' : ''}<span class="rs" data-s="${i}">${(s.words && s.words.length ? s.words : s.t.split(/\s+/).map(t => ({ t, de: '' }))).map((w, j) => `<span class="rw" data-w="${i}-${j}">${esc(w.t)}</span>`).join(' ')}</span> `).join('')}</p></div>
     <div id="rd-pop" class="rpop" hidden></div>
     ${(() => { const w = textStats(chapterSrc(book, ch)).w; const lang = LANGS[settings.lang].name; return w.total ? `<div class="card" id="rd-cards">
@@ -1752,6 +1765,15 @@ function readChapter(root, book, ch) {
     <div class="card" id="rd-quiz"><b>✅ Hast du alles verstanden?</b><p class="muted small">3 Fragen zum Inhalt.</p><button class="btn primary" id="rd-qstart">Fragen starten</button></div>
     ${isLast && talkCfg.key ? `<button class="btn big" id="rd-next" ${readBusy ? 'disabled' : ''}>✍️ Kapitel ${book.chapters.length + 1} schreiben</button>` : !isLast ? `<a class="btn big" href="#read/${book.id}~${ch.n + 1}" style="display:block">Weiter: Kapitel ${ch.n + 1}</a>` : ''}`;
   const pop = $('#rd-pop', root);
+  const stopRead = () => {
+    if (readToken) readToken.stop = true;
+    readToken = null;
+    speechSynthesis.cancel();
+    listening = false;
+    $('#rd-play', root).textContent = '▶ Vorlesen';
+    $$('.rs.now', root).forEach(x => x.classList.remove('now'));
+  };
+  $('#rd-rep', root).onchange = e => { settings.sentRep = Number(e.target.value); saveSettings(); };
   $$('.rw', root).forEach(el => {
     el.onclick = e => {
       e.stopPropagation();
@@ -1769,9 +1791,21 @@ function readChapter(root, book, ch) {
         <div class="muted small" style="margin-top:4px">${esc(s.de)}</div>
         <div class="row" style="margin-top:6px"><button class="btn small" data-say>🔊 Wort</button><button class="btn small" data-sent>🔊 Satz</button>
         <button class="btn small" data-add ${exists || !word ? 'disabled' : ''}>${exists ? 'schon in der Wortliste' : '＋ Wortliste'}</button></div>`;
-      $('[data-x]', pop).onclick = () => { pop.hidden = true; el.classList.remove('sel'); };
+      $('[data-x]', pop).onclick = () => { pop.hidden = true; el.classList.remove('sel'); if (readToken && readToken.sent !== undefined) stopRead(); };
       $('[data-say]', pop).onclick = () => speak(word);
-      $('[data-sent]', pop).onclick = () => speak(s.t);
+      $('[data-sent]', pop).onclick = async e2 => {
+        const b = e2.target;
+        const same = readToken && readToken.sent === i;
+        stopRead();
+        if (same) return;
+        const token = { stop: false, sent: i };
+        readToken = token;
+        listening = true;
+        b.textContent = '■ Stopp';
+        $(`.rs[data-s="${i}"]`, root).classList.add('now');
+        await repeatSentence(s.t, {}, token);
+        if (readToken === token) { stopRead(); b.textContent = '🔊 Satz'; }
+      };
       $('[data-add]', pop).onclick = e2 => {
         state.words.push({ id: 'u:' + uid(), t: word, d: wordMeaning(w) || '?', ts: Date.now() });
         persist();
@@ -1784,7 +1818,9 @@ function readChapter(root, book, ch) {
   const btn = $('#rd-play', root);
   $('#rd-loop', root).onchange = e => { book.loop = e.target.checked; persist(); };
   btn.onclick = async () => {
-    if (readToken) { readToken.stop = true; readToken = null; speechSynthesis.cancel(); listening = false; btn.textContent = '▶ Vorlesen'; $$('.rs.now', root).forEach(x => x.classList.remove('now')); return; }
+    const wasAll = readToken && readToken.sent === undefined;
+    stopRead();
+    if (wasAll) return;
     const token = { stop: false };
     readToken = token;
     listening = true;
@@ -1799,7 +1835,7 @@ function readChapter(root, book, ch) {
       }
       if (book.loop && !token.stop) await wait(2500);
     } while (book.loop && !token.stop);
-    if (readToken === token) { readToken = null; listening = false; btn.textContent = '▶ Vorlesen'; $$('.rs.now', root).forEach(x => x.classList.remove('now')); }
+    if (readToken === token) stopRead();
   };
   if ($('#rd-next', root)) $('#rd-next', root).onclick = () => { location.hash = '#read/' + book.id; setTimeout(() => nextChapter($('#view'), book), 50); };
   // Verständnisfragen
@@ -3541,6 +3577,7 @@ function textDetail(root, tx) {
       <label class="inline small" style="margin:0"><input type="checkbox" id="tx-loop" ${tx.loop ? 'checked' : ''}> 🔁 Schleife</label>
       ${tx.story ? `<label class="inline small" style="margin:0"><input type="checkbox" id="tx-hide" ${tx.hideT ? 'checked' : ''}> Text verbergen</label>` : ''}
     </div>
+    ${sentRepSelect('tx-rep')}
     <ul class="list card ${tx.story && tx.hideT ? 'tx-hidden' : ''}" id="tx-list">
       ${tx.lines.map((l, i) => `
         <li data-i="${i}">
@@ -3637,7 +3674,32 @@ function textDetail(root, tx) {
   }
   $('#tx-show', root).onchange = e => { tx.showDe = e.target.checked; persist(); $$('.tx-de', root).forEach(x => { x.hidden = !tx.showDe; }); };
   $$('[data-td]', root).forEach(b => { b.onclick = () => { const el = $(`li[data-i="${b.dataset.td}"] .tx-de`, root); el.hidden = !el.hidden; }; });
-  $$('[data-tp]', root).forEach(b => { b.onclick = () => speak(tx.lines[b.dataset.tp].t, storyVoice(tx, tx.lines[b.dataset.tp].sp)); });
+  // Vorlesen stoppen (ganzer Text oder einzelner Satz) und Knöpfe zurücksetzen
+  const stopPlay = () => {
+    if (textPlayToken) textPlayToken.stop = true;
+    textPlayToken = null;
+    speechSynthesis.cancel();
+    listening = false;
+    $('#tx-play', root).textContent = '▶ Alles vorlesen';
+    $$('[data-tp]', root).forEach(x => { x.textContent = '🔊'; });
+    $$('#tx-list li', root).forEach(x => x.classList.remove('now'));
+  };
+  $('#tx-rep', root).onchange = e => { settings.sentRep = Number(e.target.value); saveSettings(); };
+  $$('[data-tp]', root).forEach(b => {
+    b.onclick = async () => {
+      const i = Number(b.dataset.tp);
+      const same = textPlayToken && textPlayToken.line === i;
+      stopPlay();
+      if (same) return;
+      const token = { stop: false, line: i };
+      textPlayToken = token;
+      listening = true;
+      b.textContent = '■';
+      $(`#tx-list li[data-i="${i}"]`, root).classList.add('now');
+      await repeatSentence(tx.lines[i].t, storyVoice(tx, tx.lines[i].sp), token);
+      if (textPlayToken === token) stopPlay();
+    };
+  });
   $('#tx-loop', root).onchange = e => { tx.loop = e.target.checked; persist(); };
   if ($('#tx-hide', root)) $('#tx-hide', root).onchange = e => { tx.hideT = e.target.checked; persist(); $('#tx-list', root).classList.toggle('tx-hidden', tx.hideT); };
   $$('[data-ta]', root).forEach(b => {
@@ -3688,7 +3750,9 @@ function textDetail(root, tx) {
   // Mitlesen: alle Zeilen nacheinander vorlesen, aktuelle Zeile markieren
   $('#tx-play', root).onclick = async () => {
     const btn = $('#tx-play', root);
-    if (textPlayToken) { textPlayToken.stop = true; textPlayToken = null; speechSynthesis.cancel(); listening = false; btn.textContent = '▶ Alles vorlesen'; $$('#tx-list li', root).forEach(x => x.classList.remove('now')); return; }
+    const wasAll = textPlayToken && textPlayToken.line === undefined;
+    stopPlay();
+    if (wasAll) return;
     const token = { stop: false };
     textPlayToken = token;
     listening = true;
@@ -3703,7 +3767,7 @@ function textDetail(root, tx) {
       }
       if (tx.loop && !token.stop) await wait(2500); // kurze Pause vor der nächsten Runde
     } while (tx.loop && !token.stop);
-    if (textPlayToken === token) { textPlayToken = null; listening = false; btn.textContent = '▶ Alles vorlesen'; }
+    if (textPlayToken === token) stopPlay();
   };
   $('#tx-del', root).onclick = () => {
     if (!confirm(`Text „${tx.title}“ löschen?`)) return;

@@ -59,6 +59,7 @@ const URL = 'http://localhost:8765/';
   console.log('ctx front:', (await p.textContent('#cx-f')).trim(), '| native:', (await p.textContent('.flash .native')).trim());
   await p.click('#reveal');
   console.log('ctx back:', (await p.textContent('#answer')).replace(/\s+/g, ' ').trim().slice(0, 160));
+  console.log('Vorderseite nur Wort:', !(await p.textContent('.flash .native')).includes('Grundform'), '| Warum so hinten:', await p.textContent('#answer .why'));
   await p.screenshot({ path: process.env.S + '/text-ctx.png', fullPage: true });
   await p.click('.rate [data-r="2"]');
   console.log('word d:', await p.evaluate(() => (state.words.find(w => w.t === 'cammino') || {}).d));

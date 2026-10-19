@@ -126,6 +126,7 @@ label.inline input { width: auto; }
 .flash .target { font-size: 30px; font-weight: 700; margin: 6px 0; word-break: break-word; }
 .flash .sentence { font-size: 22px; font-weight: 600; margin: 6px 0; }
 .flash .native { font-size: 19px; color: var(--muted); }
+.flash .why { font-size: 15px; margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); text-align: left; }
 .flash .hint { font-size: 14px; color: var(--muted); font-style: italic; margin-top: 8px; }
 .pill { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
 

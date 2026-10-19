@@ -49,6 +49,8 @@ const URL = 'http://localhost:8765/';
   // Zahlen-Karte
   const card = await p.evaluate(() => { const it = numberCard({ t: '40', d: '40' }); const de = numberCard({ t: '40', d: 'vierzig' }); return [it, de, numberCard({ t: 'casa', d: 'Haus' })]; });
   console.log('number cards:', JSON.stringify(card));
+  console.log('numText:', JSON.stringify(await p.evaluate(() => ['Ho 40 anni.', 'Alle 8:30 arrivano 23 persone', 'Costa 3,5 euro', 'Il 19.10. è lunedì', 'Ho 1 fratello e 2 sorelle', 'Nel 1984', 'Siamo in 100%'].map(numText))));
+  console.log('compare digits:', await p.evaluate(() => compareWords('Ho 40 anni', 'ho quaranta anni').score));
   console.log('errors:', errs.length ? errs : 'keine');
   await b.close();
 })();

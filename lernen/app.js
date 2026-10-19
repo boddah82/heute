@@ -607,6 +607,15 @@ function numberWords(n, lang) {
   const k = Math.floor(n / 1000), r = n % 1000;
   return (k ? one(k) + 'tausend' : '') + (r || !k ? lt1000(r) : '');
 }
+// Ziffern im Satz (Zielsprache) ausschreiben: „Ho 40 anni“ → „Ho quaranta anni“. Nur Anzeige/Vorlesen, gespeichert bleibt das Original.
+// Uhrzeiten, Kommazahlen, Daten (8:30, 3,5, 19.10.) und die 1 (un/una/uno je nach Wort) bleiben, wie sie sind.
+function numText(t) {
+  return (t || '').replace(/\d+/g, (m, i, str) => {
+    const before = str[i - 1] || '', after = str[i + m.length] || '', after2 = str[i + m.length + 1] || '';
+    if (m.length > 4 || m === '1' || /[\d.,:\/]/.test(before) && /\d/.test(str[i - 2] || '') || /[.,:\/]/.test(after) && /\d/.test(after2) || /\w/.test(before) || /[A-Za-zÀ-ÿ°%€$]/.test(after)) return m;
+    return numberWords(Number(m), settings.lang) || m;
+  });
+}
 // Karte, auf der nur eine Zahl steht: vorne/hinten ausgeschrieben, Ziffern in Klammern
 function numberCard(it) {
   const m = /^\s*(\d{1,4})\s*$/.exec(it.t || '');
@@ -616,9 +625,9 @@ function numberCard(it) {
   return Object.assign({}, it, { t: numberWords(n, settings.lang), d: /\d/.test(de) ? de : `${de} (${n})` });
 }
 function compareWords(target, attempt) {
-  const T = target.split(/\s+/).filter(Boolean);
+  const T = numText(target).split(/\s+/).filter(Boolean);
   const Tn = T.map(w => normWords(w).join(' '));
-  const A = normWords(attempt);
+  const A = normWords(numText(attempt));
   const dp = Array.from({ length: T.length + 1 }, () => new Array(A.length + 1).fill(0));
   for (let i = T.length - 1; i >= 0; i--) {
     for (let j = A.length - 1; j >= 0; j--) {
@@ -695,7 +704,7 @@ function recallSession(root, ids, cfg) {
     const id = queue[0];
     const raw = cfg.get(id);
     if (!raw) { queue.shift(); show(); return; }
-    const it = cfg.big === 'target' ? numberCard(raw) : raw;
+    const it = cfg.big === 'target' ? numberCard(raw) : Object.assign({}, raw, { t: numText(raw.t) });
     const cx = cfg.ctx && cfg.ctx(id);
     const m = cfg.big === 'target' ? splitMeaning(it.d, id) : { de: it.d };
     root.innerHTML = `
@@ -2525,7 +2534,7 @@ views.shadow = function (root) {
     if (!list.length) { pane.innerHTML = '<div class="card">Diese Insel hat noch keine Sätze.</div>'; return; }
     if (idx >= list.length) idx = 0;
     save('sl.shadow.' + settings.lang, { island: islandId, idx });
-    const s = list[idx];
+    const s = Object.assign({}, list[idx], { t: numText(list[idx].t) });
     if (ownUrl) { URL.revokeObjectURL(ownUrl); ownUrl = null; }
     pane.innerHTML = `
       <div class="row between muted small"><span>Satz ${idx + 1}/${list.length}</span></div>

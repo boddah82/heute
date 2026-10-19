@@ -52,13 +52,13 @@ const URL = 'http://localhost:8765/';
   console.log('ctx in Zeile:', (await p.textContent('#tx-list')).includes('gehen zu Fuß'));
   await p.click('a[href$="~cards"]');
   console.log('word front:', (await p.textContent('.card.flash')).replace(/\s+/g, ' ').trim().slice(0, 40), '| buttons:', await p.$$eval('.rate .btn', x => x.map(b => b.textContent).join('/')));
-  // Karte mit Zusammenhang: „cammino“ ist die 3. Karte
+  // Karte mit Zusammenhang: „cammino“ ist die 2. Karte („La“ ist ein kleines Wort und kommt nicht)
   await p.click('#reveal'); await p.click('.rate [data-r="0"]');
-  await p.click('#reveal'); await p.click('.rate [data-r="2"]');
   await p.click('#cx-b');
   console.log('ctx front:', (await p.textContent('#cx-f')).trim(), '| native:', (await p.textContent('.flash .native')).trim());
   await p.click('#reveal');
   console.log('ctx back:', (await p.textContent('#answer')).replace(/\s+/g, ' ').trim().slice(0, 160));
+  console.log('Vorderseite nur Wort:', !(await p.textContent('.flash .native')).includes('Grundform'), '| Warum so hinten:', await p.textContent('#answer .why'));
   await p.screenshot({ path: process.env.S + '/text-ctx.png', fullPage: true });
   await p.click('.rate [data-r="2"]');
   console.log('word d:', await p.evaluate(() => (state.words.find(w => w.t === 'cammino') || {}).d));

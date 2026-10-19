@@ -661,14 +661,15 @@ function recallSession(root, ids, cfg) {
     const it = cfg.get(id);
     if (!it) { queue.shift(); show(); return; }
     const cx = cfg.ctx && cfg.ctx(id);
+    const m = cfg.big === 'target' ? splitMeaning(it.d, id) : { de: it.d };
     root.innerHTML = `
       <div class="row between muted small"><span>${queue.length} übrig</span>${it.isNew ? '<span class="pill">neu</span>' : ''}</div>
       <div class="card flash">
         <img data-photo="${esc(id)}" class="photo" hidden alt="">
-        ${cfg.rev ? `<div class="${cfg.big}">${esc(it.t)}</div><button class="btn small" id="q-say">🔊</button>` : `<div class="native">${esc(it.d)}</div>`}
+        ${cfg.rev ? `<div class="${cfg.big}">${esc(it.t)}</div><button class="btn small" id="q-say">🔊</button>` : `<div class="native">${esc(m.de)}</div>`}
         ${it.note ? `<button class="btn small" id="hint" style="margin-top:8px">💡 Eselsbrücke</button><div class="hint" id="hint-t" hidden>${esc(it.note)}</div>` : ''}
         ${cx ? `<button class="btn small" id="cx-b" style="margin-top:8px">📖 Satz zeigen</button><div class="small muted" id="cx-f" hidden style="margin-top:6px">${cx.front}</div>` : ''}
-        <div id="answer" hidden>${cfg.rev ? `<div class="native">${esc(it.d)}</div>` : `<div class="${cfg.big}">${esc(it.t)}</div>`}<div id="cmp" class="small"></div><div id="wordhelp"></div>${cx ? `<div style="margin-top:8px">${cx.back}</div>` : ''}</div>
+        <div id="answer" hidden>${cfg.rev ? `<div class="native">${esc(m.de)}</div>` : `<div class="${cfg.big}">${esc(it.t)}</div>`}<div id="mx">${meaningExtra(m)}</div><div id="cmp" class="small"></div><div id="wordhelp"></div>${cx ? `<div style="margin-top:8px">${cx.back}</div>` : ''}</div>
       </div>
       ${cfg.rev ? '<p class="muted small">Laut sagen, was es auf Deutsch heißt → aufdecken.</p>' : ''}
       ${cfg.typing && !cfg.rev ? `<input type="text" id="typed" placeholder="Antwort tippen (optional)" autocomplete="off" autocapitalize="off" spellcheck="false">` : ''}
@@ -741,14 +742,19 @@ function recallSession(root, ids, cfg) {
       if (r === 0) queue.push(id);
       show();
     };
+    const setMeaning = d => {
+      const n = cfg.big === 'target' ? splitMeaning(d, id) : { de: d };
+      $('.native', root).textContent = n.de;
+      $('#mx', root).innerHTML = meaningExtra(n);
+    };
     $('#reveal', root).onclick = reveal;
     $('#replay', root).onclick = () => speak(it.t);
     if ($('#chk', root)) $('#chk', root).onclick = () => cfg.check(id, $('#chk', root), $('#chk-out', root), n => {
       it.t = n.t; it.d = n.d;
       $('#answer .' + cfg.big, root).textContent = n.t;
-      $('.native', root).textContent = n.d;
+      setMeaning(n.d);
     });
-    if (cfg.correct) $('#fix', root).onclick = () => cfg.correct(id, () => { const n = cfg.get(id); if (n) { it.t = n.t; it.d = n.d; $$('.flash .' + cfg.big, root).forEach(e => { e.textContent = n.t; }); $('.native', root).textContent = n.d; } });
+    if (cfg.correct) $('#fix', root).onclick = () => cfg.correct(id, () => { const n = cfg.get(id); if (n) { it.t = n.t; it.d = n.d; $$('.flash .' + cfg.big, root).forEach(e => { e.textContent = n.t; }); setMeaning(n.d); } });
     $$('.rate .btn', root).forEach(b => { b.onclick = () => rate(Number(b.dataset.r)); });
     if ($('#hint', root)) $('#hint', root).onclick = () => { $('#hint-t', root).hidden = false; };
     if ($('#cx-b', root)) $('#cx-b', root).onclick = () => { $('#cx-f', root).hidden = false; $('#cx-b', root).hidden = true; };
@@ -998,7 +1004,7 @@ function hearSession(pane) {
         <button class="btn big" id="h-play">🔊 Anhören</button>
         <div class="target" id="h-t" hidden>${esc(w.t)}</div>
         <div id="h-answer" hidden>
-          <div class="native">${esc(w.d)}</div>
+          <div class="native">${esc(splitMeaning(w.d, wid).de)}</div>${meaningExtra(splitMeaning(w.d, wid))}
           ${state.notes[wid] ? `<div class="hint">💡 ${esc(state.notes[wid])}</div>` : ''}
         </div>
       </div>
@@ -1475,12 +1481,39 @@ const READ_LEN = [{ k: 150, l: 'Kurz (~150 Wörter)' }, { k: 300, l: 'Mittel (~3
 // Wort für Wort mit Zusammenhang: ctx = Hinweis, welche Bedeutung gemeint ist (z. B. suono = „spiele – ein Instrument“), base = Grundform
 const WORD_ITEMS = { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de', 'ctx', 'base'], properties: { t: { type: 'string' }, de: { type: 'string' }, ctx: { type: 'string' }, base: { type: 'string' } } } };
 function wordCtxRule() {
-  return `For every word also give "ctx" and "base". "ctx" = a very short German hint whenever the German meaning alone could be misunderstood when the word is learned later on a flashcard without the sentence: which meaning is meant here (e.g. Italian "suono" → de "spiele", ctx "ein Instrument spielen – nicht Sport/Spiel"), what a small word refers to (article, preposition, pronoun, e.g. "lo" → de "ihn", ctx "bezieht sich auf den Brief"; "la" → de "die", ctx "Artikel, weiblich Einzahl"), or that a form is special (e.g. "hier: Vergangenheit"); empty string if the meaning is clear on its own. "base" = the dictionary form when it differs from the word (infinitive for verbs, masculine singular for nouns/adjectives, e.g. "suono" → "suonare"), else empty string. Write ctx simply – the learner struggles with grammar terms, so add a plain explanation in brackets after any grammar word.`;
+  return `For every word also give "ctx" and "base". The learner sees these only on the BACK of a flashcard, after trying to remember the word – the front shows just the short German meaning. The learner wants to speak everyday language, not become a grammar expert, and hardly knows grammar even in German. So "ctx" is NOT a dictionary or grammar description, but what a good teacher would say: an aha moment, a simple rule of thumb ("Faustregel") or pattern that helps again and again, or the feeling behind the form. Max. 2 short German sentences, everyday words, no grammar terms (no "Imperfekt", "passato remoto", "Artikel", "Pronomen", "Infinitiv") – describe what it does. Only give a rule that really holds in most everyday cases; no exceptions, no lists of forms; never invent a rule – if there is no good simple rule, just say which meaning is meant here. Examples (Italian): "avevo" → de "hatte", ctx "-vo am Ende heißt: ich, früher, und zwar etwas, das eine Weile so war. Genauso ero, andavo, facevo."; "aveva" → de "hatte", ctx "-va am Ende = er/sie, früher (avevo = ich)."; "alzarono" → de "hoben", ctx "Buch-Vergangenheit, steht fast nur in Geschichten. Im Gespräch sagst du hanno alzato."; "la" (before casa) → de "die", ctx "Faustregel: Wörter auf -a sind meist weiblich, davor la oder una."; "lo" (lo vedo) → de "ihn", ctx "Kleine Wörter wie ihn/es stehen im Italienischen vor dem Verb: lo vedo = ich sehe ihn."; "suono" → de "spiele", ctx "gemeint ist ein Instrument spielen. Fußball oder ein Spiel spielen heißt giocare."; empty string if the meaning is clear and there is nothing helpful to say (most words). For English use the same style. "base" = the form you would look up in a dictionary when it differs from the word, followed by its German meaning in brackets (e.g. "suono" → "suonare (spielen)"), else empty string. ${numberRule()}`;
+}
+// Zahlen ausgeschrieben lernen: im Text „quaranta“ (Ziffern würde die Sprachausgabe doppelt vorlesen), Ziffer in der Bedeutung
+function numberRule() {
+  return `Numbers: whenever YOU write ${settings.lang === 'it' ? 'Italian' : 'English'} text, write numbers as words, never as digits (e.g. "quaranta", not "40"); the word item then gets de = German number word with the digits in brackets, e.g. "vierzig (40)". If a given text contains a number only as digits, its word item gets de = German number word with the digits in brackets (e.g. "vierzig (40)") and ctx = how it is written in the language (e.g. "geschrieben: quaranta").`;
 }
 // Bedeutung fürs Lernen ohne Satz: „spiele (ein Instrument …) · Grundform: suonare“
 function wordMeaning(w) {
   const de = (w.de || '').replace(/-/g, ' ').trim();
   return de + (w.ctx ? ` (${w.ctx})` : '') + (w.base ? ` · Grundform: ${w.base}` : '');
+}
+// Umkehrung von wordMeaning(): vorne nur das Wort, Erklärung und Grundform kommen auf die Rückseite.
+// Klammern nur bei eigenen Wörtern (u:…) abtrennen – in der Grundwortliste gehören sie zur Bedeutung („das Glas (Trinkglas)“)
+function splitMeaning(d, id) {
+  let de = d || '', ctx = '', base = '';
+  const own = !id || /^(r:)?u:/.test(id);
+  const g = de.indexOf(' · Grundform: ');
+  if (g >= 0) { base = de.slice(g + 14).trim(); de = de.slice(0, g); }
+  if (own && de.endsWith(')')) {
+    let depth = 0;
+    for (let i = de.length - 1; i >= 0; i--) {
+      if (de[i] === ')') depth++;
+      else if (de[i] === '(' && --depth === 0) {
+        if (i > 0 && de[i - 1] === ' ') { ctx = de.slice(i + 1, -1).trim(); de = de.slice(0, i).trim(); }
+        break;
+      }
+    }
+  }
+  return { de, ctx, base };
+}
+function meaningExtra(m) {
+  return (m.ctx ? `<div class="why">💡 <b>Warum so?</b> ${esc(m.ctx)}</div>` : '')
+    + (m.base ? `<div class="small muted" style="margin-top:4px">Grundform: <b>${esc(m.base)}</b></div>` : '');
 }
 // Wort im Satz markieren (HTML)
 function markWord(txt, w) {
@@ -1639,7 +1672,7 @@ function readChapter(root, book, ch) {
       </div>
       <p class="small">${w.total} Wörter · ${w.train} im Training · <b>${w.sure}</b> sitzen${w.due ? ` · <b>${w.due} fällig</b>` : ''}</p>
       <div class="progress" style="margin-bottom:8px"><div style="width:${w.sure / w.total * 100}%"></div></div>
-      <p class="muted small">Wie die normale Abfrage: Nochmal / Schwer / Gut / Leicht, pro Runde ${TEXT_NEW_W} neue Wörter plus alles Fällige.</p>
+      <p class="muted small">Wie die normale Abfrage: Nochmal / Schwer / Gut / Leicht, pro Runde ${TEXT_NEW_W} neue Wörter plus alles Fällige. Kleine Wörter (der, die, ihn, von …) kommen nicht einzeln, die lernst du in den Sätzen.</p>
       <a class="btn primary" href="#read/${book.id}~${ch.n}~cards">Wörter-Runde starten</a>
     </div>` : ''; })()}
     <div class="card" id="rd-quiz"><b>✅ Hast du alles verstanden?</b><p class="muted small">3 Fragen zum Inhalt.</p><button class="btn primary" id="rd-qstart">Fragen starten</button></div>
@@ -1941,7 +1974,7 @@ function vocabNew(pane) {
       ${from ? `<div class="pill" style="margin-bottom:8px">aus deinem Satz</div><div class="small muted" style="margin-bottom:8px">„${esc(from.sentence.t)}“</div>` : ''}
       ${photoEditor(w.id)}
       <div class="target">${esc(w.t)}</div>
-      <div class="native">${esc(w.d)}</div>
+      <div class="native">${esc(splitMeaning(w.d, w.id).de)}</div>${meaningExtra(splitMeaning(w.d, w.id))}
       <div class="row" style="justify-content:center;margin-top:10px">
         <button class="btn small" id="play">🔊 Anhören</button>
         <button class="btn small" id="fix" title="Übersetzung korrigieren">✎ Korrigieren</button>
@@ -1974,7 +2007,7 @@ function vocabNew(pane) {
   speak(w.t);
   $('#play', pane).onclick = () => speak(w.t);
   $('#fix', pane).onclick = () => { saveNote(); correctWord(w.id, () => vocabNew(pane)); };
-  if ($('#chk', pane)) $('#chk', pane).onclick = () => checkWordUI(w.id, $('#chk', pane), $('#chk-out', pane), n => { $('.flash .target', pane).textContent = n.t; $('.flash .native', pane).textContent = n.d; });
+  if ($('#chk', pane)) $('#chk', pane).onclick = () => checkWordUI(w.id, $('#chk', pane), $('#chk-out', pane), n => { $('.flash .target', pane).textContent = n.t; $('.flash .native', pane).textContent = splitMeaning(n.d, w.id).de; });
   $('#known', pane).onclick = () => {
     saveNote();
     const t = today();
@@ -3246,9 +3279,18 @@ function lineToIsland(tx, l) {
 // Dieselben Karten wie in Wörter → Abfragen / Satz-Abfrage (keine Doppelten); Gegenrichtung der Wörter = r:<Wort-ID> wie „Verstehen“.
 const TEXT_NEW_W = 10, TEXT_NEW_S = 5; // neue Karten pro Runde
 // tx: eigener Text oder chapterSrc() – braucht lines (mit words), title, ggf. back
+// Kleine Wörter (der/die/das, ihn, von …) ändern sich ständig – sie kommen nicht als eigene Wortkarte, sondern über die Satz-Karten
+const SMALL_WORDS = {
+  it: 'il lo la l i gli le un uno una di a da in con su per tra fra del dello della dei degli delle al allo alla ai agli alle dal dallo dalla dai dagli dalle nel nello nella nei negli nelle sul sullo sulla sui sugli sulle col dell all dall nell sull mi ti si ci vi li ne me te ce ve se e ed o od ma che',
+  en: 'the a an of to in on at for with by from and or but it him her them me us i he she we they my your his its our their',
+};
+function isSmallWord(t) {
+  const w = (t || '').toLowerCase().replace(/['’]$/, '');
+  return (SMALL_WORDS[settings.lang] || '').split(' ').includes(w);
+}
 function textWordItems(tx) {
   const byT = new Map(allWords().map(w => [w.t.toLowerCase(), w]));
-  return chapterWords({ sentences: tx.lines }).map(x => { const w = byT.get(x.t.toLowerCase()); return Object.assign(x, { id: w ? w.id : null }); });
+  return chapterWords({ sentences: tx.lines }).filter(x => !isSmallWord(x.t)).map(x => { const w = byT.get(x.t.toLowerCase()); return Object.assign(x, { id: w ? w.id : null }); });
 }
 function textStats(tx) {
   const key = settings.cardRev ? id => 'r:' + id : id => id;
@@ -3302,7 +3344,7 @@ function textRound(root, tx, sents) {
       return {
         front: rev ? markWord(line.t, x.t) : esc(line.de),
         // „Im Text“ nur, wenn die Wortkarte etwas anderes sagt (z. B. Grundwortliste: suono = Klang)
-        back: `${(wordById(x.id) || {}).d === wordMeaning(x) ? '' : `<div class="small"><b>Im Text:</b> ${esc(wordMeaning(x))}</div>`}<div class="small muted">${markWord(line.t, x.t)}<br>${esc(line.de)}</div>`,
+        back: `${(wordById(x.id) || {}).d === wordMeaning(x) ? '' : `<div class="small"><b>Im Text:</b> ${esc(splitMeaning(wordMeaning(x)).de)}</div>${meaningExtra(splitMeaning(wordMeaning(x)))}`}<div class="small muted">${markWord(line.t, x.t)}<br>${esc(line.de)}</div>`,
       };
     },
     big: sents ? 'sentence' : 'target',
@@ -3382,7 +3424,7 @@ function textDetail(root, tx) {
     </ul>
     ${withDe.length && !tx.story ? `<div class="card" id="tx-learn">
       <b>🃏 Diesen Text lernen</b>
-      <p class="muted small">Wie die normale Abfrage: ehrlich bewerten (Nochmal / Schwer / Gut / Leicht). Pro Runde nur ${TEXT_NEW_W} neue Wörter bzw. ${TEXT_NEW_S} neue Sätze plus alles, was fällig ist. Die Karten kommen danach auch in Wörter → Abfragen und in der Satz-Abfrage.</p>
+      <p class="muted small">Wie die normale Abfrage: ehrlich bewerten (Nochmal / Schwer / Gut / Leicht). Pro Runde nur ${TEXT_NEW_W} neue Wörter bzw. ${TEXT_NEW_S} neue Sätze plus alles, was fällig ist. Kleine Wörter (der, die, ihn, von …) kommen nicht als Wortkarte, die lernst du in den Satz-Karten. Die Karten kommen danach auch in Wörter → Abfragen und in der Satz-Abfrage.</p>
       <b class="small">Wörter</b>
       <div class="chips" style="margin:4px 0">
         <button class="chip ${rev ? '' : 'on'}" data-dir="0">Deutsch → ${lang}</button>

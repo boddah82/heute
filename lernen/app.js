@@ -580,6 +580,41 @@ function normWords(s) {
   return s.toLowerCase().replace(/[’`]/g, "'").replace(/[.,!?;:¿¡"«»()…—–-]/g, ' ').split(/\s+/).filter(Boolean);
 }
 // Wortweiser Abgleich über die längste gemeinsame Teilfolge
+// Zahlen ausschreiben (0–9999), ohne Claude – alte Karten haben oft nur Ziffern („40“)
+function numberWords(n, lang) {
+  if (!(n >= 0 && n < 10000)) return '';
+  if (lang === 'it') {
+    const u = 'zero uno due tre quattro cinque sei sette otto nove dieci undici dodici tredici quattordici quindici sedici diciassette diciotto diciannove'.split(' ');
+    const t = ['', '', 'venti', 'trenta', 'quaranta', 'cinquanta', 'sessanta', 'settanta', 'ottanta', 'novanta'];
+    const lt100 = x => { if (x < 20) return u[x]; const d = t[Math.floor(x / 10)], r = x % 10; if (!r) return d; return (r === 1 || r === 8 ? d.slice(0, -1) : d) + (r === 3 ? 'tré' : u[r]); };
+    const lt1000 = x => { const h = Math.floor(x / 100), r = x % 100; return (h ? (h > 1 ? u[h] : '') + 'cento' : '') + (r || !h ? lt100(r) : ''); };
+    const k = Math.floor(n / 1000), r = n % 1000;
+    return (k ? (k === 1 ? 'mille' : lt1000(k) + 'mila') : '') + (r || !k ? lt1000(r) : '');
+  }
+  if (lang === 'en') {
+    const u = 'zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen'.split(' ');
+    const t = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+    const lt100 = x => x < 20 ? u[x] : t[Math.floor(x / 10)] + (x % 10 ? '-' + u[x % 10] : '');
+    const lt1000 = x => { const h = Math.floor(x / 100), r = x % 100; return h ? u[h] + ' hundred' + (r ? ' and ' + lt100(r) : '') : lt100(r); };
+    const k = Math.floor(n / 1000), r = n % 1000;
+    return k ? lt100(k) + ' thousand' + (r ? (r < 100 ? ' and ' : ' ') + lt1000(r) : '') : lt1000(r);
+  }
+  const u = 'null eins zwei drei vier fünf sechs sieben acht neun zehn elf zwölf dreizehn vierzehn fünfzehn sechzehn siebzehn achtzehn neunzehn'.split(' ');
+  const t = ['', '', 'zwanzig', 'dreißig', 'vierzig', 'fünfzig', 'sechzig', 'siebzig', 'achtzig', 'neunzig'];
+  const one = x => x === 1 ? 'ein' : u[x];
+  const lt100 = x => x < 20 ? u[x] : (x % 10 ? one(x % 10) + 'und' : '') + t[Math.floor(x / 10)];
+  const lt1000 = x => { const h = Math.floor(x / 100), r = x % 100; return (h ? one(h) + 'hundert' : '') + (r || !h ? lt100(r) : ''); };
+  const k = Math.floor(n / 1000), r = n % 1000;
+  return (k ? one(k) + 'tausend' : '') + (r || !k ? lt1000(r) : '');
+}
+// Karte, auf der nur eine Zahl steht: vorne/hinten ausgeschrieben, Ziffern in Klammern
+function numberCard(it) {
+  const m = /^\s*(\d{1,4})\s*$/.exec(it.t || '');
+  if (!m) return it;
+  const n = Number(m[1]);
+  const de = /[a-zäöüß]/i.test(it.d || '') ? it.d : numberWords(n, 'de') + ` (${n})`;
+  return Object.assign({}, it, { t: numberWords(n, settings.lang), d: /\d/.test(de) ? de : `${de} (${n})` });
+}
 function compareWords(target, attempt) {
   const T = target.split(/\s+/).filter(Boolean);
   const Tn = T.map(w => normWords(w).join(' '));
@@ -658,8 +693,9 @@ function recallSession(root, ids, cfg) {
       return;
     }
     const id = queue[0];
-    const it = cfg.get(id);
-    if (!it) { queue.shift(); show(); return; }
+    const raw = cfg.get(id);
+    if (!raw) { queue.shift(); show(); return; }
+    const it = cfg.big === 'target' ? numberCard(raw) : raw;
     const cx = cfg.ctx && cfg.ctx(id);
     const m = cfg.big === 'target' ? splitMeaning(it.d, id) : { de: it.d };
     root.innerHTML = `
@@ -1573,7 +1609,7 @@ let readBusy = null;
 views.read = function (root, arg) {
   const [id, n, mode] = (arg || '').split('~');
   const book = id && books().find(b => b.id === id);
-  if (book && n) { const ch = book.chapters[Number(n) - 1]; if (ch) { if (mode === 'cards') textRound(root, chapterSrc(book, ch), false); else readChapter(root, book, ch); return; } }
+  if (book && n) { const ch = book.chapters[Number(n) - 1]; if (ch) { if (mode === 'cards' || mode === 'sents') textRound(root, chapterSrc(book, ch), mode === 'sents'); else readChapter(root, book, ch); return; } }
   if (book) { readBook(root, book); return; }
   const themes = readThemes();
   const opts = Object.assign({ theme: 0, len: 1, custom: '' }, load('sl.read', {}));
@@ -1658,7 +1694,7 @@ function chapterWords(ch) {
   return [...seen.values()];
 }
 // Lesekapitel als Quelle für textRound()/textStats() (Wörter-Runden wie bei eigenen Texten)
-function chapterSrc(book, ch) { return { lines: ch.sentences, title: ch.title, back: `#read/${book.id}~${ch.n}` }; }
+function chapterSrc(book, ch) { return { lines: ch.sentences, title: ch.title, back: `#read/${book.id}~${ch.n}`, islandId: 'read-' + book.id, islandTitle: '📖 ' + book.title }; }
 
 let readToken = null;
 function readChapter(root, book, ch) {
@@ -1683,6 +1719,12 @@ function readChapter(root, book, ch) {
       <div class="progress" style="margin-bottom:8px"><div style="width:${w.sure / w.total * 100}%"></div></div>
       <p class="muted small">Wie die normale Abfrage: Nochmal / Schwer / Gut / Leicht, pro Runde ${TEXT_NEW_W} neue Wörter plus alles Fällige. Kleine Wörter (der, die, ihn, von …) kommen nicht einzeln, die lernst du in den Sätzen.</p>
       <a class="btn primary" href="#read/${book.id}~${ch.n}~cards">Wörter-Runde starten</a>
+    </div>` : ''; })()}
+    ${(() => { const st = textStats(chapterSrc(book, ch)).s; return st.total ? `<div class="card" id="rd-sents">
+      <b>🃏 Sätze aus diesem Kapitel</b>
+      <p class="small">${st.total} Sätze · ${st.train} im Training · <b>${st.sure}</b> sitzen${st.due ? ` · <b>${st.due} fällig</b>` : ''}</p>
+      <p class="muted small">Deutsch sehen → selbst sagen. Pro Runde ${TEXT_NEW_S} neue Sätze plus alles Fällige. Zu lang? Nach dem Aufdecken ✂️ Aufteilen.</p>
+      <a class="btn primary" href="#read/${book.id}~${ch.n}~sents">Sätze-Runde starten</a>
     </div>` : ''; })()}
     <div class="card" id="rd-quiz"><b>✅ Hast du alles verstanden?</b><p class="muted small">3 Fragen zum Inhalt.</p><button class="btn primary" id="rd-qstart">Fragen starten</button></div>
     ${isLast && talkCfg.key ? `<button class="btn big" id="rd-next" ${readBusy ? 'disabled' : ''}>✍️ Kapitel ${book.chapters.length + 1} schreiben</button>` : !isLast ? `<a class="btn big" href="#read/${book.id}~${ch.n + 1}" style="display:block">Weiter: Kapitel ${ch.n + 1}</a>` : ''}`;
@@ -2502,6 +2544,7 @@ views.shadow = function (root) {
       <div class="row" style="margin-top:8px">
         ${window.MediaRecorder ? '<button class="btn grow" id="s-rec">🎙 Aufnehmen</button>' : ''}
         ${SR ? '<button class="btn grow" id="s-check">✅ Aussprache prüfen</button>' : ''}
+        ${talkCfg.key && canSplit(s.id) ? '<button class="btn" id="s-split" title="In Teile zerlegen (≈ 1–3 Cent)">✂️ Aufteilen</button>' : ''}
       </div>
       <div id="s-own" style="margin-top:8px"></div>
       <div class="row" style="margin-top:12px">
@@ -2518,6 +2561,14 @@ views.shadow = function (root) {
     $('#s-loop', pane).onclick = () => cue.run(3, settings.rate);
     $('#s-prev', pane).onclick = () => { idx = (idx - 1 + list.length) % list.length; render(); };
     $('#s-next', pane).onclick = () => { idx = (idx + 1) % list.length; render(); };
+    // Teile stehen danach direkt vor dem ganzen Satz – mit dem ersten Teil weitermachen
+    if ($('#s-split', pane)) $('#s-split', pane).onclick = async () => {
+      const parts = await splitSentenceUI(s.id, $('#s-split', pane));
+      if (!parts) return;
+      if (list === weak) weak.splice(idx, 0, ...parts.map(findSentence).filter(Boolean));
+      else idx = Math.max(0, list.findIndex(x => x.id === parts[0]));
+      render();
+    };
     if ($('#s-check', pane)) {
       micToggle($('#s-check', pane), '✅ Aussprache prüfen', said => {
         const c = compareWords(s.t, said);
@@ -2997,7 +3048,7 @@ async function splitSentenceUI(id, btn) {
       if (old) return old.id;
       const p = { id: 's:' + uid(), t, d: x.de, partOf: s.id, ts: Date.now() };
       if (gloss) p.gloss = gloss.slice(x.start, end);
-      isl.sentences.push(p);
+      isl.sentences.splice(isl.sentences.indexOf(s), 0, p);
       return p.id;
     });
     s.parts = ids; s.ts = Date.now(); isl.ts = Date.now();
@@ -3323,9 +3374,9 @@ function listenStories(root) {
 // Ziel-Insel für Sätze aus einem Text: gewählte Insel oder Sammelinsel „Texte“ (txt-<lang>)
 function textIsland(tx, create) {
   let isl = tx.island && state.islands.find(i => i.id === tx.island);
-  const id = 'txt-' + settings.lang;
+  const id = tx.islandId || 'txt-' + settings.lang;
   if (!isl) isl = state.islands.find(i => i.id === id);
-  if (!isl && create) { isl = { id, title: 'Texte', sentences: [], ts: Date.now() }; state.islands.push(isl); }
+  if (!isl && create) { isl = { id, title: tx.islandTitle || 'Texte', sentences: [], ts: Date.now() }; state.islands.push(isl); }
   return isl;
 }
 function sentenceKnown(t) { return allSentences().find(s => s.t === t); }
@@ -3683,7 +3734,8 @@ function islandDetail(root, isl) {
     <ul class="list card">
       ${isl.sentences.map(s => `
         <li><button class="btn small" data-play="${s.id}">🔊</button>
-          <div class="grow"><div class="t">${esc(s.t)}</div><div class="d">${esc(s.d)}</div>${photoEditor(s.id)}</div>
+          <div class="grow"><div class="t">${s.partOf ? '<span class="muted">↳ </span>' : ''}${esc(s.t)}</div><div class="d">${esc(s.d)}</div>${photoEditor(s.id)}</div>
+          ${talkCfg.key && canSplit(s.id) ? `<button class="btn small" data-split="${s.id}" title="In Teile zerlegen (≈ 1–3 Cent)">✂️</button>` : ''}
           <button class="btn small" data-edit="${s.id}">✎</button>
           <button class="btn small danger" data-del="${s.id}">✕</button></li>`).join('') || '<li class="muted">Noch keine Sätze.</li>'}
     </ul>
@@ -3713,6 +3765,7 @@ function islandDetail(root, isl) {
     islandDetail(root, isl);
   };
   $$('[data-play]', root).forEach(b => { b.onclick = () => speak(find(b.dataset.play).t); });
+  $$('[data-split]', root).forEach(b => { b.onclick = async () => { if (await splitSentenceUI(b.dataset.split, b)) islandDetail(root, isl); }; });
   $$('[data-edit]', root).forEach(b => {
     b.onclick = () => {
       const s = find(b.dataset.edit);

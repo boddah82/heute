@@ -27,7 +27,7 @@ function save(key, val) {
 }
 
 const settings = Object.assign(
-  { lang: 'it', newWords: 30, newSentences: 10, rate: 0.9, enVariant: 'en-GB', voices: {}, voiceGender: {}, sentRep: 3, autoTempo: true, talkModel: 'claude-opus-5-5', teen: false, dailyGoal: 30 },
+  { lang: 'it', newWords: 30, newSentences: 10, rate: 0.9, enVariant: 'en-GB', voices: {}, voiceGender: {}, sentRep: 3, bite: 15, goalWords: 0, goalDate: '', autoTempo: true, talkModel: 'claude-opus-5-5', teen: false, dailyGoal: 30 },
   load('sl.settings', {})
 );
 settings.profile = Object.assign({ name: '', gender: 'm', origin: 'de', city: '', ts: 0 }, settings.profile);
@@ -754,9 +754,30 @@ document.addEventListener('keydown', e => { if (keyHandler) keyHandler(e); });
 
 // ---------- Abfrage (Active Recall) ----------
 // Zeigt die deutsche Seite, der Nutzer produziert die Antwort (sprechen/tippen/denken), deckt auf und bewertet.
+// Häppchen: kleine Portionen mit Zwischenstand – lieber oft kurz als selten ein Berg
+function biteCounter(size) {
+  let n = 0, ok = 0, no = 1, xp0 = totalXP();
+  return {
+    head: isNew => `<div class="row between muted small"><span>Häppchen ${no} · Karte ${n + 1} von ${size}</span>${isNew ? '<span class="pill">neu</span>' : ''}</div>
+      <div class="progress" style="margin:4px 0 10px"><div style="width:${n / size * 100}%"></div></div>`,
+    rated(r) { n++; if (r > 0) ok++; return n >= size; },
+    pause(root, left, quitHref, more) {
+      const xp = totalXP() - xp0;
+      const bites = Math.ceil(left / size);
+      root.innerHTML = `<div class="card flash"><div class="target">✓</div><p><b>Häppchen ${no} geschafft!</b></p>
+          <p class="small">${ok} von ${n} gewusst · +${xp} Punkte</p>
+          <p class="muted small">${bites === 1 ? 'Noch 1 Häppchen' : `Noch ${bites} Häppchen`} in dieser Runde – oder später weiter. Pausen helfen dem Gedächtnis.</p></div>
+        <div class="row"><a class="btn grow" href="${quitHref || '#home'}">Für jetzt reicht's</a><button class="btn primary grow" id="bite-more">Noch ein Häppchen</button></div>`;
+      n = 0; ok = 0; no++; xp0 = totalXP();
+      $('#bite-more', root).onclick = more;
+      keyHandler = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); more(); } };
+    },
+  };
+}
 function recallSession(root, ids, cfg) {
   const queue = ids.slice();
   const steps = learnSteps();
+  const bite = cfg.bite ? biteCounter(cfg.bite) : null;
   let done = 0;
   function show() {
     keyHandler = null;
@@ -775,7 +796,7 @@ function recallSession(root, ids, cfg) {
     steps.begin(id);
     const m = cfg.big === 'target' ? splitMeaning(it.d, id) : { de: it.d };
     root.innerHTML = `
-      <div class="row between muted small"><span>${queue.length} übrig</span>${it.isNew ? '<span class="pill">neu</span>' : ''}</div>
+      ${bite ? bite.head(it.isNew) : `<div class="row between muted small"><span>${queue.length} übrig</span>${it.isNew ? '<span class="pill">neu</span>' : ''}</div>`}
       <div class="card flash">
         <img data-photo="${esc(id)}" class="photo" hidden alt="">
         ${cfg.rev ? `<div class="${cfg.big}">${esc(it.t)}</div><button class="btn small" id="q-say">🔊</button>` : `<div class="native">${esc(m.de)}</div>`}
@@ -860,6 +881,7 @@ function recallSession(root, ids, cfg) {
       done++;
       queue.shift();
       if (again) queue.splice(Math.min(LEARN_GAP, queue.length), 0, id);
+      if (bite && bite.rated(r) && queue.length) { keyHandler = null; bite.pause(root, new Set(queue).size, cfg.quitHref, show); return; }
       show();
     };
     const setMeaning = d => {
@@ -909,7 +931,9 @@ views.locked = function (root) {
 };
 
 // ---------- „Heute zuerst“: lerngerechte Empfehlung nach festen Regeln ----------
-const REVIEW_CAP = 50; // Wort-Wiederholungen pro Runde – nach Pausen den Rückstand verteilen statt alles nachzuholen
+const REVIEW_CAP = 50; // Wort-Wiederholungen pro Tag – nach Pausen den Rückstand verteilen statt alles nachzuholen
+function wordBudget() { const l = dayLog(); return Math.max(0, REVIEW_CAP - (l.wok || 0) - (l.wfail || 0)); }
+function bitesText(n) { const b = Math.ceil(n / settings.bite); return b === 1 ? '1 Häppchen' : `${b} Häppchen`; }
 function daysSince(key) {
   for (let d = today(); d >= today() - 60; d--) {
     const l = state.log[d];
@@ -948,8 +972,9 @@ function todayPlan() {
   const neglectedStep = neglected && neglected.score >= 2
     ? { href: neglected.href, title: neglected.title, why: [sinceText(neglected.days), neglected.extra].filter(Boolean).join(' · ') + ' – Sprechen ist dein Ziel' }
     : null;
-  const reviewStep = dueW
-    ? { href: '#vocab/recall', title: `${Math.min(dueW, REVIEW_CAP)} Wörter wiederholen`, why: dueW > REVIEW_CAP ? `${dueW} fällig – heute höchstens ${REVIEW_CAP}, der Rest verteilt sich auf die nächsten Tage` : 'fällig – jetzt wiederholen, bevor sie verblassen' }
+  const todayW = Math.min(dueW, wordBudget());
+  const reviewStep = todayW
+    ? { href: '#vocab/recall', title: `Wörter wiederholen: ${bitesText(todayW)}`, why: `je ${settings.bite} Karten, Pause dazwischen erlaubt${dueW > todayW ? ' – der Rest verteilt sich still auf die nächsten Tage' : ''}` }
     : null;
   // Lange Vernachlässigtes (≥ 3 Tage) zuerst, sonst gilt: fällige Wiederholungen vor allem anderen
   if (neglectedStep && neglected.score >= 3) { steps.push(neglectedStep); if (reviewStep) steps.push(reviewStep); }
@@ -957,7 +982,7 @@ function todayPlan() {
   const tempo = newWordTempo();
   const newLeft = Math.max(0, tempo.n + (l.extraNew || 0) - l.newWords);
   if (newLeft && dueW <= REVIEW_CAP * 2) steps.push({ href: '#vocab/new', title: `${newLeft} neue Wörter`, why: tempo.reason ? `heute weniger: ${tempo.reason}` : 'mit Eselsbrücke oder Foto' });
-  else if (newLeft) steps.push({ href: '#vocab/new', title: 'Neue Wörter: heute auslassen', why: 'erst den Rückstand abbauen – sonst wächst er weiter' });
+  else if (newLeft) steps.push({ href: '#vocab/new', title: 'Neue Wörter: heute Pause', why: 'erst die fälligen festigen – das lohnt sich mehr' });
   // Rückrichtung (hören → Deutsch) nur ohne großen Rückstand in der Hauptrichtung
   const hearN = hearQueue().length;
   if (hearN && dueW <= REVIEW_CAP) steps.push({ href: '#vocab/hear', title: `${hearN} Wörter verstehen`, why: 'hören → Bedeutung sagen' });
@@ -973,6 +998,86 @@ function todayPlan() {
   return { steps: steps.slice(0, 3), pause: pauseDays() };
 }
 
+// ---------- Fortschritt: Etappenziel, Prognose, Woche, Verlauf ----------
+// Sichere Wörter (Abstand ≥ 3 Tage) werden täglich im Log notiert (l.secure) – daraus Woche, Tempo und Meilensteine.
+const MILESTONES = [50, 100, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10000];
+function secureAt(day) { // letzter bekannter Stand an oder vor diesem Tag
+  let best = null;
+  Object.entries(state.log).forEach(([d, l]) => { if (Number(d) <= day && l.secure !== undefined && (best === null || Number(d) > best.d)) best = { d: Number(d), n: l.secure }; });
+  return best;
+}
+function noteSecure() {
+  const sec = secureWordCount();
+  const l = dayLog();
+  if (l.secure === sec) return sec;
+  const before = secureAt(today() - 1);
+  l.secure = sec;
+  // Meilenstein neu erreicht? Dann den ganzen Tag feiern
+  const m = MILESTONES.filter(x => sec >= x && (!before || before.n < x)).pop();
+  if (m && before) l.mile = m;
+  persist();
+  return sec;
+}
+// Tempo: sichere Wörter pro Tag aus den Notizen (≥ 7 Tage Abstand), sonst grob aus neu gestarteten Wörtern
+function secureTempo() {
+  const t = today(), now = secureAt(t);
+  // ältester Stand der letzten 4 Wochen
+  const old = Object.entries(state.log).filter(([d, l]) => Number(d) >= t - 28 && l.secure !== undefined).map(([d, l]) => ({ d: Number(d), n: l.secure })).sort((a, b) => a.d - b.d)[0];
+  if (now && old && now.d - old.d >= 7) return { rate: Math.max(0, (now.n - old.n) / (now.d - old.d)), rough: false };
+  let started = 0, active = 0;
+  for (let d = t - 13; d <= t; d++) { const l = state.log[d]; if (l && l.newWords) { started += l.newWords; active++; } }
+  return active >= 3 ? { rate: started / 14, rough: true } : null;
+}
+function fmtDate(day) { return new Date(day * 86400000).toLocaleDateString('de-DE', { day: 'numeric', month: 'long', timeZone: 'UTC' }); }
+function nextTarget(sec) {
+  const st = STAGES.find(x => x.min > sec);
+  const prevStage = STAGES.filter(x => x.min <= sec).pop();
+  if (st) return { n: st.min, prev: prevStage ? prevStage.min : 0, label: `Stufe ${st.id}`, text: st.text };
+  const n = Math.floor(sec / 1000) * 1000 + 1000;
+  return { n, prev: n - 1000, label: `${n.toLocaleString('de-DE')} sichere Wörter`, text: '' };
+}
+// Abfragen der letzten 30 Tage als kleine Balken (eine Reihe, ohne Legende)
+function activityBars() {
+  const t = today(), days = [];
+  for (let d = t - 29; d <= t; d++) days.push({ d, n: (state.log[d] || {}).reviews || 0 });
+  const max = Math.max(10, ...days.map(x => x.n));
+  const w = 300, h = 44, bw = w / 30;
+  return `<svg viewBox="0 0 ${w} ${h + 2}" class="bars" role="img" aria-label="Abfragen pro Tag, letzte 30 Tage">
+    ${days.map((x, i) => { const bh = x.n ? Math.max(3, x.n / max * h) : 1; return `<rect x="${i * bw + 1}" y="${h - bh}" width="${bw - 2}" height="${bh}" rx="2" class="${x.n ? '' : 'zero'}"><title>${fmtDay(x.d)}: ${x.n} Abfragen</title></rect>`; }).join('')}
+  </svg>`;
+}
+function progressCard() {
+  const sec = noteSecure();
+  const l = dayLog();
+  const tg = nextTarget(sec);
+  const pct = Math.max(2, Math.min(100, (sec - tg.prev) / (tg.n - tg.prev) * 100));
+  const tempo = secureTempo();
+  const left = tg.n - sec;
+  const eta = tempo && tempo.rate > 0 ? today() + Math.ceil(left / tempo.rate) : null;
+  const wk = weekStart(today()), ws = weekStats(wk), atWk = secureAt(wk - 1);
+  const weekLine = atWk ? `<b>+${Math.max(0, sec - atWk.n)}</b> sichere Wörter diese Woche` : `<b>${ws.newWords}</b> neue Wörter diese Woche`;
+  let goal = '';
+  if (settings.goalWords > sec && settings.goalDate) {
+    const end = Math.floor(Date.parse(settings.goalDate) / 86400000);
+    const days = end - today();
+    if (days > 0) {
+      const need = Math.ceil((settings.goalWords - sec) / days);
+      const have = tempo ? Math.round(tempo.rate * 10) / 10 : null;
+      goal = `<p class="small" style="margin-top:8px">🎯 Dein Ziel: ${settings.goalWords.toLocaleString('de-DE')} bis ${fmtDate(end)} → dafür ≈ <b>${need}</b> Wörter pro Tag sicher machen${have !== null ? ` (dein Schnitt: ${have})` : ''}.${have !== null && need > Math.max(2 * have, 1) ? ' Das ist mehr als doppelt so viel wie jetzt – ein späteres Datum wäre realistischer.' : ''}</p>`;
+    }
+  }
+  return `${l.mile ? `<div class="card celebrate"><div class="target">🎉</div><p><b>${l.mile.toLocaleString('de-DE')} sichere Wörter!</b></p><p class="small">${(STAGES.find(x => x.min === l.mile) || {}).text || 'Stark – jedes davon hast du dir mehrfach selbst abgerufen.'}</p></div>` : ''}
+    <a class="card" href="#level" style="display:block;text-decoration:none;color:var(--text)">
+      <div class="row between"><b>Nächstes Etappenziel: ${tg.label}</b><span class="muted small">${sec} / ${tg.n}</span></div>
+      <div class="progress" style="margin-top:8px"><div style="width:${pct}%"></div></div>
+      <p class="small" style="margin:8px 0 0">Noch <b>${left}</b> sichere Wörter${eta ? ` · bei deinem Tempo etwa am <b>${fmtDate(eta)}</b>${tempo.rough ? ' (grob geschätzt)' : ''}` : ''}</p>
+      <p class="small" style="margin:4px 0 0">${weekLine} · ${ws.reviews} Abfragen · ${ws.days} Lerntage</p>
+      ${goal}
+      ${activityBars()}
+      <p class="muted small" style="margin:0">Abfragen pro Tag, letzte 30 Tage · „sicher“ = kommt erst in 3 Tagen oder später wieder</p>
+    </a>`;
+}
+
 views.home = function (root) {
   const l = dayLog();
   const total = minutesToday();
@@ -982,7 +1087,7 @@ views.home = function (root) {
   const dueS = dueIds(id => id.startsWith('s:')).length;
   const sentCount = allSentences().length;
   const info = {
-    vocab: `${l.newWords}/${newWordTempo().n} neu · ${dueW} fällig · ${hearQueue().length} verstehen`,
+    vocab: `${l.newWords}/${newWordTempo().n} neu · heute ${bitesText(Math.min(dueW, wordBudget())).replace(/^0 .*/, 'nichts')} wiederholen · ${hearQueue().length} verstehen`,
     review: `${dueS} fällig · bis zu ${Math.max(0, settings.newSentences - l.newSent)} neue`,
     listen: 'so viel wie möglich',
     shadow: '5–15 Minuten',
@@ -1006,6 +1111,7 @@ views.home = function (root) {
         ${plan.steps.map((st, i) => `<a class="plan-step" href="${st.href}"><span class="num">${'①②③'[i]}</span><span class="grow"><b>${esc(st.title)}</b><span class="meta">${esc(st.why)}</span></span><span>›</span></a>`).join('')}
       </div>`;
     })()}
+    ${progressCard()}
     <div class="stats">
       <div class="stat"><b>${learnedWords}</b><span>Wörter im Training</span></div>
       <div class="stat"><b>${sentencesInTraining}</b><span>Sätze im Training</span></div>
@@ -1039,11 +1145,7 @@ ${talkLocked() ? '' : `    <a class="card step" href="#talk">
         <div class="grow"><div><b>${s.title}</b></div><div class="meta">${m}/${s.goal} Min. · ${info[s.key]}</div></div>
         <div>›</div></a>`;
     }).join('')}
-    <div class="card">
-      <div class="row between"><b>Jahresziel: 10.000 Wörter</b><span class="muted small">${learnedWords} / 10.000</span></div>
-      <div class="progress" style="margin-top:8px"><div style="width:${Math.min(100, learnedWords / 100)}%"></div></div>
-      <p class="muted small">Mitgeliefert: ${starterWords(settings.lang).length} Wörter, nach Häufigkeit sortiert. Übersetzungen ungeprüft – Fehler mit ✎ korrigieren. Mehr unter „Wörter → Eigene“ importieren.</p>
-    </div>
+    <p class="muted small">Mitgeliefert: ${starterWords(settings.lang).length} Wörter, nach Häufigkeit sortiert. Übersetzungen ungeprüft – Fehler mit ✎ korrigieren. Mehr unter „Wörter → Eigene“ importieren.</p>
     <div class="row"><a class="btn grow" href="#settings">⚙️ Einstellungen & Backup</a><a class="btn grow" href="#method">📖 Methode</a></div>`;
 };
 
@@ -1061,6 +1163,7 @@ views.method = function (root) {
     <p class="muted small">Wichtig: Die Aussprache kommt aus der Sprachausgabe deines Geräts (keine Muttersprachler-Aufnahmen). Selbst übersetzte Sätze vor dem Lernen prüfen lassen – Fehler lernt man sonst mit.</p>`;
 };
 
+let vocabExtra = false; // „Freiwillig noch ein Häppchen“ über die Tagesportion hinaus
 views.vocab = function (root, arg) {
   const mode = arg || 'new';
   root.innerHTML = `
@@ -1068,7 +1171,7 @@ views.vocab = function (root, arg) {
     ${voiceNotice()}
     <div class="seg">
       <button data-m="new" class="${mode === 'new' ? 'on' : ''}">Neu</button>
-      <button data-m="recall" class="${mode === 'recall' ? 'on' : ''}">Abfragen (${dueIds(isWordId).length})</button>
+      <button data-m="recall" class="${mode === 'recall' ? 'on' : ''}">Abfragen (${Math.min(dueIds(isWordId).length, wordBudget())})</button>
       <button data-m="hear" class="${mode === 'hear' ? 'on' : ''}">Verstehen (${hearQueue().length})</button>
       <button data-m="own" class="${mode === 'own' ? 'on' : ''}">Eigene</button>
     </div>
@@ -1077,13 +1180,16 @@ views.vocab = function (root, arg) {
   const pane = $('#pane', root);
   if (mode === 'recall') {
     const due = dueIds(isWordId);
-    recallSession(pane, due.slice(0, REVIEW_CAP), {
+    const extra = vocabExtra; vocabExtra = false;
+    const budget = wordBudget();
+    recallSession(pane, due.slice(0, extra ? settings.bite : budget || 0), {
       big: 'target',
-      emptyText: 'Keine Wörter fällig.',
+      bite: settings.bite,
+      emptyText: due.length ? '✓ Deine Wiederholungen für heute sind geschafft. Der Rest verteilt sich auf die nächsten Tage.' : 'Keine Wörter fällig.',
       doneExtra: () => {
         const rest = dueIds(isWordId).length;
         const hear = hearQueue().length;
-        return (rest ? `<div class="card"><p class="small">Noch ${rest} fällig. Für heute reicht das – der Rest verteilt sich auf die nächsten Tage.</p><button class="btn" onclick="views.vocab($('#view'), 'recall')">Trotzdem weitere ${Math.min(rest, REVIEW_CAP)}</button></div>` : '')
+        return (rest ? `<div class="card"><p class="muted small">Weitere Wörter kommen in den nächsten Tagen dran.</p><button class="btn" onclick="vocabExtra = true; views.vocab($('#view'), 'recall')">Freiwillig: noch ein Häppchen</button></div>` : '')
           + (hear ? `<a class="btn big" href="#vocab/hear">Weiter: ${hear} Wörter verstehen (hören)</a>` : '');
       },
       correct: correctWord,
@@ -1117,6 +1223,7 @@ function hearQueue() {
 function hearSession(pane) {
   const queue = hearQueue();
   const steps = learnSteps();
+  const bite = biteCounter(settings.bite);
   let done = 0;
   function show() {
     keyHandler = null;
@@ -1131,7 +1238,7 @@ function hearSession(pane) {
     const isNew = !state.srs[id];
     steps.begin(id);
     pane.innerHTML = `
-      <div class="row between muted small"><span>${queue.length} übrig</span>${isNew ? '<span class="pill">neu in dieser Richtung</span>' : ''}</div>
+      ${bite.head(isNew)}
       <div class="card flash">
         <button class="btn big" id="h-play">🔊 Anhören</button>
         <div class="target" id="h-t" hidden>${esc(w.t)}</div>
@@ -1164,6 +1271,7 @@ function hearSession(pane) {
       done++;
       queue.shift();
       if (again) queue.splice(Math.min(LEARN_GAP, queue.length), 0, id);
+      if (bite.rated(r) && queue.length) { keyHandler = null; bite.pause(pane, new Set(queue).size, '#home', show); return; }
       show();
     };
     speak(w.t);
@@ -2250,6 +2358,7 @@ views.review = function (root) {
     <div id="pane"></div>`;
   recallSession($('#pane', root), ids, {
     big: 'sentence',
+    bite: settings.bite,
     wordHelp: true,
     typing: true,
     split: true,
@@ -3578,6 +3687,8 @@ function textRound(root, tx, sents) {
       };
     },
     big: sents ? 'sentence' : 'target',
+    bite: settings.bite,
+    quitHref: back,
     rev,
     typing: true,
     wordHelp: sents,
@@ -4612,6 +4723,9 @@ views.settings = function (root) {
     <div class="card">
       <label for="o-new">Neue Wörter pro Tag</label><input type="number" id="o-new" min="5" max="200" value="${settings.newWords}">
       <label for="o-sent">Neue Sätze pro Tag (Wiederholung)</label><input type="number" id="o-sent" min="0" max="100" value="${settings.newSentences}">
+      <label for="o-bite">Häppchen-Größe (Karten, dann kurze Pause)</label><select id="o-bite">${[10, 15, 20, 25].map(n => `<option ${n === settings.bite ? 'selected' : ''}>${n}</option>`).join('')}</select>
+      <label>Eigenes Ziel (optional): sichere Wörter bis Datum</label>
+      <div class="row"><input type="number" id="o-gw" min="0" max="20000" placeholder="z. B. 1000" value="${settings.goalWords || ''}" class="grow"><input type="date" id="o-gd" value="${esc(settings.goalDate || '')}" class="grow"></div>
       <label for="o-rate">Sprechtempo: <span id="o-rate-v">${settings.rate}</span></label><input type="range" id="o-rate" min="0.5" max="1.2" step="0.05" value="${settings.rate}" style="width:100%">
       <label for="o-var">Englisch-Variante</label>
       <select id="o-var"><option value="en-GB" ${settings.enVariant === 'en-GB' ? 'selected' : ''}>Britisch (en-GB)</option><option value="en-US" ${settings.enVariant === 'en-US' ? 'selected' : ''}>Amerikanisch (en-US)</option></select>
@@ -4661,6 +4775,9 @@ views.settings = function (root) {
     </div>`;
   const num = (el, min, max, fallback) => { const v = parseInt(el.value, 10); return isNaN(v) ? fallback : Math.min(max, Math.max(min, v)); };
   $('#o-new', root).onchange = e => { settings.newWords = num(e.target, 5, 200, 30); saveSettings(); };
+  $('#o-bite', root).onchange = e => { settings.bite = Number(e.target.value); saveSettings(); };
+  $('#o-gw', root).onchange = e => { settings.goalWords = Math.max(0, Math.min(20000, Number(e.target.value) || 0)); saveSettings(); };
+  $('#o-gd', root).onchange = e => { settings.goalDate = e.target.value; saveSettings(); };
   $('#o-sent', root).onchange = e => { settings.newSentences = num(e.target, 0, 100, 10); saveSettings(); };
   $('#o-rate', root).oninput = e => { settings.rate = Number(e.target.value); $('#o-rate-v', root).textContent = settings.rate; saveSettings(); };
   $('#o-var', root).onchange = e => { settings.enVariant = e.target.value; saveSettings(); };

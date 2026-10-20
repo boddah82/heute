@@ -210,3 +210,8 @@ mark { background: var(--accent-soft); color: var(--accent); font-weight: 700; b
 .rw.sel { background: var(--accent); color: #fff; }
 .rs.now { background: var(--accent-soft); border-radius: 4px; }
 .rpop { position: sticky; bottom: calc(70px + env(safe-area-inset-bottom)); background: var(--card); border: 1px solid var(--accent); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.15); z-index: 4; }
+
+.bars { width: 100%; height: 46px; display: block; margin: 10px 0 4px; }
+.bars rect { fill: var(--accent); }
+.bars rect.zero { fill: var(--line); }
+.celebrate { text-align: center; border: 2px solid var(--accent); }

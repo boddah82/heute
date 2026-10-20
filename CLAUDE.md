@@ -31,6 +31,7 @@ Karteikarten-Abfrage `recallSession()`: nach dem Aufdecken deckt „🙈 Zudecke
 
 ### Daten
 - `localStorage`: `sl.settings`, `sl.data.<lang>` (Zustand pro Sprache), `sl.sync`, `sl.talkcfg` (API-Schlüssel), `sl.talk.<lang>` (laufendes Gespräch), `sl.usage`.
+- Wiederholung: `nextCard()` (SM-2 ohne Seiteneffekte, ±10 % Streuung ab 3 Tagen, Verspätung zählt mit), `grade()`, Lernschritte `learnSteps()` in `recallSession`/`hearSession` (neue Karten zweimal, vergessene einmal gewusst, Wiederkehr nach `LEARN_GAP` Karten), Vorschau `rateButtons(steps.labels(id))`; Text-/Lese-Runden halten Tageslimits ein (`textNewLeft()`).
 - Zustand: `words`, `islands`, `srs` (SM-2, Intervalle in Tagen), `notes`/`noteTs`, `overrides`, `log` (pro Tag), `deleted` (Löschmarker), `builderVerbs`, `texts`, `grammar`, `weekTests`, `books`, `level`, `talkAdjust`, `resetAt`.
 - Jede Änderung setzt `ts: Date.now()`, Löschen ruft `markDeleted(id)` – nötig für `mergeState()` (Gist-Sync, neuerer Zeitstempel gewinnt).
 - Fotos: IndexedDB `sl-photos`, Schlüssel `<lang>|<id>`, nur lokal (nicht im Sync/Backup).

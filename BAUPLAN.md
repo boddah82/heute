@@ -13,7 +13,7 @@ Dieses Dokument beschreibt die Lern-App in `lernen/` so, dass ein anderes Claude
 Die App folgt wenigen Grundsätzen. Sie gelten für jedes Lernthema, nicht nur für Sprachen.
 
 1. **Aktiv abrufen statt wiederlesen (Active Recall).** Die App zeigt eine Frage, man erinnert sich selbst (laut, getippt oder im Kopf) und deckt erst dann auf. Die Anstrengung beim Erinnern ist der Lerneffekt.
-2. **Verteilte Wiederholung (Spaced Repetition, SM-2).** Nach jeder Abfrage bewertet man sich: Nochmal / Schwer / Gut / Leicht. Daraus berechnet die App, wann die Karte wiederkommt: erst nach 1 Tag, dann nach 3, 7, 20 Tagen und so weiter. Was sitzt, kommt seltener, was hakt, öfter.
+2. **Verteilte Wiederholung (Spaced Repetition, SM-2).** Nach jeder Abfrage bewertet man sich: Nochmal / Schwer / Gut / Leicht. Daraus berechnet die App, wann die Karte wiederkommt: erst nach 1 Tag, dann nach 3, 7, 20 Tagen und so weiter. Was sitzt, kommt seltener, was hakt, öfter. Neue und vergessene Karten kommen in derselben Runde nach ein paar anderen Karten wieder (Lernschritte), unter jedem Knopf steht, wann die Karte wiederkommt.
 3. **Eselsbrücken und eigene Bilder.** Zu jeder Karte kann man eine eigene Merkgeschichte schreiben oder einsprechen und ein eigenes Foto anhängen.
 4. **Wie ein Trainer, nicht wie ein Lehrbuch.** Keine vorgekauten Regeln, sondern Übungsformen, in denen man das Muster selbst entdeckt:
    - erst Beispiele, in denen sich nur eines ändert,

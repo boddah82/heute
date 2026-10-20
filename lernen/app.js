@@ -326,28 +326,81 @@ function newWordTempo() {
   return { n: Math.max(5, Math.min(80, Math.round(base * f))), reason };
 }
 
-// Einfache Wiederholungsplanung nach SM-2 (Intervalle in Tagen).
-function grade(id, r) {
-  const t = today();
-  const isNew = !state.srs[id];
-  const c = state.srs[id] || { iv: 0, ef: 2.5, reps: 0, lapses: 0, due: t };
-  if (r === 0) {
-    c.iv = 0; c.ef = Math.max(1.3, c.ef - 0.2); c.lapses++; c.due = t;
-  } else {
-    if (r === 1) { c.iv = Math.max(1, Math.round(c.iv * 1.2)); c.ef = Math.max(1.3, c.ef - 0.15); }
-    else if (r === 2) { c.iv = c.iv < 1 ? 1 : c.iv < 3 ? 3 : Math.round(c.iv * c.ef); }
-    else { c.iv = c.iv < 1 ? 3 : Math.round(Math.max(c.iv, 3) * c.ef * 1.3); c.ef += 0.15; }
-    c.reps++; c.due = t + c.iv;
-  }
-  c.ts = Date.now();
-  state.srs[id] = c;
+// Wiederholungsplanung nach SM-2 (Intervalle in Tagen), ohne Seiteneffekte – auch für die Vorschau unter den Knöpfen.
+function nextCard(c0, r, t, fuzz) {
+  const c = Object.assign({ iv: 0, ef: 2.5, reps: 0, lapses: 0, due: t }, c0);
+  if (r === 0) { c.iv = 0; c.ef = Math.max(1.3, c.ef - 0.2); c.lapses++; c.due = t; return c; }
+  // Zu spät, aber noch gewusst: die tatsächliche Pause zählt mit (Gut halb, Leicht ganz)
+  const late = c.iv >= 3 ? Math.max(0, t - c.due) : 0;
+  if (r === 1) { c.iv = Math.max(1, Math.round(c.iv * 1.2)); c.ef = Math.max(1.3, c.ef - 0.15); }
+  else if (r === 2) c.iv = c.iv < 1 ? 1 : c.iv < 3 ? 3 : Math.round((c.iv + late / 2) * c.ef);
+  else { c.iv = c.iv < 1 ? 3 : Math.round((Math.max(c.iv, 3) + late) * c.ef * 1.3); c.ef += 0.15; }
+  // ±10 % Streuung, damit nicht alle Karten einer Runde am selben Tag wiederkommen
+  if (fuzz && c.iv >= 3) c.iv = Math.max(3, Math.round(c.iv * (0.9 + Math.random() * 0.2)));
+  c.reps++; c.due = t + c.iv;
+  return c;
+}
+function logReview(id, r, isNew) {
   const l = dayLog();
   l.reviews++;
   if (isWordId(id)) { if (r === 0) l.wfail = (l.wfail || 0) + 1; else l.wok = (l.wok || 0) + 1; }
   if (isNew && id.startsWith('s:')) l.newSent++;
   // Punkte fürs Abrufen – gleich für jede Bewertung, damit sich ehrliches „Nochmal“ nicht rächt
   addXP(isWordId(id) || id.startsWith('r:') ? 2 : 3);
+}
+function grade(id, r) {
+  const isNew = !state.srs[id];
+  const c = nextCard(state.srs[id], r, today(), true);
+  c.ts = Date.now();
+  state.srs[id] = c;
+  logReview(id, r, isNew);
   persist();
+}
+// Lernschritte: Neue Karten kommen in der Runde nach LEARN_GAP anderen Karten wieder, bis sie zweimal
+// gewusst wurden (vergessene: einmal) – erst dann gilt der Abstand in Tagen. „Leicht“ überspringt das.
+const LEARN_GAP = 4;
+function learnSteps() {
+  const need = {};
+  const step = (id, r) => { // Schritt ohne neuen Abstand: Karte bleibt heute fällig
+    const isNew = !state.srs[id];
+    if (isNew) state.srs[id] = { iv: 0, ef: 2.5, reps: 0, lapses: 0, due: today(), ts: Date.now() };
+    logReview(id, r, isNew);
+    persist();
+    return true;
+  };
+  const days = n => n < 1 ? 'gleich' : n < 3 ? `${n} T` : n < 60 ? `~${n} T` : `~${Math.round(n / 30)} Mon`;
+  return {
+    begin(id) { const c = state.srs[id]; if (!(id in need) && (!c || c.iv === 0)) need[id] = c && c.reps > 0 ? 1 : 2; },
+    // Vorschau: wann kommt die Karte bei Nochmal/Schwer/Gut/Leicht wieder?
+    labels(id) {
+      const c = state.srs[id], t = today(), iv = r => days(nextCard(c, r, t).iv);
+      if (id in need) return ['gleich', 'gleich', need[id] > 1 ? 'gleich' : iv(2), iv(3)];
+      return ['gleich', iv(1), iv(2), iv(3)];
+    },
+    // true = Karte kommt in dieser Runde wieder
+    rate(id, r) {
+      if (!(id in need)) {
+        grade(id, r);
+        if (r === 0) { need[id] = 1; return true; }
+        return false;
+      }
+      if (r === 0) { grade(id, 0); need[id] = state.srs[id].reps > 0 ? 1 : 2; return true; }
+      if (r === 3) { delete need[id]; grade(id, 3); return false; }
+      if (r === 1) return step(id, r); // Schwer: Schritt wiederholen
+      if (--need[id] > 0) return step(id, r);
+      delete need[id];
+      grade(id, r);
+      return false;
+    },
+  };
+}
+function rateButtons(lb) {
+  return `<div class="rate">
+          <button class="btn again" data-r="0">Nochmal<small>${lb[0]}</small></button>
+          <button class="btn hard" data-r="1">Schwer<small>${lb[1]}</small></button>
+          <button class="btn good" data-r="2">Gut<small>${lb[2]}</small></button>
+          <button class="btn easy" data-r="3">Leicht<small>${lb[3]}</small></button>
+        </div>`;
 }
 
 // ---------- Zeitmessung ----------
@@ -703,6 +756,7 @@ document.addEventListener('keydown', e => { if (keyHandler) keyHandler(e); });
 // Zeigt die deutsche Seite, der Nutzer produziert die Antwort (sprechen/tippen/denken), deckt auf und bewertet.
 function recallSession(root, ids, cfg) {
   const queue = ids.slice();
+  const steps = learnSteps();
   let done = 0;
   function show() {
     keyHandler = null;
@@ -718,6 +772,7 @@ function recallSession(root, ids, cfg) {
     if (!raw) { queue.shift(); show(); return; }
     const it = cfg.big === 'target' ? numberCard(raw) : Object.assign({}, raw, { t: numText(raw.t) });
     const cx = cfg.ctx && cfg.ctx(id);
+    steps.begin(id);
     const m = cfg.big === 'target' ? splitMeaning(it.d, id) : { de: it.d };
     root.innerHTML = `
       <div class="row between muted small"><span>${queue.length} übrig</span>${it.isNew ? '<span class="pill">neu</span>' : ''}</div>
@@ -737,12 +792,7 @@ function recallSession(root, ids, cfg) {
       <div id="post" hidden class="stack">
         <div class="row"><button class="btn" id="cover" title="Lösung wieder verstecken, dann ohne Hilfe nochmal sagen">🙈 Zudecken</button><button class="btn grow" id="replay">🔊 Nochmal hören</button>${cfg.correct ? '<button class="btn" id="fix">✎ Korrigieren</button>' : ''}${cfg.check && talkCfg.key ? '<button class="btn" id="chk" title="Mit Claude prüfen (≈ 1–3 Cent)">🔍 Prüfen</button>' : ''}${cfg.split && talkCfg.key && canSplit(id) ? '<button class="btn" id="split" title="Langen Satz in Teile zerlegen (≈ 1–3 Cent)">✂️ Aufteilen</button>' : ''}</div>
         <div id="chk-out"></div>
-        <div class="rate">
-          <button class="btn again" data-r="0">Nochmal</button>
-          <button class="btn hard" data-r="1">Schwer</button>
-          <button class="btn good" data-r="2">Gut</button>
-          <button class="btn easy" data-r="3">Leicht</button>
-        </div>
+        ${rateButtons(steps.labels(id))}
         <p class="muted small">Laut nachsprechen, dann ehrlich bewerten. Tasten 1–4 gehen auch. Zum Einprägen: 🙈 zudecken und ohne Lösung nochmal sagen.</p>
         <details class="card" id="memo" style="margin-top:4px">
           <summary><b>🧠 ${it.note ? 'Eselsbrücke & Foto bearbeiten' : 'Eselsbrücke & Foto hinzufügen'}</b></summary>
@@ -806,10 +856,10 @@ function recallSession(root, ids, cfg) {
     if (cfg.rev) { speak(it.t); $('#q-say', root).onclick = () => speak(it.t); }
     const rate = r => {
       cfg.onRate && cfg.onRate(id, r, it.isNew);
-      grade(id, r);
+      const again = steps.rate(id, r);
       done++;
       queue.shift();
-      if (r === 0) queue.push(id);
+      if (again) queue.splice(Math.min(LEARN_GAP, queue.length), 0, id);
       show();
     };
     const setMeaning = d => {
@@ -1066,6 +1116,7 @@ function hearQueue() {
 }
 function hearSession(pane) {
   const queue = hearQueue();
+  const steps = learnSteps();
   let done = 0;
   function show() {
     keyHandler = null;
@@ -1078,6 +1129,7 @@ function hearSession(pane) {
     const w = wordById(wid);
     if (!w) { queue.shift(); show(); return; }
     const isNew = !state.srs[id];
+    steps.begin(id);
     pane.innerHTML = `
       <div class="row between muted small"><span>${queue.length} übrig</span>${isNew ? '<span class="pill">neu in dieser Richtung</span>' : ''}</div>
       <div class="card flash">
@@ -1095,12 +1147,7 @@ function hearSession(pane) {
       </div>
       <div id="h-post" hidden class="stack">
         <div class="row"><button class="btn grow" id="h-fix">✎ Korrigieren</button></div>
-        <div class="rate">
-          <button class="btn again" data-r="0">Nochmal</button>
-          <button class="btn hard" data-r="1">Schwer</button>
-          <button class="btn good" data-r="2">Gut</button>
-          <button class="btn easy" data-r="3">Leicht</button>
-        </div>
+        ${rateButtons(steps.labels(id))}
       </div>`;
     let revealed = false;
     const reveal = () => {
@@ -1113,10 +1160,10 @@ function hearSession(pane) {
     };
     const rate = r => {
       if (isNew) { const l = dayLog(); l.newHear = (l.newHear || 0) + 1; }
-      grade(id, r);
+      const again = steps.rate(id, r);
       done++;
       queue.shift();
-      if (r === 0) queue.push(id);
+      if (again) queue.splice(Math.min(LEARN_GAP, queue.length), 0, id);
       show();
     };
     speak(w.t);
@@ -3481,19 +3528,27 @@ function textStats(tx) {
   };
 }
 // Runde: fällige Karten des Texts (max. REVIEW_CAP) + wenige neue in Textreihenfolge
+// Neue Karten, die heute noch gehen – dieselben Tageslimits wie in der normalen Abfrage
+function textNewLeft(sents) {
+  const l = dayLog();
+  if (sents) return Math.max(0, settings.newSentences - l.newSent);
+  if (settings.cardRev) return Math.max(0, HEAR_NEW - (l.newHear || 0));
+  return Math.max(0, newWordTempo().n + (l.extraNew || 0) - l.newWords);
+}
 function textQueue(tx, sents) {
   const t = today();
+  const room = textNewLeft(sents);
   if (sents) {
     const lines = tx.lines.filter(l => l.de);
     const ids = lines.map(l => (sentenceKnown(l.t) || {}).id);
     const due = ids.filter(id => id && state.srs[id] && state.srs[id].due <= t).slice(0, REVIEW_CAP);
-    const fresh = lines.filter((l, k) => !(ids[k] && state.srs[ids[k]])).slice(0, TEXT_NEW_S).map(l => lineToIsland(tx, l));
+    const fresh = lines.filter((l, k) => !(ids[k] && state.srs[ids[k]])).slice(0, Math.min(TEXT_NEW_S, room)).map(l => lineToIsland(tx, l));
     return withParts(due.concat(fresh));
   }
   const key = id => settings.cardRev ? 'r:' + id : id;
   const items = textWordItems(tx);
   const due = items.filter(x => x.id && state.srs[key(x.id)] && state.srs[key(x.id)].due <= t).map(x => key(x.id)).slice(0, REVIEW_CAP);
-  const fresh = items.filter(x => !(x.id && state.srs[key(x.id)])).slice(0, TEXT_NEW_W).map(x => {
+  const fresh = items.filter(x => !(x.id && state.srs[key(x.id)])).slice(0, Math.min(TEXT_NEW_W, room)).map(x => {
     if (!x.id) { x.id = 'u:' + uid(); state.words.push({ id: x.id, t: x.t, d: wordMeaning(x), ts: Date.now() }); }
     return key(x.id);
   });
@@ -3527,7 +3582,7 @@ function textRound(root, tx, sents) {
     typing: true,
     wordHelp: sents,
     split: sents,
-    emptyText: 'Aus diesem Text ist gerade nichts fällig. Die Karten kommen wieder, wenn sie dran sind.',
+    emptyText: textNewLeft(sents) ? 'Aus diesem Text ist gerade nichts fällig. Die Karten kommen wieder, wenn sie dran sind.' : `Nichts fällig, und dein Tageslimit für neue ${sents ? 'Sätze' : 'Wörter'} ist erreicht – morgen geht's weiter.`,
     get: id => {
       const wid = rev ? id.slice(2) : id;
       const x = sents ? findSentence(id) : wordById(wid);
@@ -3542,11 +3597,19 @@ function textRound(root, tx, sents) {
     doneExtra: () => {
       const st = textStats(tx)[sents ? 's' : 'w'];
       const open = st.total - st.train;
+      const room = textNewLeft(sents);
+      const more = Math.min(open, room, sents ? TEXT_NEW_S : TEXT_NEW_W);
       return `<div class="card"><p class="small">${st.total} ${sents ? 'Sätze' : 'Wörter'} · ${st.train} im Training · ${st.sure} sitzen · ${open} noch neu</p>
         <p class="muted small">Fällige Karten kommen von selbst wieder – hier und in der normalen ${sents ? 'Satz-Abfrage' : 'Wort-Abfrage'}.</p></div>
-        <div class="row">${open ? `<button class="btn grow" id="tr-more">Noch eine Runde (${Math.min(open, sents ? TEXT_NEW_S : TEXT_NEW_W)} neue)</button>` : ''}<a class="btn primary grow" href="${back}">${tx.back ? 'Zum Kapitel' : 'Zum Text'}</a></div>`;
+        ${open && !room ? `<p class="small">Tageslimit für neue ${sents ? 'Sätze' : 'Wörter'} erreicht – morgen geht's weiter. Mehr auf einmal führt in ein paar Tagen zu einem Stau.</p>${!sents && !rev ? '<button class="btn small" id="tr-extra">Heute trotzdem 10 mehr</button>' : ''}` : ''}
+        <div class="row">${more ? `<button class="btn grow" id="tr-more">Noch eine Runde (${more} neue)</button>` : ''}<a class="btn primary grow" href="${back}">${tx.back ? 'Zum Kapitel' : 'Zum Text'}</a></div>`;
     },
-    onDone: pane => { const b = $('#tr-more', pane); if (b) b.onclick = () => textRound(root, tx, sents); },
+    onDone: pane => {
+      const b = $('#tr-more', pane);
+      if (b) b.onclick = () => textRound(root, tx, sents);
+      const x = $('#tr-extra', pane);
+      if (x) x.onclick = () => { l.extraNew = (l.extraNew || 0) + 10; persist(); textRound(root, tx, sents); };
+    },
   });
 }
 

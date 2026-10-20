@@ -30,8 +30,9 @@ Die App folgt wenigen Grundsätzen. Sie gelten für jedes Lernthema, nicht nur f
    - Pro Runde höchstens 50 Wiederholungen; Rückstand nach Pausen wird verteilt statt nachgeholt.
    - Lange Vernachlässigtes nach vorn.
    - Neues aussetzen, wenn der Rückstand groß ist.
-10. **Ehrlich messen.** Wochen-Check ohne KI, Punkte für jede ehrliche Bewertung (auch „Nochmal“), eine Serie mit Jokern statt Strafe.
-11. **Kosten offen zeigen.** Alles ohne KI ist kostenlos und offline. KI-Funktionen zeigen eine geschätzte Kosten-Angabe und merken sich das Ergebnis, damit nichts doppelt bezahlt wird.
+10. **Kleine Häppchen, sichtbarer Fortschritt.** Abfragen in Portionen à 15 mit Zwischenstand, keine großen Rückstandszahlen; statt eines fernen Riesenziels das nächste Etappenziel mit Prognose aus dem eigenen Tempo.
+11. **Ehrlich messen.** Wochen-Check ohne KI, Punkte für jede ehrliche Bewertung (auch „Nochmal“), eine Serie mit Jokern statt Strafe.
+12. **Kosten offen zeigen.** Alles ohne KI ist kostenlos und offline. KI-Funktionen zeigen eine geschätzte Kosten-Angabe und merken sich das Ergebnis, damit nichts doppelt bezahlt wird.
 
 ---
 

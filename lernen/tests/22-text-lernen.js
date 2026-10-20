@@ -41,7 +41,8 @@ const URL = 'http://localhost:8765/';
   // Runde rated wie die normale Abfrage: erste Karte „Nochmal“ (kommt in der Runde wieder), Rest „Gut“
   const round = async () => {
     let n = 0, first = true;
-    while (await p.$('#reveal')) {
+    while (await p.$('#reveal') || await p.$('#bite-more')) {
+      if (await p.$('#bite-more')) { await p.click('#bite-more'); continue; }
       await p.click('#reveal');
       await p.click(first ? '.rate [data-r="0"]' : '.rate [data-r="2"]');
       first = false; n++;

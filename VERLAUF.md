@@ -50,6 +50,8 @@ Zusammenfassung der bisherigen Arbeit (Sept./Okt. 2026, Claude Code im Web) für
 
 33. **Muster-Drill „🔁 Varianten“**: Anlass: Video eines Sprachtrainers (1000 nützliche Sätze, Pattern Drills wie FSI/DLI). Einen bekannten Satz 15-mal leicht abgewandelt laut sagen (ein Wort anders → andere Person → verneint → Frage → Vergangenheit → Zukunft → länger), Claude schreibt die Varianten einmal pro Satz. Keine Bewertung, einzelne Varianten per „➕ Insel“ als Satz-Karte. Weitere Ideen aus dem Video, noch nicht gebaut: neue Häufigkeitswörter nur mit Beispielsatz, Vorlage-Insel „Kennenlernen“ als Frage-Antwort-Paare, Zähler „sichere Sätze“. Widerspruch an Ricky: „1000 Wörter = 80 %“ heißt jedes 5. Wort unbekannt; kurze Grammatik-Erklärung nach dem Muster hilft Erwachsenen trotzdem.
 
+34. **Kein Wort ohne Satz**: zweite Idee aus dem Video. Neue Wortkarte zeigt einen eigenen Satz mit dem Wort, sonst einen kurzen Alltagssatz von Claude (auf Knopfdruck oder automatisch, 10 Wörter pro Aufruf); Satz nur auf Wunsch („➕ Satz lernen“) als Satz-Karte, damit sich die Abfragen nicht verdoppeln. In der Wort-Abfrage „📖 Satz zeigen“ vorne auf Deutsch, hinten der Satz.
+
 ## Bewusst nicht gemacht / abgelehnt
 - KI-Übersetzung für eigene Sprachinseln (manuell gewünscht), Emoji-Bilder, KI-Merkbild als Text. (Prüfknopf zuerst abgelehnt, später gewünscht – siehe 21.)
 - Sprachaufnahme der eigenen Stimme als Eselsbrücke (Text-Diktat gebaut; Audio wäre möglich, nicht angefragt).

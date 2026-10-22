@@ -2760,6 +2760,7 @@ views.shadow = function (root) {
         ${window.MediaRecorder ? '<button class="btn grow" id="s-rec">🎙 Aufnehmen</button>' : ''}
         ${SR ? '<button class="btn grow" id="s-check">✅ Aussprache prüfen</button>' : ''}
         ${talkCfg.key && canSplit(s.id) ? '<button class="btn" id="s-split" title="In Teile zerlegen (≈ 1–3 Cent)">✂️ Aufteilen</button>' : ''}
+        ${varLink(s.id)}
       </div>
       <div id="s-own" style="margin-top:8px"></div>
       <div class="row" style="margin-top:12px">
@@ -2944,13 +2945,51 @@ function bindSentenceCard(pane, sent) {
   }
 }
 
+// ---------- Muster-Drill: einen bekannten Satz in vielen kleinen Abwandlungen laut sagen ----------
+// Claude schreibt einmal pro Satz 15 Varianten (gespeichert als s.vars), danach kostenlos. Keine Bewertung, nur Tempo und Wiederholung.
+const VAR_KINDS = { word: '🔄 ein Wort anders', person: '👤 andere Person', neg: '🚫 verneint', question: '❓ als Frage', past: '⏪ Vergangenheit', future: '⏩ Zukunft / Plan', longer: '➕ länger' };
+const VAR_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['variants'],
+  properties: { variants: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['t', 'de', 'kind'], properties: { t: { type: 'string' }, de: { type: 'string' }, kind: { type: 'string', enum: Object.keys(VAR_KINDS) } } } } },
+};
+async function makeVariants(id, btn) {
+  const s = findSentence(id);
+  if (!s) return false;
+  const lang = settings.lang === 'it' ? 'Italian' : 'British English';
+  btn.disabled = true; btn.textContent = '🔁 Schreibe Varianten …';
+  try {
+    const r = await callClaude(
+      `A German-speaking learner of ${lang} does a pattern drill, as in intensive language courses: they take one sentence they already know and say many small variations of it out loud, fast, until the sentence structure is automatic. Write 15 variations of the given sentence, getting gradually harder, in this order: about 5 where exactly one word is swapped (another place, activity, object, time …, kind "word"); then another person, e.g. she/we/you (kind "person"); negation ("neg"); a question ("question"); past ("past"); future or plan ("future"); finally 2–3 slightly longer combinations, e.g. with "but", "because" or "anymore" ("longer"). Change as little as possible each time, so the pattern of the original stays clearly visible. Everyday ${lang} a native speaker would really say – natural, idiomatic language always comes before reusing the exact words; keep the vocabulary common and simple. No duplicates, none identical to the original. "de" = a natural German translation. ${numberRule()}${settings.teen ? ' ' + TEEN_RULES : ''}`,
+      [{ role: 'user', content: `${lang}: ${s.t}\nGerman: ${s.d}` }], VAR_SCHEMA, 6000);
+    const norm = x => x.toLowerCase().replace(/[.,!?¿¡;:"“”«»]/g, '').replace(/\s+/g, ' ').trim();
+    const seen = new Set([norm(s.t)]);
+    const vars = (r.data.variants || []).filter(v => v.t && v.de && !seen.has(norm(v.t)) && seen.add(norm(v.t))).map(v => ({ t: v.t.trim(), d: v.de.trim(), k: v.kind }));
+    if (!vars.length) throw new Error('Keine Varianten erhalten – bitte nochmal versuchen.');
+    s.vars = vars; s.ts = Date.now();
+    persist();
+    return true;
+  } catch (e) { toast(e.message); btn.disabled = false; btn.textContent = '🔁 Varianten erstellen'; return false; }
+}
+// Wörter der Variante, die im Ausgangssatz nicht vorkommen, markiert
+function markChanged(base, t) {
+  const norm = w => w.toLowerCase().replace(/[.,!?¿¡;:"“”«»]/g, '');
+  const known = new Set(base.split(/\s+/).map(norm));
+  return t.split(/(\s+)/).map(w => /^\s*$/.test(w) || known.has(norm(w)) ? esc(w) : `<mark>${esc(w)}</mark>`).join('');
+}
+function varLink(id, small) {
+  const s = findSentence(id);
+  if (!s || !(talkCfg.key || (s.vars && s.vars.length))) return '';
+  return `<a class="btn${small ? ' small' : ''}" href="#builder/var~${encodeURIComponent(id)}" title="Muster-Drill: 15 Abwandlungen laut sagen${s.vars ? '' : ' (≈ 1–3 Cent)'}">🔁${small ? '' : ' Varianten'}</a>`;
+}
+
 views.builder = function (root, arg) {
   const b = builderData();
   const it = settings.lang === 'it';
-  const mode = ['modal', 'be', 'like', 'dialog', 'drill'].includes(arg) ? arg : 'modal';
+  const [m0, varId] = (arg || '').split('~');
+  const mode = ['modal', 'be', 'like', 'dialog', 'drill', 'var'].includes(m0) ? m0 : 'modal';
   const selKey = 'sl.builder.' + settings.lang;
   const sel = Object.assign({ m: 0, v: 0, time: -1, neg: false, a: 2, bl: 0, l: 0, ll: 0 }, load(selKey, {}));
-  const labels = { modal: it ? 'Voglio …' : 'I want to …', be: it ? 'Sono …' : "I'm …", like: it ? 'Mi piace …' : 'I like …', dialog: 'Fragen', drill: '🎲 Drill' };
+  const labels = { modal: it ? 'Voglio …' : 'I want to …', be: it ? 'Sono …' : "I'm …", like: it ? 'Mi piace …' : 'I like …', dialog: 'Fragen', drill: '🎲 Drill', var: '🔁 Varianten' };
   root.innerHTML = `
     ${islandsSeg('builder')}
     <p class="muted small">Wenige feste Satzmuster über dich selbst, dazu austauschbare Wörter – so entstehen hunderte einfache Sätze. Damit kannst du nach wenigen Wochen erste kleine Gespräche führen.</p>
@@ -2968,6 +3007,7 @@ views.builder = function (root, arg) {
     else if (mode === 'be') renderBe();
     else if (mode === 'like') renderLike();
     else if (mode === 'dialog') renderDialog();
+    else if (mode === 'var') varId ? renderVarDrill(findSentence(decodeURIComponent(varId))) : renderVarList();
     else renderDrill();
   }
 
@@ -3130,6 +3170,104 @@ views.builder = function (root, arg) {
       if (e.target.tagName === 'INPUT') return;
       if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if ($('#pre', pane).hidden) $('#next', pane).click(); else reveal(); }
     };
+  }
+
+
+  // Muster-Drill: Satz auswählen – schwierige Sätze zuerst
+  function renderVarList() {
+    const weak = weakSentences();
+    const src = sel.vi === 'weak' && weak.length ? 'weak' : state.islands.some(i => i.id === sel.vi) ? sel.vi : weak.length ? 'weak' : (state.islands[0] || {}).id;
+    const list = src === 'weak' ? weak : ((state.islands.find(i => i.id === src) || {}).sentences || []).filter(s => !s.partOf);
+    pane.innerHTML = `
+      <div class="card">
+        <p><b>Ein Satz – viele Abwandlungen.</b> Du nimmst einen Satz, den du kennst, und sagst ihn 15-mal leicht verändert laut: ein Wort anders, eine andere Person, verneint, als Frage, in der Vergangenheit … So sitzt am Ende das Muster, nicht nur der eine Satz.</p>
+        <p class="muted small">Claude schreibt die Varianten einmal pro Satz (≈ 1–3 Cent), danach kostenlos. Keine Bewertung – nur laut und zügig sprechen.</p>
+      </div>
+      ${talkCfg.key ? '' : '<div class="notice">Für neue Varianten brauchst du einen API-Schlüssel → <a href="#talk/setup">Einrichten</a>. Schon erstellte Varianten gehen auch ohne.</div>'}
+      ${islandSelect('v-isl', src, false, weak.length)}
+      <ul class="list card" style="margin-top:10px">
+        ${list.map(s => `<li><a class="grow" href="#builder/var~${encodeURIComponent(s.id)}" style="color:inherit;text-decoration:none"><div class="t">${esc(s.t)}</div><div class="d">${esc(s.d)}</div></a>${s.vars && s.vars.length ? `<span class="muted small">🔁 ${s.vars.length}</span>` : ''}</li>`).join('') || '<li class="muted">Keine Sätze.</li>'}
+      </ul>`;
+    $('#v-isl', pane).onchange = e => { sel.vi = e.target.value; store(); renderVarList(); };
+  }
+
+  function renderVarDrill(s) {
+    if (!s) { pane.innerHTML = '<div class="card">Satz nicht gefunden. <a href="#builder/var">Zur Auswahl</a></div>'; return; }
+    if (!s.vars || !s.vars.length) {
+      pane.innerHTML = `
+        <div class="card flash"><div class="muted small">Ausgangssatz</div><div class="sentence">${esc(numText(s.t))}</div><div class="native">${esc(s.d)}</div></div>
+        ${talkCfg.key ? '<button class="btn primary" id="v-make" style="width:100%">🔁 Varianten erstellen (≈ 1–3 Cent)</button>' : '<div class="notice">Dafür brauchst du einen API-Schlüssel → <a href="#talk/setup">Einrichten</a></div>'}
+        <p><a href="#builder/var">‹ Anderer Satz</a></p>`;
+      if ($('#v-make', pane)) $('#v-make', pane).onclick = async () => { if (await makeVariants(s.id, $('#v-make', pane))) renderVarDrill(findSentence(s.id)); };
+      return;
+    }
+    let order = s.vars.map((v, k) => k), i = 0;
+    const base = numText(s.t);
+    const show = () => {
+      const l = dayLog();
+      if (i >= order.length) {
+        keyHandler = null;
+        pane.innerHTML = `
+          <div class="card"><b>🎉 ${order.length} Varianten geschafft.</b><p class="muted small">Am besten gleich nochmal, diesmal gemischt und schneller – oder morgen wieder.</p></div>
+          <div class="stack">
+            <button class="btn primary" id="v-again">🔀 Nochmal gemischt</button>
+            ${talkCfg.key ? '<button class="btn" id="v-new">🔄 Neue Varianten (≈ 1–3 Cent)</button>' : ''}
+            <a class="btn" href="#builder/var">‹ Anderer Satz</a>
+          </div>`;
+        $('#v-again', pane).onclick = () => { order = shuffle(order); i = 0; show(); };
+        if ($('#v-new', pane)) $('#v-new', pane).onclick = async () => { if (await makeVariants(s.id, $('#v-new', pane))) renderVarDrill(findSentence(s.id)); };
+        return;
+      }
+      const v = s.vars[order[i]];
+      const t = numText(v.t);
+      pane.innerHTML = `
+        <div class="row between muted small"><span>Variante ${i + 1}/${order.length} · ${VAR_KINDS[v.k] || ''}</span><span>laut sprechen!</span></div>
+        <div class="muted small">Ausgangssatz: ${esc(base)}</div>
+        <div class="card flash">
+          <div class="muted small">Sag auf ${LANGS[settings.lang].name}:</div>
+          <div class="native">${esc(v.d)}</div>
+          <div id="answer" hidden><div class="sentence" style="margin-top:10px">${markChanged(base, t)}</div><div id="cmp" class="small"></div></div>
+        </div>
+        <div class="row" id="pre">
+          ${SR ? '<button class="btn" id="say">🎙 Sprechen</button>' : ''}
+          <button class="btn primary grow" id="reveal">Aufdecken</button>
+        </div>
+        <div class="row" id="post" hidden>
+          <button class="btn" id="again">🔊</button>
+          <button class="btn" id="add" title="Als Satz-Karte in die Insel des Ausgangssatzes">➕ Insel</button>
+          <button class="btn primary grow" id="next">Weiter ›</button>
+        </div>
+        <p class="muted small" style="margin-top:12px">Heute ${l.drill || 0} Sätze im Drill · <a href="#builder/var">anderer Satz</a></p>`;
+      let said = '';
+      const reveal = () => {
+        $('#answer', pane).hidden = false;
+        $('#pre', pane).hidden = true;
+        $('#post', pane).hidden = false;
+        if (said) {
+          const c = compareWords(t, said);
+          $('#cmp', pane).innerHTML = `<p>Gesagt: „${esc(said)}“</p><p>${c.html} <b>${c.score}%</b></p>`;
+        }
+        speak(t);
+      };
+      $('#reveal', pane).onclick = reveal;
+      $('#again', pane).onclick = () => speak(t);
+      $('#add', pane).onclick = () => {
+        const isl = state.islands.find(x => x.sentences.includes(s));
+        if (!isl) return;
+        if (isl.sentences.some(x => x.t === v.t)) { toast('Schon in der Insel'); return; }
+        isl.sentences.splice(isl.sentences.indexOf(s) + 1, 0, { id: 's:' + uid(), t: v.t, d: v.d, ts: Date.now() });
+        isl.ts = Date.now();
+        persist();
+        toast(`In Insel „${isl.title}“ – kommt in die Satz-Abfrage`);
+      };
+      $('#next', pane).onclick = () => { l.drill = (l.drill || 0) + 1; addXP(2); persist(); i++; show(); };
+      if ($('#say', pane)) micToggle($('#say', pane), '🎙 Sprechen', x => { said = x; reveal(); }, live => { $('#cmp', pane).innerHTML = `<p class="muted">${esc(live)}</p>`; $('#answer', pane).hidden = true; });
+      keyHandler = e => {
+        if (e.target.tagName === 'INPUT') return;
+        if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if ($('#pre', pane).hidden) $('#next', pane).click(); else reveal(); }
+      };
+    };
+    show();
   }
 
   render();
@@ -3997,6 +4135,7 @@ function islandDetail(root, isl) {
         <li><button class="btn small" data-play="${s.id}">🔊</button>
           <div class="grow"><div class="t">${s.partOf ? '<span class="muted">↳ </span>' : ''}${esc(s.t)}</div><div class="d">${esc(s.d)}</div>${photoEditor(s.id)}</div>
           ${talkCfg.key && canSplit(s.id) ? `<button class="btn small" data-split="${s.id}" title="In Teile zerlegen (≈ 1–3 Cent)">✂️</button>` : ''}
+          ${varLink(s.id, true)}
           <button class="btn small" data-edit="${s.id}">✎</button>
           <button class="btn small danger" data-del="${s.id}">✕</button></li>`).join('') || '<li class="muted">Noch keine Sätze.</li>'}
     </ul>

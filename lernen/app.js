@@ -86,7 +86,7 @@ function starterIslands(lang) {
 }
 function stateKey(lang) { return 'sl.data.' + lang; }
 function emptyState() {
-  return { words: [], islands: [], srs: {}, notes: {}, noteTs: {}, overrides: {}, log: {}, deleted: {}, builderVerbs: [], resetAt: 0, level: null, talkAdjust: 0, texts: [], grammar: {}, weekTests: {}, books: [] };
+  return { words: [], islands: [], srs: {}, notes: {}, noteTs: {}, overrides: {}, log: {}, deleted: {}, builderVerbs: [], resetAt: 0, level: null, talkAdjust: 0, texts: [], grammar: {}, weekTests: {}, books: [], examples: {} };
 }
 function loadState(lang) {
   let s = load(stateKey(lang), null);
@@ -1195,6 +1195,8 @@ views.vocab = function (root, arg) {
       correct: correctWord,
       check: checkWordUI,
       get: id => { const w = wordById(id); return w && { t: w.t, d: w.d, note: state.notes[id] }; },
+      // Beispielsatz: vorne nur Deutsch (sonst steht die Lösung da), hinten der Satz mit markiertem Wort
+      ctx: id => { const ex = exampleFor(id); return ex && { front: esc(ex.d), back: `<div class="small muted">${markWord(numText(ex.t), ex.w)}<br>${esc(ex.d)}</div>` }; },
     });
   } else if (mode === 'hear') {
     hearSession(pane);
@@ -2191,6 +2193,62 @@ function wordPriorities() {
   return prio;
 }
 
+// ---------- Beispielsätze für neue Wörter: kein Wort ohne Satz ----------
+// Zuerst ein eigener Satz (aus den Inseln), sonst ein Beispielsatz von Claude (state.examples, 10 Wörter pro Aufruf).
+const EX_BATCH = 10;
+const EX_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['items'],
+  properties: { items: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['i', 't', 'de', 'w'], properties: { i: { type: 'integer' }, t: { type: 'string' }, de: { type: 'string' }, w: { type: 'string' } } } } },
+};
+let exIndex = null; // Wort-ID → eigener Satz; neu aufgebaut, wenn sich die Inseln ändern
+function ownSentenceFor(id) {
+  const key = state.islands.map(i => i.id + ':' + i.sentences.length).join('|');
+  if (!exIndex || exIndex.key !== key) {
+    const m = new Map();
+    allSentences().forEach(s => wordsInSentence(s.t).forEach(w => { if (!m.has(w) || s.t.length < m.get(w).t.length) m.set(w, s); }));
+    exIndex = { key, m };
+  }
+  return exIndex.m.get(id) || null;
+}
+// { t, d, w (markiertes Wort), own }
+function exampleFor(id) {
+  const own = ownSentenceFor(id);
+  if (own) { const w = wordById(id); return { t: own.t, d: own.d, w: w ? w.t : '', own: true }; }
+  const ex = state.examples[id];
+  return ex ? { t: ex.t, d: ex.d, w: ex.w, own: false } : null;
+}
+async function fetchExamples(ids, btn) {
+  const lang = settings.lang === 'it' ? 'Italian' : 'British English';
+  const words = ids.map(wordById).filter(Boolean);
+  if (!words.length) return false;
+  if (btn) { btn.disabled = true; btn.textContent = '💬 Hole Beispielsätze …'; }
+  try {
+    const r = await callClaude(
+      `A German-speaking learner of ${lang} learns new words, but never in isolation – every word comes with one example sentence. For every numbered word (with the German meaning from the learner's flashcard) write one short sentence (about 4–8 words) that a native speaker would really say in everyday life, using the word in exactly this meaning (if the German meaning is wrong, use the most common meaning). Prefer simple, common words around it and useful everyday situations (talking about yourself, plans, shopping, food, travel, work, friends), never textbook sentences like "the cat is on the table". Natural, idiomatic language always comes first. Return one item per word: "i" = its number, "t" = the sentence, "de" = a natural German translation, "w" = the word exactly as it appears in "t" (it may be a different form, e.g. a conjugated verb). ${numberRule()}${settings.teen ? ' ' + TEEN_RULES : ''}`,
+      [{ role: 'user', content: words.map((w, i) => `${i}: ${w.t} = ${splitMeaning(w.d, w.id).de}`).join('\n') }], EX_SCHEMA, 6000);
+    let n = 0;
+    (r.data.items || []).forEach(x => {
+      const w = words[x.i];
+      if (!w || !x.t || !x.de) return;
+      state.examples[w.id] = { t: x.t.trim(), d: x.de.trim(), w: (x.w || w.t).trim(), ts: Date.now() };
+      n++;
+    });
+    persist();
+    if (!n) throw new Error('Keine Beispielsätze erhalten – bitte nochmal versuchen.');
+    return true;
+  } catch (e) { toast(e.message); if (btn) { btn.disabled = false; btn.textContent = '💬 Beispielsätze holen'; } return false; }
+}
+function addExampleSentence(ex) {
+  const id = 'ex-' + settings.lang;
+  let isl = state.islands.find(i => i.id === id);
+  if (!isl) { isl = { id, title: 'Beispielsätze', sentences: [], ts: Date.now() }; state.islands.push(isl); }
+  if (isl.sentences.some(s => s.t === ex.t)) { toast('Schon in der Insel'); return; }
+  isl.sentences.push({ id: 's:' + uid(), t: ex.t, d: ex.d, ts: Date.now() });
+  isl.ts = Date.now();
+  persist();
+  toast('In Insel „Beispielsätze“ – kommt in die Satz-Abfrage');
+}
+
 function vocabNew(pane) {
   const l = dayLog();
   const tempo = newWordTempo();
@@ -2236,7 +2294,6 @@ function vocabNew(pane) {
     ${tempo.reason ? `<div class="notice small">Tempo angepasst: ${tempo.n} statt ${settings.newWords} neue Wörter – ${tempo.reason}</div>` : ''}
     ${nudge ? `<div class="notice">${l.newWords} neue Wörter – kurz <a href="#vocab/recall">abfragen</a>, bevor es weitergeht?</div>` : ''}
     <div class="card flash">
-      ${from ? `<div class="pill" style="margin-bottom:8px">aus deinem Satz</div><div class="small muted" style="margin-bottom:8px">„${esc(from.sentence.t)}“</div>` : ''}
       ${photoEditor(w.id)}
       <div class="target">${esc(w.t)}</div>
       <div class="native">${esc(splitMeaning(w.d, w.id).de)}</div>${meaningExtra(splitMeaning(w.d, w.id))}
@@ -2246,6 +2303,7 @@ function vocabNew(pane) {
         ${talkCfg.key ? '<button class="btn small" id="chk" title="Mit Claude prüfen (≈ 1–3 Cent)">🔍 Prüfen</button>' : ''}
       </div>
       <div id="chk-out"></div>
+      <div id="ex"></div>
     </div>
     <div class="row between" style="margin-top:10px"><label for="note" style="margin:0">Eselsbrücke: Welches Bild, welche Geschichte verbindet Klang und Bedeutung?</label>
       ${SR ? '<button class="btn small" id="note-mic">🎙 Einsprechen</button>' : ''}</div>
@@ -2269,6 +2327,33 @@ function vocabNew(pane) {
       persist();
     }, live => { const b = before(); $('#note', pane).value = (b ? b + ' ' : '') + live; }, 'de-DE');
   }
+  // Beispielsatz: dein Satz, in dem das Wort vorkommt, sonst einer von Claude
+  const showEx = () => {
+    const box = $('#ex', pane);
+    if (!box) return;
+    const ex = from ? { t: from.sentence.t, d: from.sentence.d, w: w.t, own: true } : exampleFor(w.id);
+    if (ex) {
+      box.innerHTML = `<div class="ex">
+        <div class="pill" style="margin-bottom:6px">${ex.own ? 'aus deinem Satz' : 'im Satz'}</div>
+        <div class="sentence">${markWord(numText(ex.t), ex.w)}</div><div class="small muted">${esc(ex.d)}</div>
+        <div class="row" style="justify-content:center;margin-top:6px"><button class="btn small" id="ex-play">🔊 Satz</button>${ex.own ? '' : '<button class="btn small" id="ex-add" title="Als Satz-Karte in die Insel „Beispielsätze“">➕ Satz lernen</button>'}</div>
+      </div>`;
+      $('#ex-play', box).onclick = () => speak(numText(ex.t));
+      if ($('#ex-add', box)) $('#ex-add', box).onclick = () => { addExampleSentence(ex); $('#ex-add', box).remove(); };
+      return;
+    }
+    if (!talkCfg.key) { box.innerHTML = '<p class="small muted" style="margin-top:8px">Noch kein Satz mit diesem Wort. Beispielsätze von Claude gibt es mit API-Schlüssel (<a href="#talk/setup">Einrichten</a>).</p>'; return; }
+    box.innerHTML = `<div class="ex"><button class="btn small" id="ex-get">💬 Beispielsätze holen</button>
+      <label class="small muted" style="display:block;margin-top:6px"><input type="checkbox" id="ex-auto" ${settings.autoExamples ? 'checked' : ''}> automatisch für jedes neue Wort (≈ 1–3 Cent pro ${EX_BATCH} Wörter)</label></div>`;
+    const get = async () => {
+      const ids = pool.filter(x => !exampleFor(x.id)).slice(0, EX_BATCH).map(x => x.id);
+      if (await fetchExamples(ids, $('#ex-get', box)) && pool[0] === w && $('#ex', pane) === box) showEx();
+    };
+    $('#ex-get', box).onclick = get;
+    $('#ex-auto', box).onchange = e => { settings.autoExamples = e.target.checked; saveSettings(); if (e.target.checked) get(); };
+    if (settings.autoExamples) get();
+  };
+  showEx();
   speak(w.t);
   $('#play', pane).onclick = () => speak(w.t);
   $('#fix', pane).onclick = () => { saveNote(); correctWord(w.id, () => vocabNew(pane)); };
@@ -5040,7 +5125,7 @@ function mergeState(a, b) {
       words: old.words.filter(keep),
       builderVerbs: old.builderVerbs.filter(keep),
       islands: old.islands.filter(keep).map(i => Object.assign({}, i, { sentences: i.sentences.filter(keep) })),
-      srs: keepObj(old.srs), overrides: keepObj(old.overrides), log: old.log, deleted: old.deleted, resetAt: nw.resetAt,
+      srs: keepObj(old.srs), overrides: keepObj(old.overrides), examples: keepObj(old.examples || {}), log: old.log, deleted: old.deleted, resetAt: nw.resetAt,
     });
   }
   const deleted = {};
@@ -5095,6 +5180,7 @@ function mergeState(a, b) {
     grammar: byTs(a.grammar, b.grammar),
     books: mergeList(a.books || [], b.books || []),
     weekTests: byTs(a.weekTests, b.weekTests),
+    examples: byTs(a.examples, b.examples),
   };
 }
 

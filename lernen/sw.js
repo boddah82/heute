@@ -1,6 +1,6 @@
 // Offline-Cache für die App-Dateien. Bei Änderungen VERSION erhöhen.
 // Nur eigene Caches („sl-…“) löschen – die Rhetorik-App liegt unter derselben Adresse („rh-…“).
-const VERSION = 'sl-v48';
+const VERSION = 'sl-v49';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'data/it.js', 'data/en.js', 'data/it-words.js', 'data/en-words.js', 'data/builder.js', 'data/teen.js', 'data/grammar.js', 'data/packs.js', 'vendor/anthropic-sdk.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {

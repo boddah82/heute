@@ -755,30 +755,37 @@ document.addEventListener('keydown', e => { if (keyHandler) keyHandler(e); });
 // ---------- Abfrage (Active Recall) ----------
 // Zeigt die deutsche Seite, der Nutzer produziert die Antwort (sprechen/tippen/denken), deckt auf und bewertet.
 // Häppchen: kleine Portionen mit Zwischenstand – lieber oft kurz als selten ein Berg
-// Hochrechnung aus dem eigenen Schnitt der letzten 2 Wochen: wann ist das nächste Etappenziel erreicht –
-// und wie viel früher mit 1 Häppchen mehr pro Tag (sichere Wörter je Abfrage × Häppchengröße)?
+// Hochrechnung: „Wenn du jeden Tag so lernst wie heute …“. Tempo = sichere Wörter pro Tag (Schnitt 2 Wochen),
+// skaliert mit dem heutigen Einsatz im Vergleich zum Schnitt (Abfragen, im groben Modus neue Wörter).
+// Mehr Einsatz bringt nicht 1:1 mehr sichere Wörter – deshalb auf das 0,5- bis 1,5-Fache begrenzt.
 function projection() {
   const sec = secureWordCount(), tg = nextTarget(sec), tempo = secureTempo();
   if (!tempo || tempo.rate <= 0) return null;
-  const t = today();
-  let reviews = 0;
-  for (let d = t - 13; d <= t; d++) reviews += (state.log[d] || {}).reviews || 0;
-  const days = Math.ceil((tg.n - sec) / tempo.rate);
-  // Im groben Modus (noch keine Notizen zu sicheren Wörtern) keine Rechnung pro Abfrage
-  const perReview = !tempo.rough && reviews ? tempo.rate * 14 / reviews : 0;
-  // Mehr Abfragen bringen nicht 1:1 mehr sichere Wörter (neue Wörter müssen erst durch die Wiederholungen) – Zuwachs vorsichtig auf +50 % begrenzt
-  const faster = perReview ? Math.ceil((tg.n - sec) / Math.min(tempo.rate * 1.5, tempo.rate + settings.bite * perReview)) : null;
-  return { tg, days, faster: faster && faster < days ? faster : null, rough: tempo.rough };
+  const t = today(), l = dayLog(), key = tempo.rough ? 'newWords' : 'reviews';
+  let sum = 0;
+  for (let d = t - 13; d <= t; d++) sum += (state.log[d] || {})[key] || 0;
+  const avg = sum / 14, mine = l[key] || 0;
+  const clamp = x => Math.max(0.5, Math.min(1.5, x));
+  const left = tg.n - sec;
+  const daysAt = factor => Math.ceil(left / (tempo.rate * factor));
+  const todayF = mine && avg ? clamp(mine / avg) : 1;
+  const days = daysAt(todayF);
+  // 1 Häppchen mehr pro Tag (nur mit echten Notizen zu sicheren Wörtern)
+  const faster = !tempo.rough && avg ? daysAt(clamp((mine || avg) / avg + settings.bite / avg)) : null;
+  return { tg, days, faster: faster && faster < days ? faster : null, rough: tempo.rough, fromToday: !!mine };
 }
 function cheer() {
   const l = dayLog();
   const praise = ['Stark!', 'Sehr gut!', 'Weiter so!', 'Klasse!'][(l.bites || 0) % 4];
+  const todayLine = `Heute bis jetzt: <b>${l.reviews}</b> Abfragen${l.newWords ? ` · <b>${l.newWords}</b> neue Wörter` : ''}${minutesToday() ? ` · ${minutesToday()} Min.` : ''}`;
   const pr = projection();
-  if (!pr) return `<p class="small">💪 ${praise} Die Hochrechnung, wann du die nächste Stufe schaffst, kommt nach ein paar Lerntagen.</p>`;
+  if (!pr) return `<p class="small">💪 ${praise} ${todayLine}<br><span class="muted">Die Hochrechnung, wann du die nächste Stufe schaffst, kommt nach ein paar Lerntagen.</span></p>`;
   const when = d => d > 365 ? 'mehr als einem Jahr' : `ca. ${d} Tagen`;
-  return `<p class="small">💪 ${praise} Bei deinem Tempo: <b>${pr.tg.label} in ${when(pr.days)}</b>${pr.days <= 365 ? ` (≈ ${fmtDate(today() + pr.days)})` : ''}${pr.rough ? ' – grob geschätzt' : ''}.
+  return `<p class="small">💪 ${praise} ${todayLine}
+    <br>${pr.fromToday ? 'Wenn du jeden Tag so lernst wie heute' : 'Bei deinem Tempo'}: <b>${pr.tg.label} in ${when(pr.days)}</b>${pr.days <= 365 ? ` (≈ ${fmtDate(today() + pr.days)})` : ''}.
     ${pr.tg.text ? `<br><span class="muted">${pr.tg.label}: „${esc(pr.tg.text)}“</span>` : ''}
-    ${pr.faster ? `<br>Mit <b>1 Häppchen mehr pro Tag</b>: in ${when(pr.faster)} <span class="muted">(grobe Hochrechnung)</span>.` : ''}</p>`;
+    ${pr.faster ? `<br>Mit <b>1 Häppchen mehr pro Tag</b>: in ${when(pr.faster)}.` : ''}
+    <br><span class="muted">Grobe Hochrechnung aus deinen letzten 2 Wochen.</span></p>`;
 }
 function biteCounter(size) {
   let n = 0, ok = 0, no = 1, xp0 = totalXP();

@@ -755,6 +755,31 @@ document.addEventListener('keydown', e => { if (keyHandler) keyHandler(e); });
 // ---------- Abfrage (Active Recall) ----------
 // Zeigt die deutsche Seite, der Nutzer produziert die Antwort (sprechen/tippen/denken), deckt auf und bewertet.
 // Häppchen: kleine Portionen mit Zwischenstand – lieber oft kurz als selten ein Berg
+// Hochrechnung aus dem eigenen Schnitt der letzten 2 Wochen: wann ist das nächste Etappenziel erreicht –
+// und wie viel früher mit 1 Häppchen mehr pro Tag (sichere Wörter je Abfrage × Häppchengröße)?
+function projection() {
+  const sec = secureWordCount(), tg = nextTarget(sec), tempo = secureTempo();
+  if (!tempo || tempo.rate <= 0) return null;
+  const t = today();
+  let reviews = 0;
+  for (let d = t - 13; d <= t; d++) reviews += (state.log[d] || {}).reviews || 0;
+  const days = Math.ceil((tg.n - sec) / tempo.rate);
+  // Im groben Modus (noch keine Notizen zu sicheren Wörtern) keine Rechnung pro Abfrage
+  const perReview = !tempo.rough && reviews ? tempo.rate * 14 / reviews : 0;
+  // Mehr Abfragen bringen nicht 1:1 mehr sichere Wörter (neue Wörter müssen erst durch die Wiederholungen) – Zuwachs vorsichtig auf +50 % begrenzt
+  const faster = perReview ? Math.ceil((tg.n - sec) / Math.min(tempo.rate * 1.5, tempo.rate + settings.bite * perReview)) : null;
+  return { tg, days, faster: faster && faster < days ? faster : null, rough: tempo.rough };
+}
+function cheer() {
+  const l = dayLog();
+  const praise = ['Stark!', 'Sehr gut!', 'Weiter so!', 'Klasse!'][(l.bites || 0) % 4];
+  const pr = projection();
+  if (!pr) return `<p class="small">💪 ${praise} Die Hochrechnung, wann du die nächste Stufe schaffst, kommt nach ein paar Lerntagen.</p>`;
+  const when = d => d > 365 ? 'mehr als einem Jahr' : `ca. ${d} Tagen`;
+  return `<p class="small">💪 ${praise} Bei deinem Tempo: <b>${pr.tg.label} in ${when(pr.days)}</b>${pr.days <= 365 ? ` (≈ ${fmtDate(today() + pr.days)})` : ''}${pr.rough ? ' – grob geschätzt' : ''}.
+    ${pr.tg.text ? `<br><span class="muted">${pr.tg.label}: „${esc(pr.tg.text)}“</span>` : ''}
+    ${pr.faster ? `<br>Mit <b>1 Häppchen mehr pro Tag</b>: in ${when(pr.faster)} <span class="muted">(grobe Hochrechnung)</span>.` : ''}</p>`;
+}
 function biteCounter(size) {
   let n = 0, ok = 0, no = 1, xp0 = totalXP();
   return {
@@ -764,8 +789,10 @@ function biteCounter(size) {
     pause(root, left, quitHref, more) {
       const xp = totalXP() - xp0;
       const bites = Math.ceil(left / size);
+      const dl = dayLog(); dl.bites = (dl.bites || 0) + 1; persist();
       root.innerHTML = `<div class="card flash"><div class="target">✓</div><p><b>Häppchen ${no} geschafft!</b></p>
           <p class="small">${ok} von ${n} gewusst · +${xp} Punkte</p>
+          ${cheer()}
           <p class="muted small">${bites === 1 ? 'Noch 1 Häppchen' : `Noch ${bites} Häppchen`} in dieser Runde – oder später weiter. Pausen helfen dem Gedächtnis.</p></div>
         <div class="row"><a class="btn grow" href="${quitHref || '#home'}">Für jetzt reicht's</a><button class="btn primary grow" id="bite-more">Noch ein Häppchen</button></div>`;
       n = 0; ok = 0; no++; xp0 = totalXP();
@@ -784,7 +811,7 @@ function recallSession(root, ids, cfg) {
     cancelDictation();
     if (!queue.length) {
       root.innerHTML = `<div class="card flash"><div class="target">🎉</div>
-        <p>${done ? `Fertig – ${done} Abfragen.` : cfg.emptyText}</p></div>${typeof cfg.doneExtra === 'function' ? cfg.doneExtra() : (cfg.doneExtra || '')}`;
+        <p>${done ? `Fertig – ${done} Abfragen.` : cfg.emptyText}</p>${done && bite ? cheer() : ''}</div>${typeof cfg.doneExtra === 'function' ? cfg.doneExtra() : (cfg.doneExtra || '')}`;
       cfg.onDone && cfg.onDone(root);
       return;
     }
@@ -1228,7 +1255,7 @@ function hearSession(pane) {
   function show() {
     keyHandler = null;
     if (!queue.length) {
-      pane.innerHTML = `<div class="card flash"><div class="target">🎉</div><p>${done ? `Fertig – ${done} Wörter.` : 'Nichts zu tun. Wörter kommen hierher, sobald sie in der Abfrage sitzen (ab 3 Tagen Abstand).'}</p></div>`;
+      pane.innerHTML = `<div class="card flash"><div class="target">🎉</div><p>${done ? `Fertig – ${done} Wörter.` : 'Nichts zu tun. Wörter kommen hierher, sobald sie in der Abfrage sitzen (ab 3 Tagen Abstand).'}</p>${done ? cheer() : ''}</div>`;
       return;
     }
     const id = queue[0];

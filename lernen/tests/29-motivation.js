@@ -29,6 +29,7 @@ const URL = 'http://localhost:8765/';
   console.log('Tab:', await p.textContent('.seg .on'), '| Kopf:', (await p.textContent('#pane .row.between')).trim());
   for (let k = 0; k < 15; k++) { await p.click('#reveal'); await p.click(k === 3 ? '.rate [data-r="0"]' : '.rate [data-r="2"]'); }
   console.log('Pause:', (await p.textContent('#pane')).replace(/\s+/g, ' ').trim().slice(0, 170));
+  console.log('Hochrechnung:', (await p.textContent('#pane .card.flash p.small:nth-of-type(2)').then(() => p.$$eval('#pane .card.flash p.small', x => x[1].textContent))).replace(/\s+/g, ' ').trim());
   await p.screenshot({ path: process.env.S + '/motivation-bite.png' });
   await p.click('#bite-more');
   console.log('weiter:', (await p.textContent('#pane .row.between')).trim());

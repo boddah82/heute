@@ -5,6 +5,7 @@
 - `VERLAUF.md`: bisheriger Verlauf, Wünsche und Arbeitsweise des Nutzers – **vor größeren Änderungen lesen**.
 - `rhetorik/`: **Rhetorik-Training** (eigene PWA, Abschnitt unten).
 - `lernen/`: **Sprachtraining-App** (Italienisch + Englisch britisch) für den Repo-Besitzer. Deutschsprachige Oberfläche.
+- `physio-app/`: **Reiz-Reaktions-Tracker** (Next.js-PWA für Schmerz/Belastungs-Tracking in der Physiotherapie) – liegt (noch) nicht auf `main`, sondern auf Branch `claude/amazing-franklin-5ue3h5`. Veröffentlicht als Artifact: https://claude.ai/artifact/SVYaLs3cpjJSRiwiVsaz8K.
 
 Live: GitHub Pages von `main` → https://boddah82.github.io/heute/lernen/
 

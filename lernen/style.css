@@ -215,3 +215,4 @@ mark { background: var(--accent-soft); color: var(--accent); font-weight: 700; b
 .bars rect { fill: var(--accent); }
 .bars rect.zero { fill: var(--line); }
 .celebrate { text-align: center; border: 2px solid var(--accent); }
+.ex { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }

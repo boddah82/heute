@@ -350,9 +350,11 @@ function logReview(id, r, isNew) {
 }
 function grade(id, r) {
   const isNew = !state.srs[id];
+  const wasSecure = !isNew && state.srs[id].iv >= 3;
   const c = nextCard(state.srs[id], r, today(), true);
   c.ts = Date.now();
   state.srs[id] = c;
+  if (isWordId(id) && !wasSecure && c.iv >= 3) { const l = dayLog(); l.secured = (l.secured || 0) + 1; }
   logReview(id, r, isNew);
   persist();
 }
@@ -777,9 +779,15 @@ function projection() {
 function cheer() {
   const l = dayLog();
   const praise = ['Stark!', 'Sehr gut!', 'Weiter so!', 'Klasse!'][(l.bites || 0) % 4];
-  const todayLine = `Heute bis jetzt: <b>${l.reviews}</b> Abfragen${l.newWords ? ` · <b>${l.newWords}</b> neue Wörter` : ''}${minutesToday() ? ` · ${minutesToday()} Min.` : ''}`;
+  const todayLine = `Heute bis jetzt: <b>${l.reviews}</b> Abfragen · <b>${l.newWords || 0}</b> neue Wörter${l.secured ? ` · <b>+${l.secured}</b> Wörter sicher` : ''}${minutesToday() ? ` · ${minutesToday()} Min.` : ''}`;
   const pr = projection();
-  if (!pr) return `<p class="small">💪 ${praise} ${todayLine}<br><span class="muted">Die Hochrechnung, wann du die nächste Stufe schaffst, kommt nach ein paar Lerntagen.</span></p>`;
+  if (!pr) {
+    // Noch kein messbares Tempo (z. B. nur Wiederholungen): ehrliche Wenn-dann-Rechnung mit dem Tagesziel neuer Wörter
+    const sec = secureWordCount(), tg = nextTarget(sec), n = newWordTempo().n;
+    return `<p class="small">💪 ${praise} ${todayLine}
+      <br>Für <b>${tg.label}</b> fehlen noch <b>${tg.n - sec}</b> sichere Wörter. Mit ${n} neuen Wörtern pro Tag – wenn sie sitzen – wärst du in ca. <b>${Math.ceil((tg.n - sec) / n)} Tagen</b> da.
+      ${l.newWords ? '' : '<br>Heute ist noch kein neues Wort dabei – neue Wörter bringen dich zur nächsten Stufe.'}</p>`;
+  }
   const when = d => d > 365 ? 'mehr als einem Jahr' : `ca. ${d} Tagen`;
   return `<p class="small">💪 ${praise} ${todayLine}
     <br>${pr.fromToday ? 'Wenn du jeden Tag so lernst wie heute' : 'Bei deinem Tempo'}: <b>${pr.tg.label} in ${when(pr.days)}</b>${pr.days <= 365 ? ` (≈ ${fmtDate(today() + pr.days)})` : ''}.
@@ -787,6 +795,28 @@ function cheer() {
     ${pr.faster ? `<br>Mit <b>1 Häppchen mehr pro Tag</b>: in ${when(pr.faster)}.` : ''}
     <br><span class="muted">Grobe Hochrechnung aus deinen letzten 2 Wochen.</span></p>`;
 }
+// 70 % Wiederholung, 30 % neu: neue Karten gleichmäßig einstreuen (etwa jede 3.–4. Karte)
+const NEW_SHARE = 0.3;
+function mixNew(due, fresh) {
+  const out = [];
+  let i = 0, j = 0;
+  while (i < due.length || j < fresh.length) {
+    if (j < fresh.length && (i >= due.length || (j + 1) / (out.length + 1) <= NEW_SHARE)) out.push(fresh[j++]);
+    else out.push(due[i++]);
+  }
+  return out;
+}
+// „⏭ Später“: Karte 3 Tage zurückstellen, ohne Bewertung (Abstand bleibt)
+function postpone(id, days = 3) {
+  const c = state.srs[id];
+  if (c) { c.due = today() + days; c.ts = Date.now(); }
+  const s = id.startsWith('s:') && findSentence(id);
+  if (s) { s.later = today() + days; s.ts = Date.now(); }
+  persist();
+  return c || s ? `Kommt in ${days} Tagen wieder` : 'Heute nicht mehr';
+}
+function laterOk(s) { return !(s.later > today()); }
+function newWordsLeft() { const l = dayLog(); return Math.max(0, newWordTempo().n + (l.extraNew || 0) - l.newWords); }
 function biteCounter(size) {
   let n = 0, ok = 0, no = 1, xp0 = totalXP();
   return {
@@ -842,6 +872,7 @@ function recallSession(root, ids, cfg) {
       ${cfg.typing && !cfg.rev ? `<input type="text" id="typed" placeholder="Antwort tippen (optional)" autocomplete="off" autocapitalize="off" spellcheck="false">` : ''}
       <div class="row" id="pre" style="margin-top:8px">
         ${SR && !cfg.rev ? '<button class="btn" id="say">🎙 Sprechen</button>' : ''}
+        ${cfg.later ? '<button class="btn" id="later" title="Diese Karte erst in 3 Tagen">⏭ Später</button>' : ''}
         <button class="btn primary grow" id="reveal">Aufdecken</button>
       </div>
       <div id="post" hidden class="stack">
@@ -937,7 +968,8 @@ function recallSession(root, ids, cfg) {
       if (!parts) return;
       queue.shift();
       parts.forEach(p => { const k = queue.indexOf(p); if (k >= 0) queue.splice(k, 1); });
-      queue.unshift(...parts, id);
+      // Erst die Teile – der ganze Satz kommt in einer späteren Runde, wenn alle Teile gelernt sind
+      queue.unshift(...parts);
       show();
     };
     if (cfg.correct) $('#fix', root).onclick = () => cfg.correct(id, () => { const n = cfg.get(id); if (n) { it.t = n.t; it.d = n.d; $$('.flash .' + cfg.big, root).forEach(e => { e.textContent = n.t; }); setMeaning(n.d); } });
@@ -953,6 +985,16 @@ function recallSession(root, ids, cfg) {
       if (!revealed && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); reveal(); }
       else if (revealed && ['1', '2', '3', '4'].includes(e.key)) rate(Number(e.key) - 1);
     };
+    if ($('#later', root)) $('#later', root).onclick = () => {
+      toast(cfg.later(id));
+      for (let k = queue.length - 1; k >= 0; k--) if (queue[k] === id) queue.splice(k, 1);
+      show();
+    };
+    // Neue Karte: erst ansehen und einprägen – abgefragt wird sie nach ein paar Karten (Lernschritte)
+    if (cfg.introNew && it.isNew && !cfg.rev) {
+      reveal();
+      $('#post', root).insertAdjacentHTML('afterbegin', '<div class="notice small">🆕 Neu: anschauen, laut nachsprechen, Eselsbrücke ausdenken. Gleich kommt die Karte nochmal – dann aus dem Kopf.</div>');
+    }
   }
   show();
 }
@@ -1007,16 +1049,14 @@ function todayPlan() {
     ? { href: neglected.href, title: neglected.title, why: [sinceText(neglected.days), neglected.extra].filter(Boolean).join(' · ') + ' – Sprechen ist dein Ziel' }
     : null;
   const todayW = Math.min(dueW, wordBudget());
-  const reviewStep = todayW
-    ? { href: '#vocab/recall', title: `Wörter wiederholen: ${bitesText(todayW)}`, why: `je ${settings.bite} Karten, Pause dazwischen erlaubt${dueW > todayW ? ' – der Rest verteilt sich still auf die nächsten Tage' : ''}` }
+  const newW = Math.min(newWordsLeft(), newWordPool().pool.length);
+  const reviewStep = todayW + newW
+    ? { href: '#vocab/recall', title: `Wörter: ${bitesText(todayW + newW)}`, why: `${newW ? `${newW} neue + ` : ''}${todayW} Wiederholungen gemischt (≈ 70 % festigen, 30 % neu) – je ${settings.bite} Karten` }
     : null;
   // Lange Vernachlässigtes (≥ 3 Tage) zuerst, sonst gilt: fällige Wiederholungen vor allem anderen
   if (neglectedStep && neglected.score >= 3) { steps.push(neglectedStep); if (reviewStep) steps.push(reviewStep); }
   else { if (reviewStep) steps.push(reviewStep); if (neglectedStep) steps.push(neglectedStep); }
-  const tempo = newWordTempo();
-  const newLeft = Math.max(0, tempo.n + (l.extraNew || 0) - l.newWords);
-  if (newLeft && dueW <= REVIEW_CAP * 2) steps.push({ href: '#vocab/new', title: `${newLeft} neue Wörter`, why: tempo.reason ? `heute weniger: ${tempo.reason}` : 'mit Eselsbrücke oder Foto' });
-  else if (newLeft) steps.push({ href: '#vocab/new', title: 'Neue Wörter: heute Pause', why: 'erst die fälligen festigen – das lohnt sich mehr' });
+  // Neue Wörter stecken in den gemischten Häppchen (70/30) – kein eigener Schritt mehr
   // Rückrichtung (hören → Deutsch) nur ohne großen Rückstand in der Hauptrichtung
   const hearN = hearQueue().length;
   if (hearN && dueW <= REVIEW_CAP) steps.push({ href: '#vocab/hear', title: `${hearN} Wörter verstehen`, why: 'hören → Bedeutung sagen' });
@@ -1205,7 +1245,7 @@ views.vocab = function (root, arg) {
     ${voiceNotice()}
     <div class="seg">
       <button data-m="new" class="${mode === 'new' ? 'on' : ''}">Neu</button>
-      <button data-m="recall" class="${mode === 'recall' ? 'on' : ''}">Abfragen (${Math.min(dueIds(isWordId).length, wordBudget())})</button>
+      <button data-m="recall" class="${mode === 'recall' ? 'on' : ''}">Abfragen (${Math.min(dueIds(isWordId).length, wordBudget()) + Math.min(newWordsLeft(), newWordPool().pool.length)})</button>
       <button data-m="hear" class="${mode === 'hear' ? 'on' : ''}">Verstehen (${hearQueue().length})</button>
       <button data-m="own" class="${mode === 'own' ? 'on' : ''}">Eigene</button>
     </div>
@@ -1216,10 +1256,16 @@ views.vocab = function (root, arg) {
     const due = dueIds(isWordId);
     const extra = vocabExtra; vocabExtra = false;
     const budget = wordBudget();
-    recallSession(pane, due.slice(0, extra ? settings.bite : budget || 0), {
+    const fresh = newWordPool().pool.slice(0, extra ? Math.round(settings.bite * NEW_SHARE) : newWordsLeft()).map(w => w.id);
+    const ids = mixNew(due.slice(0, extra ? Math.round(settings.bite * (1 - NEW_SHARE)) : budget), fresh);
+    const l = dayLog();
+    recallSession(pane, ids, {
       big: 'target',
       bite: settings.bite,
-      emptyText: due.length ? '✓ Deine Wiederholungen für heute sind geschafft. Der Rest verteilt sich auf die nächsten Tage.' : 'Keine Wörter fällig.',
+      introNew: true,
+      later: postpone,
+      onRate: (id, r, isNew) => { if (isNew) l.newWords++; },
+      emptyText: due.length ? '✓ Deine Wörter für heute sind geschafft. Der Rest verteilt sich auf die nächsten Tage.' : 'Keine Wörter fällig und dein Tagesziel neuer Wörter ist erreicht.',
       doneExtra: () => {
         const rest = dueIds(isWordId).length;
         const hear = hearQueue().length;
@@ -1228,7 +1274,7 @@ views.vocab = function (root, arg) {
       },
       correct: correctWord,
       check: checkWordUI,
-      get: id => { const w = wordById(id); return w && { t: w.t, d: w.d, note: state.notes[id] }; },
+      get: id => { const w = wordById(id); return w && { t: w.t, d: w.d, note: state.notes[id], isNew: !state.srs[id] }; },
     });
   } else if (mode === 'hear') {
     hearSession(pane);
@@ -2225,15 +2271,9 @@ function wordPriorities() {
   return prio;
 }
 
-function vocabNew(pane) {
-  const l = dayLog();
-  const tempo = newWordTempo();
-  const limit = tempo.n + (l.extraNew || 0);
-  const recallTab = $('.seg [data-m="recall"]');
-  if (recallTab) recallTab.textContent = `Abfragen (${dueIds(isWordId).length})`;
-  // Wörter aus deinen Sätzen (schwierige zuerst) vor der Häufigkeitsreihenfolge
+// Neue Wörter in Lernreihenfolge: gewähltes Wortpaket, sonst Wörter aus deinen Sätzen (schwierige zuerst), dann Häufigkeit
+function newWordPool() {
   const prio = wordPriorities();
-  // Wortpaket gewählt: dessen Wörter in Paket-Reihenfolge, sonst nach Häufigkeit (Wörter aus deinen Sätzen zuerst)
   const pack = activePack();
   let pool = [];
   if (pack) {
@@ -2245,6 +2285,15 @@ function vocabNew(pane) {
     .map((w, i) => ({ w, i, p: prio.get(w.id) }))
     .sort((a, b) => (b.p ? b.p.score : 0) - (a.p ? a.p.score : 0) || a.i - b.i)
     .map(x => x.w);
+  return { pool, pack, packDone, prio };
+}
+function vocabNew(pane) {
+  const l = dayLog();
+  const tempo = newWordTempo();
+  const limit = tempo.n + (l.extraNew || 0);
+  const recallTab = $('.seg [data-m="recall"]');
+  if (recallTab) recallTab.textContent = `Abfragen (${dueIds(isWordId).length})`;
+  const { pool, pack, packDone, prio } = newWordPool();
   const packSel = `<select id="pack" style="margin-bottom:8px"><option value="">📊 Häufigste Wörter zuerst</option>${packList().map(p => { const n = packOpen(p); return `<option value="${p.k}" ${pack === p ? 'selected' : ''}>${esc(p.l)} (${n ? n + ' offen' : 'fertig'})</option>`; }).join('')}</select>
     ${packDone ? `<div class="notice small">✓ Paket „${esc(pack.l)}“ ist komplett im Training – weiter mit den häufigsten Wörtern.</div>` : ''}`;
   const bindPack = () => { $('#pack', pane).onchange = e => { settings.packs = Object.assign({}, settings.packs, { [settings.lang]: e.target.value }); saveSettings(); vocabNew(pane); }; };
@@ -2382,9 +2431,12 @@ views.review = function (root) {
   const l = dayLog();
   const sentences = allSentences();
   const byId = Object.fromEntries(sentences.map(s => [s.id, s]));
-  const due = dueIds(id => id.startsWith('s:') && byId[id]);
-  const newOnes = sentences.filter(s => !state.srs[s.id]).slice(0, Math.max(0, settings.newSentences - l.newSent)).map(s => s.id);
-  const ids = withParts(due.concat(newOnes));
+  const due = dueIds(id => id.startsWith('s:') && byId[id] && laterOk(byId[id]));
+  const len = s => s.t.split(/\s+/).length;
+  const newOnes = sentences.filter(s => !state.srs[s.id] && laterOk(s) && !s.partOf)
+    .map((s, i) => ({ s, i })).sort((a, b) => (len(a.s) > LONG_SENT) - (len(b.s) > LONG_SENT) || a.i - b.i).map(x => x.s)
+    .slice(0, Math.max(0, settings.newSentences - l.newSent)).map(s => s.id);
+  const ids = withParts(mixNew(due, newOnes));
   root.innerHTML = `
     <h1>🔁 Sätze wiederholen</h1>
     ${voiceNotice()}
@@ -2393,6 +2445,8 @@ views.review = function (root) {
   recallSession($('#pane', root), ids, {
     big: 'sentence',
     bite: settings.bite,
+    introNew: true,
+    later: postpone,
     wordHelp: true,
     typing: true,
     split: true,
@@ -3402,16 +3456,19 @@ function canSplit(id) {
   return !!s && !s.partOf && !(s.parts && s.parts.length) && s.t.split(/\s+/).length >= SPLIT_MIN;
 }
 // Vor jeden Satz seine Teile, die neu oder fällig sind
+// Geteilte Sätze: erst die Teile; der ganze Satz kommt erst, wenn alle Teile gelernt sind (Abstand ≥ 1 Tag)
+function partsLearned(s) { return (s.parts || []).every(p => !findSentence(p) || (state.srs[p] && state.srs[p].iv >= 1)); }
 function withParts(ids) {
   const out = [], seen = new Set();
   const add = id => { if (!seen.has(id)) { seen.add(id); out.push(id); } };
   ids.forEach(id => {
     const s = findSentence(id);
     (s && s.parts || []).forEach(p => { if (findSentence(p) && (!state.srs[p] || state.srs[p].due <= today())) add(p); });
-    add(id);
+    if (!s || partsLearned(s)) add(id);
   });
   return out;
 }
+const LONG_SENT = 12; // Wörter – längere neue Sätze kommen nach den kurzen
 async function splitSentenceUI(id, btn) {
   const s = findSentence(id);
   if (!s) return null;
@@ -3861,6 +3918,8 @@ function textRound(root, tx, sents) {
     big: sents ? 'sentence' : 'target',
     bite: settings.bite,
     quitHref: back,
+    introNew: true,
+    later: postpone,
     rev,
     typing: true,
     wordHelp: sents,

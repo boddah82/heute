@@ -54,6 +54,8 @@ const URL = 'http://localhost:8765/';
   console.log('sent message:', JSON.stringify(sent[sent.length - 1]), '| button after:', await p.textContent('#t-mic'));
   // Abfrage-Ansicht: Sprechen -> Fertig
   await p.evaluate(() => { window.__sessions = 0; window.__chunks = [['Mi chiamo'], ['Luca']]; });
+  // Sätze schon im Training (neue Karten werden sonst erst gezeigt, ohne Sprechen-Knopf)
+  await p.evaluate(() => { allSentences().forEach(s => { state.srs[s.id] = { iv: 3, ef: 2.5, reps: 2, lapses: 0, due: today(), ts: Date.now() }; }); persist(); });
   await p.goto(URL + '#review');
   await p.click('#say'); await p.waitForTimeout(700);
   await p.click('#say'); await p.waitForTimeout(400);

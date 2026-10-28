@@ -31,6 +31,8 @@ Views in `app.js` (`views.<name>`): `home` (mit „Heute zuerst“ aus `todayPla
 
 Motivation: Abfragen in Häppchen (`biteCounter()`, `cfg.bite` = `settings.bite`, Standard 15) mit Zwischenstand; Wörter-Tagesportion `wordBudget()` (= `REVIEW_CAP` pro Tag), „Heute zuerst“ nennt Häppchen statt Rückstand; Startseite `progressCard()`: Etappenziel aus `STAGES` (sichere Wörter), Prognose `secureTempo()` aus täglichen Notizen `log[tag].secure` (`noteSecure()`), Woche, Balken `activityBars()`, Meilensteine `MILESTONES` (`log.mile`), eigenes Ziel `settings.goalWords`/`goalDate`. Kein festes 10.000-Ziel mehr. Nach jedem Häppchen/jeder Runde `cheer()`: Lob, „Heute bis jetzt …“ + Hochrechnung `projection()` „Wenn du jeden Tag so lernst wie heute: Etappenziel in X Tagen“ (Tempo 2 Wochen × heutiger Einsatz/Schnitt, auf 0,5–1,5 begrenzt; dazu „mit 1 Häppchen mehr pro Tag“, als grob gekennzeichnet).
 
+Effizienz: Wort-Abfrage mischt fällige und neue Wörter 70/30 (`mixNew()`, `NEW_SHARE`, Pool `newWordPool()`, Tagesrest `newWordsLeft()`), ebenso die Satz-Abfrage; neue Karten werden zuerst gezeigt (`cfg.introNew`, Lernschritte fragen sie danach ab); „⏭ Später“ (`cfg.later` = `postpone()`, 3 Tage, Sätze mit `s.later`); geteilte Sätze: ganzer Satz erst, wenn alle Teile gelernt sind (`partsLearned()` in `withParts()`), neue Sätze über `LONG_SENT` Wörter nach den kurzen; `log.secured` = heute sicher gewordene Wörter (in `cheer()`), ohne messbares Tempo Wenn-dann-Rechnung mit dem Tagesziel neuer Wörter. „Heute zuerst“ hat keinen eigenen Neue-Wörter-Schritt mehr.
+
 Karteikarten-Abfrage `recallSession()`: nach dem Aufdecken deckt „🙈 Zudecken“ (`cover()`) die Lösung wieder zu (Einprägen → ohne Hilfe nochmal sagen); bewertet wird erst nach erneutem Aufdecken.
 
 ### Daten

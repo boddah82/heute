@@ -1,6 +1,7 @@
 // Browser-Test (Playwright). Start: lernen/tests/run-all.sh – Server auf Port 8765 muss laufen.
 process.env.S = process.env.S || require('os').tmpdir();
 const { chromium } = require(process.env.PW || 'playwright');
+const revealIf = async p => { if (await p.isVisible('#reveal')) await p.click('#reveal'); }; // neue Karten sind schon aufgedeckt (Einführung)
 const URL = 'http://localhost:8765/';
 (async () => {
   const b = await chromium.launch();
@@ -15,7 +16,7 @@ const URL = 'http://localhost:8765/';
   // Wörter
   await p.goto(URL + '#vocab/new'); await p.click('#learned');
   await p.goto(URL + '#vocab/recall'); await p.waitForTimeout(300);
-  await p.click('#reveal');
+  await revealIf(p);
   console.log('answer shown:', await p.isVisible('#answer'), '| cover button:', await p.isVisible('#cover'));
   await p.click('#cover');
   console.log('after cover – answer hidden:', await p.isHidden('#answer'), '| rate hidden:', await p.isHidden('.rate'), '| reveal back:', await p.isVisible('#reveal'));
@@ -27,7 +28,7 @@ const URL = 'http://localhost:8765/';
   console.log('rated after second reveal:', (await p.textContent('#view, body')).includes('Fertig') || await p.isVisible('#reveal'));
   // Sätze: Sprechen nach Zudecken, Vergleich neu
   await p.goto(URL + '#review'); await p.waitForTimeout(300);
-  await p.click('#reveal'); await p.click('#cover');
+  await revealIf(p); await p.click('#cover');
   console.log('cmp cleared:', (await p.innerHTML('#cmp')) === '');
   if (await p.$('#say')) { await p.click('#say'); await p.waitForTimeout(300); await p.click('#say'); await p.waitForTimeout(400); console.log('said again → compare shown:', (await p.textContent('#cmp')).includes('Gesagt')); }
   await p.screenshot({ path: process.env.S + '/zudecken.png', fullPage: true });

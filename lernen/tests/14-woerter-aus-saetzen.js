@@ -2,6 +2,7 @@
 // Wörter aus schwierigen Sätzen werden bei neuen Vokabeln vorgezogen; Wort-Hilfe in der Satz-Abfrage.
 process.env.S = process.env.S || require('os').tmpdir();
 const { chromium } = require(process.env.PW || 'playwright');
+const revealIf = async p => { if (await p.isVisible('#reveal')) await p.click('#reveal'); }; // neue Karten sind schon aufgedeckt (Einführung)
 const URL = 'http://localhost:8765/';
 (async () => {
   const b = await chromium.launch();
@@ -26,9 +27,9 @@ const URL = 'http://localhost:8765/';
   for (let i = 0; i < 12; i++) {
     const de = await p.textContent('.flash .native');
     if (de.includes('Glas')) break;
-    await p.click('#reveal'); await p.click('.rate .good'); await p.waitForTimeout(50);
+    await revealIf(p); await p.click('.rate .good'); await p.waitForTimeout(50);
   }
-  await p.click('#reveal');
+  await revealIf(p);
   console.log('Satz:', await p.textContent('#answer .sentence'), '| Wort-Hilfe:', (await p.textContent('#wordhelp')).replace(/\s+/g, ' ').trim());
   await p.screenshot({ path: process.env.S + '/wordhelp.png' });
   console.log('ERRORS:', errs);

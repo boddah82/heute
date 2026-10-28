@@ -2,6 +2,7 @@
 // Lesegeschichten: Kapitel (Claude nachgebaut), Wort antippen, Fragen, nächstes Kapitel mit nachgeschlagenen Wörtern.
 process.env.S = process.env.S || require('os').tmpdir();
 const { chromium } = require(process.env.PW || 'playwright');
+const revealIf = async p => { if (await p.isVisible('#reveal')) await p.click('#reveal'); }; // neue Karten sind schon aufgedeckt (Einführung)
 const URL = 'http://localhost:8765/';
 (async () => {
   const b = await chromium.launch();
@@ -62,7 +63,7 @@ const URL = 'http://localhost:8765/';
   // Runde wie die normale Abfrage: 4 Knöpfe, erste Karte „Nochmal“ (kommt wieder), Rest „Gut“
   console.log('erste:', (await p.textContent('.flash .native')).trim(), '| Knöpfe:', await p.$$eval('.rate .btn', x => x.map(b => b.textContent).join('/')));
   let n = 0;
-  while (await p.$('#reveal')) { await p.click('#reveal'); await p.click(n ? '.rate [data-r="2"]' : '.rate [data-r="0"]'); n++; }
+  while (await p.$('#reveal')) { await revealIf(p); await p.click(n ? '.rate [data-r="2"]' : '.rate [data-r="0"]'); n++; }
   console.log('Bewertungen:', n, '| Ergebnis:', (await p.textContent('#pane')).replace(/\s+/g, ' ').trim().slice(0, 120));
   console.log('Karten im SRS:', await p.evaluate(() => Object.keys(state.srs).filter(isWordId).length));
   await p.goto(p.url().replace('~cards', '')); await p.waitForTimeout(200);

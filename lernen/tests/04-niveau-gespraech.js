@@ -29,7 +29,7 @@ const S = process.env.S, URL = 'http://localhost:8765/';
   // Einstufungstest: Stufe 1+2 alles gewusst, Stufe 3 nichts
   await p.goto(URL + '#level/test');
   for (let band = 0; band < 3; band++) for (let q = 0; q < 6; q++) {
-    if (band < 2) { await p.click('#reveal'); await p.click('#yes'); } else await p.click('#skip');
+    if (band < 2) { await revealIf(p); await p.click('#yes'); } else await p.click('#skip');
   }
   console.log('result:', (await p.textContent('.card')).replace(/\s+/g, ' ').slice(0, 160));
   await p.screenshot({ path: S + '/level-result.png', fullPage: true });

@@ -1,6 +1,7 @@
 // Browser-Test (Playwright). Start: lernen/tests/run-all.sh – Server auf Port 8765 muss laufen.
 process.env.S = process.env.S || require('os').tmpdir();
 const { chromium } = require(process.env.PW || 'playwright');
+const revealIf = async p => { if (await p.isVisible('#reveal')) await p.click('#reveal'); }; // neue Karten sind schon aufgedeckt (Einführung)
 const URL = 'http://localhost:8765/', IMG = require('path').join(__dirname, '..', 'icons', 'icon-512.png');
 (async () => {
   const b = await chromium.launch();
@@ -17,7 +18,7 @@ const URL = 'http://localhost:8765/', IMG = require('path').join(__dirname, '..'
   await p.click('#learned');                  // ohne Eselsbrücke gelernt
   await p.goto(URL + '#vocab/recall'); await p.waitForTimeout(300);
   console.log('memo hidden before reveal:', await p.isHidden('#memo'));
-  await p.click('#reveal');
+  await revealIf(p);
   console.log('summary:', (await p.textContent('#memo summary')).trim());
   await p.click('#memo summary');
   await p.click('#memo-mic'); await p.waitForTimeout(500); await p.click('#memo-mic'); await p.waitForTimeout(300);
@@ -28,7 +29,7 @@ const URL = 'http://localhost:8765/', IMG = require('path').join(__dirname, '..'
   await p.waitForTimeout(200);
   console.log('hint button now present:', !!(await p.$('#hint')), '| summary now:', (await p.textContent('#memo summary')).trim());
   // Sätze
-  await p.goto(URL + '#review'); await p.click('#reveal');
+  await p.goto(URL + '#review'); await revealIf(p);
   console.log('sentence memo present:', !!(await p.$('#memo')));
   console.log('ERRORS:', errs);
   await b.close();

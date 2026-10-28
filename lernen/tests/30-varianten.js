@@ -1,6 +1,7 @@
 // Browser-Test (Playwright): Muster-Drill – Varianten zu einem Satz erstellen und laut durchgehen.
 process.env.S = process.env.S || require('os').tmpdir();
 const { chromium } = require(process.env.PW || 'playwright');
+const revealIf = async p => { if (await p.isVisible('#reveal')) await p.click('#reveal'); }; // neue Karten sind schon aufgedeckt (Einführung)
 const URL = 'http://localhost:8765/';
 (async () => {
   const b = await chromium.launch();
@@ -47,7 +48,7 @@ const URL = 'http://localhost:8765/';
   const seen = [];
   for (let k = 0; k < 4; k++) {
     seen.push((await p.textContent('.row.between span')).trim() + ' → ' + (await p.textContent('.flash .native')).trim());
-    await p.click('#reveal');
+    await revealIf(p);
     if (k === 0) { console.log('marked:', await p.innerHTML('#answer .sentence')); await p.click('#add'); }
     await p.click('#next');
   }

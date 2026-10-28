@@ -1,6 +1,7 @@
 // Browser-Test (Playwright): langen Satz auf der Karte in Teile zerlegen (✂️ Aufteilen).
 process.env.S = process.env.S || require('os').tmpdir();
 const { chromium } = require(process.env.PW || 'playwright');
+const revealIf = async p => { if (await p.isVisible('#reveal')) await p.click('#reveal'); }; // neue Karten sind schon aufgedeckt (Einführung)
 const URL = 'http://localhost:8765/';
 (async () => {
   const b = await chromium.launch();
@@ -23,29 +24,30 @@ const URL = 'http://localhost:8765/';
     state.islands = [{ id: 'i1', title: 'Test', ts: Date.now(), sentences: [
       { id: 's:lang', t: 'La gente controllava i telefoni, sospirava e spostava le borse ogni minuto che si allungava più del previsto.', d: 'Die Leute schauten auf ihre Handys, seufzten und schoben jede Minute die Taschen hin und her, die länger dauerte als gedacht.', ts: Date.now() },
       { id: 's:kurz', t: 'Ciao a tutti', d: 'Hallo zusammen', ts: Date.now() }] }];
+    state.srs['s:lang'] = { iv: 3, ef: 2.5, reps: 2, lapses: 0, due: today(), ts: Date.now() }; // schon im Training → kommt zuerst
     persist();
   });
   await p.goto(URL + '#review'); await p.reload();
   const front = async () => (await p.textContent('.flash .native')).trim();
   console.log('front 1:', await front());
-  await p.click('#reveal');
+  await revealIf(p);
   console.log('split button:', !!(await p.$('#split')));
   await p.click('#split');
   await p.waitForFunction(() => !document.querySelector('#split') && document.querySelector('.flash .native'));
   console.log('request words:', JSON.stringify(reqBody.messages[0].content.split('\n')[0].slice(0, 40)));
   const st = await p.evaluate(() => { const isl = state.islands[0]; const s = isl.sentences.find(x => x.id === 's:lang'); return { parts: s.parts.map(id => isl.sentences.find(x => x.id === id).t), partOf: isl.sentences.filter(x => x.partOf === 's:lang').length }; });
   console.log('parts:', JSON.stringify(st));
-  // Reihenfolge: drei Teile, dann der ganze Satz
+  // Reihenfolge: drei Teile (je neu eingeführt, dann abgefragt); der ganze Satz erst, wenn die Teile gelernt sind
   const order = [];
   for (let k = 0; k < 4; k++) {
     order.push(await front());
-    await p.click('#reveal');
+    await revealIf(p);
     if (k === 0) console.log('split on part:', !!(await p.$('#split')));
     await p.click('.rate .btn.good');
   }
   console.log('order:', JSON.stringify(order));
   // Kurzer Satz: kein Knopf
-  await p.click('#reveal');
+  await revealIf(p);
   console.log('short sentence', await front(), '| split button:', !!(await p.$('#split')));
   // Nächster Tag: fälliger ganzer Satz bringt seine fälligen Teile mit
   const q = await p.evaluate(() => { Object.values(state.srs).forEach(c => { c.due = today(); }); return withParts(['s:lang']).map(id => findSentence(id).t.split(' ')[0]); });

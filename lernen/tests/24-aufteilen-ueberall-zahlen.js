@@ -1,6 +1,7 @@
 // Browser-Test (Playwright): ✂️ in Sprachinsel-Liste, Shadowing und Lese-Sätze-Runde; Zahlen-Karten ausgeschrieben.
 process.env.S = process.env.S || require('os').tmpdir();
 const { chromium } = require(process.env.PW || 'playwright');
+const revealIf = async p => { if (await p.isVisible('#reveal')) await p.click('#reveal'); }; // neue Karten sind schon aufgedeckt (Einführung)
 const URL = 'http://localhost:8765/';
 (async () => {
   const b = await chromium.launch();
@@ -42,8 +43,8 @@ const URL = 'http://localhost:8765/';
   await p.goto(URL + '#read/b1~1'); await p.reload();
   console.log('read sents card:', !!(await p.$('#rd-sents')));
   await p.click('#rd-sents a');
-  await p.waitForSelector('#reveal');
-  await p.click('#reveal');
+  await p.waitForSelector('.rate', { state: 'attached' });
+  await revealIf(p);
   console.log('read round front:', (await p.textContent('.flash .native')).trim(), '| split:', !!(await p.$('#split')));
   console.log('read island:', await p.evaluate(() => (state.islands.find(i => i.id === 'read-b1') || {}).title));
   // Zahlen-Karte

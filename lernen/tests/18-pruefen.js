@@ -2,6 +2,7 @@
 // Prüfen-Knopf für Wörter und Sätze (Claude-Antwort nachgebaut).
 process.env.S = process.env.S || require('os').tmpdir();
 const { chromium } = require(process.env.PW || 'playwright');
+const revealIf = async p => { if (await p.isVisible('#reveal')) await p.click('#reveal'); }; // neue Karten sind schon aufgedeckt (Einführung)
 const URL = 'http://localhost:8765/';
 (async () => {
   const b = await chromium.launch();
@@ -32,7 +33,7 @@ const URL = 'http://localhost:8765/';
   });
   // Satz prüfen
   await p.goto(URL + '#review'); await p.reload(); await p.waitForTimeout(200);
-  await p.click('#reveal');
+  await revealIf(p);
   console.log('Hinweis Wortliste:', (await p.textContent('#wordhelp')).includes('im Satz kann ein Wort'));
   await p.click('#chk'); await p.waitForSelector('#chk-out .notice');
   console.log('Satz-Prüfung:', (await p.textContent('#chk-out')).replace(/\s+/g, ' ').trim().slice(0, 140));
@@ -40,7 +41,7 @@ const URL = 'http://localhost:8765/';
   const s1 = await p.evaluate(() => findSentence('s:t1'));
   console.log('übernommen:', s1.t, '| Glosse:', s1.gloss.map(w => w.t + '=' + w.de).join(' '), '| Anzeige:', await p.textContent('.sentence'));
   await p.click('.rate .again');
-  await p.click('#reveal');
+  await revealIf(p);
   console.log('nächstes Mal geprüfte Wort-für-Wort-Hilfe:', (await p.textContent('#wordhelp')).replace(/\s+/g, ' ').trim());
   // Wort prüfen (neue Wörter)
   await p.goto(URL + '#vocab/new'); await p.waitForTimeout(200);

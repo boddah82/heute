@@ -2,6 +2,7 @@
 // Motivation: Häppchen mit Zwischenstand, Tagesportion statt Stau-Zahl, Etappenziel mit Prognose, Meilenstein, eigenes Ziel.
 process.env.S = process.env.S || require('os').tmpdir();
 const { chromium } = require(process.env.PW || 'playwright');
+const revealIf = async p => { if (await p.isVisible('#reveal')) await p.click('#reveal'); }; // neue Karten sind schon aufgedeckt (Einführung)
 const URL = 'http://localhost:8765/';
 (async () => {
   const b = await chromium.launch();
@@ -27,13 +28,14 @@ const URL = 'http://localhost:8765/';
   // Häppchen: nach 15 Karten Pause mit Zwischenstand
   await p.goto(URL + '#vocab/recall'); await p.waitForTimeout(200);
   console.log('Tab:', await p.textContent('.seg .on'), '| Kopf:', (await p.textContent('#pane .row.between')).trim());
-  for (let k = 0; k < 15; k++) { await p.click('#reveal'); await p.click(k === 3 ? '.rate [data-r="0"]' : '.rate [data-r="2"]'); }
+  for (let k = 0; k < 15; k++) { await revealIf(p); await p.click(k === 3 ? '.rate [data-r="0"]' : '.rate [data-r="2"]'); }
   console.log('Pause:', (await p.textContent('#pane')).replace(/\s+/g, ' ').trim().slice(0, 170));
+  console.log('Hochrechnung:', (await p.textContent('#pane .card.flash p.small:nth-of-type(2)').then(() => p.$$eval('#pane .card.flash p.small', x => x[1].textContent))).replace(/\s+/g, ' ').trim());
   await p.screenshot({ path: process.env.S + '/motivation-bite.png' });
   await p.click('#bite-more');
   console.log('weiter:', (await p.textContent('#pane .row.between')).trim());
   // Tagesportion aufgebraucht → keine Stau-Zahl, freiwillig noch ein Häppchen
-  await p.evaluate(() => { dayLog().wok = 50; persist(); });
+  await p.evaluate(() => { dayLog().wok = 50; dayLog().newWords = 99; persist(); });
   await p.goto(URL + '#home'); await p.goto(URL + '#vocab/recall'); await p.waitForTimeout(200);
   console.log('Portion geschafft:', (await p.textContent('#pane')).replace(/\s+/g, ' ').trim().slice(0, 170));
   await p.click('#pane .btn');

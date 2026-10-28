@@ -1,6 +1,7 @@
 // Browser-Test (Playwright). Start: lernen/tests/run-all.sh – Server auf Port 8765 muss laufen.
 process.env.S = process.env.S || require('os').tmpdir();
 const { chromium } = require(process.env.PW || 'playwright');
+const revealIf = async p => { if (await p.isVisible('#reveal')) await p.click('#reveal'); }; // neue Karten sind schon aufgedeckt (Einführung)
 const URL = 'http://localhost:8765/';
 (async () => {
   const b = await chromium.launch();
@@ -43,7 +44,7 @@ const URL = 'http://localhost:8765/';
     let n = 0, first = true;
     while (await p.$('#reveal') || await p.$('#bite-more')) {
       if (await p.$('#bite-more')) { await p.click('#bite-more'); continue; }
-      await p.click('#reveal');
+      await revealIf(p);
       await p.click(first ? '.rate [data-r="0"]' : '.rate [data-r="2"]');
       first = false; n++;
     }
@@ -54,10 +55,10 @@ const URL = 'http://localhost:8765/';
   await p.click('a[href$="~cards"]');
   console.log('word front:', (await p.textContent('.card.flash')).replace(/\s+/g, ' ').trim().slice(0, 40), '| buttons:', await p.$$eval('.rate .btn', x => x.map(b => b.textContent).join('/')));
   // Karte mit Zusammenhang: „cammino“ ist die 2. Karte („La“ ist ein kleines Wort und kommt nicht)
-  await p.click('#reveal'); await p.click('.rate [data-r="0"]');
+  await revealIf(p); await p.click('.rate [data-r="0"]');
   await p.click('#cx-b');
   console.log('ctx front:', (await p.textContent('#cx-f')).trim(), '| native:', (await p.textContent('.flash .native')).trim());
-  await p.click('#reveal');
+  await revealIf(p);
   console.log('ctx back:', (await p.textContent('#answer')).replace(/\s+/g, ' ').trim().slice(0, 160));
   console.log('Vorderseite nur Wort:', !(await p.textContent('.flash .native')).includes('Grundform'), '| Warum so hinten:', await p.textContent('#answer .why'));
   await p.screenshot({ path: process.env.S + '/text-ctx.png', fullPage: true });

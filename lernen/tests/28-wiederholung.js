@@ -2,6 +2,7 @@
 // Wiederholung: Lernschritte in der Runde, Vorschau unter den Knöpfen, Streuung, Verspätung, Tageslimit in Text-Runden.
 process.env.S = process.env.S || require('os').tmpdir();
 const { chromium } = require(process.env.PW || 'playwright');
+const revealIf = async p => { if (await p.isVisible('#reveal')) await p.click('#reveal'); }; // neue Karten sind schon aufgedeckt (Einführung)
 const URL = 'http://localhost:8765/';
 (async () => {
   const b = await chromium.launch();
@@ -30,7 +31,7 @@ const URL = 'http://localhost:8765/';
   let labels = '';
   for (let k = 0; k < 12 && await p.$('#reveal'); k++) {
     const front = (await p.textContent('.flash .native')).trim();
-    await p.click('#reveal');
+    await revealIf(p);
     if (!labels) labels = await p.$$eval('.rate .btn', x => x.map(e => e.textContent).join(' | '));
     seen.push(front);
     await p.click('.rate [data-r="2"]');
@@ -45,11 +46,11 @@ const URL = 'http://localhost:8765/';
     persist();
   });
   await p.goto(URL + '#home'); await p.goto(URL + '#vocab/recall'); await p.waitForTimeout(300);
-  await p.click('#reveal');
+  await revealIf(p);
   console.log('Vorschau reif:', await p.$$eval('.rate .btn', x => x.map(e => e.textContent).join(' | ')));
   await p.click('.rate [data-r="0"]');
   console.log('nach Nochmal wieder da:', !!(await p.$('#reveal')));
-  await p.click('#reveal'); await p.click('.rate [data-r="2"]');
+  await revealIf(p); await p.click('.rate [data-r="2"]');
   console.log('vergessen→Gut:', await p.evaluate(() => { const c = state.srs[allWords()[5].id]; return c.iv + ' T, lapses ' + c.lapses; }));
   await p.screenshot({ path: process.env.S + '/wiederholung.png' });
   // Tageslimit in Text-Runden
@@ -62,7 +63,7 @@ const URL = 'http://localhost:8765/';
   await p.goto(URL + '#texts/txA~cards'); await p.waitForTimeout(300);
   console.log('Text-Runde bei 2 freien:', (await p.textContent('#pane .row.between span')).trim());
   let n = 0;
-  while (await p.$('#reveal') && n < 20) { await p.click('#reveal'); await p.click('.rate [data-r="3"]'); n++; }
+  while (await p.$('#reveal') && n < 20) { await revealIf(p); await p.click('.rate [data-r="3"]'); n++; }
   console.log('Ende:', (await p.textContent('#pane')).replace(/\s+/g, ' ').trim().slice(0, 200));
   console.log('Extra-Knopf:', !!(await p.$('#tr-extra')));
   console.log('ERRORS:', errs);

@@ -1,6 +1,7 @@
 // Browser-Test (Playwright). Start: lernen/tests/run-all.sh – Server auf Port 8765 muss laufen.
 process.env.S = process.env.S || require('os').tmpdir();
 const { chromium } = require(process.env.PW || 'playwright');
+const revealIf = async p => { if (await p.isVisible('#reveal')) await p.click('#reveal'); }; // neue Karten sind schon aufgedeckt (Einführung)
 (async () => {
   const b = await chromium.launch();
   const p = await b.newPage({ viewport: { width: 390, height: 844 } });
@@ -23,10 +24,10 @@ const { chromium } = require(process.env.PW || 'playwright');
   await p.waitForTimeout(200);
   console.log('recall header:', await p.textContent('.seg'));
   await p.click('#hint'); 
-  await p.click('#reveal');
+  await revealIf(p);
   await p.screenshot({ path: S + '/vocab-recall.png', fullPage: true });
   await p.click('.rate .good');
-  await p.click('#reveal'); await p.click('.rate .again');
+  await revealIf(p); await p.click('.rate .again');
   console.log('remaining:', await p.textContent('#pane .row'));
   // Sätze
   await p.goto('http://localhost:8765/#review');

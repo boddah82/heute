@@ -326,9 +326,14 @@ function newWordTempo() {
   return { n: Math.max(5, Math.min(80, Math.round(base * f))), reason };
 }
 
+// Ältere Karten ohne Gut-Serie: Abstand ≥ 3 Tage heißt mindestens zweimal an verschiedenen Tagen gewusst (Schätzung)
+function goodStreak(c) { return c.ok !== undefined ? c.ok : c.iv >= 3 ? 2 : 0; }
 // Wiederholungsplanung nach SM-2 (Intervalle in Tagen), ohne Seiteneffekte – auch für die Vorschau unter den Knöpfen.
 function nextCard(c0, r, t, fuzz) {
   const c = Object.assign({ iv: 0, ef: 2.5, reps: 0, lapses: 0, due: t }, c0);
+  // Gut-Serie: „Gut“/„Leicht“ hintereinander, höchstens eins pro Tag (ok, Tag okd); „Nochmal“/„Schwer“ setzt auf 0
+  c.ok = goodStreak(c);
+  if (r >= 2) { if (c.okd !== t) { c.ok++; c.okd = t; } } else { c.ok = 0; delete c.okd; }
   if (r === 0) { c.iv = 0; c.ef = Math.max(1.3, c.ef - 0.2); c.lapses++; c.due = t; return c; }
   // Zu spät, aber noch gewusst: die tatsächliche Pause zählt mit (Gut halb, Leicht ganz)
   const late = c.iv >= 3 ? Math.max(0, t - c.due) : 0;
@@ -730,7 +735,10 @@ function voiceNotice() {
   }
   return '';
 }
-// Sätze, die in der Satz-Abfrage noch nicht sitzen – schlechteste zuerst (für Hören & Shadowing)
+// Sätze, die in der Satz-Abfrage noch nicht sitzen – schlechteste zuerst (für Hören & Shadowing).
+// „Gut gekonnt“ = SENT_KNOWN-mal hintereinander „Gut“/„Leicht“ an verschiedenen Tagen → fällt raus, alte Fehler zählen dann nicht mehr.
+// Kommt in der Satz-Abfrage wieder „Nochmal“/„Schwer“, ist der Satz wieder dabei.
+const SENT_KNOWN = 2;
 function sentenceWeakness(c) {
   return (c.lapses || 0) * 2 + Math.max(0, 2.5 - c.ef) * 6 + (c.iv < 3 ? 2 : c.iv < 7 ? 1 : 0) + (c.due <= today() ? 1 : 0);
 }
@@ -738,7 +746,7 @@ function weakSentences() {
   return allSentences()
     .filter(s => state.srs[s.id])
     .map(s => ({ s, c: state.srs[s.id] }))
-    .filter(x => x.c.iv < 21) // sicher Gekonntes (≥ 3 Wochen Abstand) bleibt draußen
+    .filter(x => x.c.iv < 21 && goodStreak(x.c) < SENT_KNOWN) // gut Gekonntes bleibt draußen
     .map(x => ({ s: x.s, w: sentenceWeakness(x.c) }))
     .filter(x => x.w > 0)
     .sort((a, b) => b.w - a.w)
@@ -2582,9 +2590,10 @@ function listenCheck(root) {
   const pane = $('#hc-pane', root);
   const pick = () => {
     const v = opts.island;
-    let list = v === 'weak' ? weak.slice() : v === 'all' ? allSentences() : ((state.islands.find(i => i.id === v) || { sentences: [] }).sentences).slice();
-    if (v !== 'weak') for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
-    return opts.count ? list.slice(0, opts.count) : list;
+    // Schwierige: erst die schwächsten auswählen, dann mischen – sonst lernt man die Reihenfolge mit
+    if (v === 'weak') return shuffle(opts.count ? weak.slice(0, opts.count) : weak);
+    const list = v === 'all' ? allSentences() : ((state.islands.find(i => i.id === v) || { sentences: [] }).sentences);
+    return shuffle(list).slice(0, opts.count || undefined);
   };
   $('#hc-start', root).onclick = () => {
     opts.island = $('#hc-isl', root).value;
@@ -2739,7 +2748,7 @@ views.listen = function (root, arg) {
   if (arg === 'check') { listenCheck(root); return; }
   if (arg === 'stories') { listenStories(root); return; }
   const opts = Object.assign({ island: 'weak', de: false, repeat: 2, pause: 2, loop: false }, load('sl.listen', {}));
-  const weak = weakSentences();
+  const weak = shuffle(weakSentences()); // bei jedem Öffnen neue Reihenfolge
   root.innerHTML = `
     <h1>🎧 Hören</h1>
     ${listenSeg('sent')}
@@ -2891,7 +2900,7 @@ function shadowCue(pane, text) {
 }
 views.shadow = function (root) {
   const saved = load('sl.shadow.' + settings.lang, {});
-  const weak = weakSentences(); // einmal beim Öffnen berechnen, damit die Reihenfolge während der Übung stabil bleibt
+  const weak = shuffle(weakSentences()); // einmal beim Öffnen berechnen und mischen, damit die Reihenfolge während der Übung stabil bleibt
   let islandId = saved.island === 'weak' || state.islands.some(i => i.id === saved.island) ? saved.island : (weak.length ? 'weak' : state.islands[0] && state.islands[0].id);
   if (!saved.island && weak.length) islandId = 'weak';
   let idx = islandId === 'weak' ? 0 : (saved.idx || 0);
@@ -2901,7 +2910,7 @@ views.shadow = function (root) {
     ${voiceNotice()}
     <p class="muted small">Anhören → sofort laut mitsprechen. Rhythmus, Betonung und Melodie kopieren, nicht nur die Wörter.</p>
     ${state.islands.length ? islandSelect('s-isl', islandId, false, weak.length) : ''}
-    <p class="muted small" id="s-weakinfo" ${islandId === 'weak' ? '' : 'hidden'}>Aus deinen Bewertungen in der Satz-Abfrage – was am wenigsten sitzt, kommt zuerst. Sicher gekonnte Sätze fehlen hier.</p>
+    <p class="muted small" id="s-weakinfo" ${islandId === 'weak' ? '' : 'hidden'}>Aus deinen Bewertungen in der Satz-Abfrage, gemischt. Sätze, die du zweimal an verschiedenen Tagen gut konntest, fehlen hier.</p>
     <div id="s-pane" style="margin-top:12px"></div>`;
   const pane = $('#s-pane', root);
   if (!state.islands.length) { pane.innerHTML = '<div class="card">Erst eine Sprachinsel anlegen.</div>'; return; }

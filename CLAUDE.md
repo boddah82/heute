@@ -53,6 +53,7 @@ Erst diese Datei lesen. Details nur bei Bedarf (Tabelle „Wo steht was?“).
   - #45 🔁 Varianten / Muster-Drill (Idee aus Video „1000 nützliche Sätze, Sprachinseln“)
   - #46 Neue Wörter mit Beispielsatz (Claude holt Sätze für je 10 Wörter, geschätzt 1–3 Cent pro Abruf)
   - #48–#50 Hochrechnung nach jedem Häppchen, Effizienz (70 % Fälliges / 30 % Neues, „⏭ Später“)
+  - Schwierige Sätze: gemischt, Satz fällt raus nach 2× Gut/Leicht an verschiedenen Tagen
 - Rhetorik-App live (gebaut ab 23.10.2026).
 
 ## 7. Offene Punkte

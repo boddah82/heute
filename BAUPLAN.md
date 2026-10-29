@@ -3,7 +3,7 @@
 Dieses Dokument beschreibt die Lern-App in `lernen/` so, dass ein anderes Claude (Terminal, Desktop) sie versteht, weiterbauen oder als **Vorlage für andere Lernthemen** nutzen kann, z. B. Physiotherapie oder Trainer-Ausbildung.
 
 - Live: https://boddah82.github.io/heute/lernen/
-- Technische Kurzreferenz: `CLAUDE.md`
+- Kurzüberblick: `CLAUDE.md`, Technik-Details: `lernen/TECHNIK.md`
 - Verlauf und Wünsche des Nutzers: `VERLAUF.md` (vor größeren Änderungen lesen)
 
 ---

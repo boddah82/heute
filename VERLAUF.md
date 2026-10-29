@@ -1,6 +1,6 @@
 # Verlauf & Übergabe – Sprachtraining-App
 
-Zusammenfassung der bisherigen Arbeit (Sept./Okt. 2026, Claude Code im Web) für die Weiterarbeit im Terminal. Technischer Aufbau: siehe `CLAUDE.md`.
+Zusammenfassung der bisherigen Arbeit (Sept./Okt. 2026, Claude Code im Web) für die Weiterarbeit im Terminal. Technischer Aufbau: siehe `CLAUDE.md` und `lernen/TECHNIK.md`.
 
 ## Wie der Nutzer arbeiten möchte
 - Kurz antworten, nur das Wichtigste. Nichts erfinden. Nicht schmeicheln.

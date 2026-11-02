@@ -602,6 +602,7 @@ async function photoHunt(max = 5) {
   }
   return out;
 }
+function isConcrete(w) { return !!window.EMOJI_CONCRETE && window.EMOJI_CONCRETE.has(emojiKey(w.d)); }
 function wordEmoji(id) {
   if (settings.emoji === false || !window.EMOJI || !id) return '';
   const w = wordById(id.replace(/^r:/, ''));
@@ -1121,7 +1122,7 @@ function seededPick(arr, n, seed) {
 function missionData(kind, seed) {
   if (kind === 'spot') {
     // Dinge mit Bild, die schon sitzen (sonst wenigstens im Training) – draußen entdecken und laut sagen
-    const withEmo = allWords().filter(w => state.srs[w.id] && wordEmoji(w.id));
+    const withEmo = allWords().filter(w => state.srs[w.id] && wordEmoji(w.id) && isConcrete(w));
     const sure = withEmo.filter(w => state.srs[w.id].iv >= 3);
     const pool = sure.length >= 5 ? sure : withEmo;
     return pool.length >= 3 ? { words: seededPick(pool, 5, seed) } : null;

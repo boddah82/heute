@@ -11,6 +11,8 @@ const shot = name => require('path').join(process.env.S, name);
   await p.goto(URL);
   // Emoji-Zuordnung über die deutsche Bedeutung
   console.log('emoji:', JSON.stringify(await p.evaluate(() => [wordEmoji('w:il pane'), wordEmoji('w:la stazione'), wordEmoji('w:allora'), wordEmoji('r:w:il pane')])), '| expected: ["🍞","🚉","","🍞"]');
+  // Auch Gefühle/Abstraktes, aber nur Konkretes zählt für die Wörter-Jagd
+  console.log('abstract:', JSON.stringify(await p.evaluate(() => [wordEmoji('w:la paura'), isConcrete(wordById('w:la paura')), isConcrete(wordById('w:il pane'))])), '| expected: ["😨",false,true]');
   // Wort-Abfrage: Brot fällig, 3× vergessen → Emoji vorne, Foto-Tipp nach dem Aufdecken
   await p.evaluate(() => {
     const t = today();

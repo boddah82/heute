@@ -18,7 +18,7 @@ Zu jedem Wort und jedem Inselsatz lässt sich ein eigenes Foto speichern (Kamera
 Modus „🔎 Beschreiben“ unter Reden: Claude gibt eine Aufgabe („Such etwas Grünes und beschreib es“), du beschreibst in 2–3 Sätzen, Claude korrigiert und fragt nach. Optional mit Foto (📷).
 
 ## Bilder: Emoji & Foto-Jagd
-Fast alle Wörter zeigen auf der Wortkarte ein Emoji – Dinge (🍞 Brot, 🚉 Bahnhof), aber auch Gefühle und Abstraktes als Merkhilfe (😨 Angst, 🕊️ Freiheit, 🐢 langsam); beim „Verstehen“ erst auf der Lösung. Nur reine Füllwörter (und, aber, dass …) bleiben ohne. Abschaltbar in den Einstellungen. Wörter, die du mehrmals vergessen hast (ab 2× „Nochmal“), schlagen nach dem Aufdecken ein eigenes Foto vor – am besten draußen vom echten Ding.
+Fast alle Wörter zeigen auf der Wortkarte ein Emoji – Dinge (🍞 Brot, 🚉 Bahnhof), aber auch Gefühle und Abstraktes als Merkhilfe (😨 Angst, 🕊️ Freiheit, 🐢 langsam); selbst Füllwörter bekommen ein frei gedeutetes Merkbild (➕ und, ✋ aber, 👌 ziemlich). Beim „Verstehen“ erst auf der Lösung. Abschaltbar in den Einstellungen. Wörter, die du mehrmals vergessen hast (ab 2× „Nochmal“), schlagen nach dem Aufdecken ein eigenes Foto vor – am besten draußen vom echten Ding.
 
 ## Orte-Karte & „📍 Ich bin hier“
 Inseln erscheinen als Kacheln mit Bild und Fortschritt („x von y sitzen“). Pro Insel eintragen, **wo** du das im echten Leben brauchst (z. B. „Bar an der Ecke“), Bild per Tipp aufs Emoji ändern. Vor Ort „📍 Ich bin hier“: 5 Sätze dieses Ortes (zuerst die, die du schon übst, wacklige vorn) – Deutsch sehen, selbst sagen, antippen zum Prüfen. Ohne Bewertung.

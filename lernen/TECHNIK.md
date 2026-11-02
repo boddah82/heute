@@ -16,6 +16,7 @@ Reine statische PWA ohne Build-Schritt, Vanilla-JS, kein Framework.
 | `lernen/data/builder.js` | Satzbaukasten-Muster (`window.BUILDER`) |
 | `lernen/data/grammar.js` | Grammatik-Lektionen (Titel/Thema, Reihenfolge) je Sprache (`window.GRAMMAR`); Inhalt erzeugt Claude → `state.grammar` |
 | `lernen/data/packs.js` | Wortpakete nach Situation (`window.PACKS`, `!` = im Jugend-Modus aus) |
+| `lernen/data/emoji.js` | Emoji für konkrete Wörter (`window.EMOJI`, Schlüssel = deutsche Bedeutung) |
 | `lernen/data/teen.js` | Jugend-Modus: Inseln, Gesprächsthemen, ausgeblendete Bausteine (`window.TEEN`) |
 | `lernen/vendor/anthropic-sdk.js` | offizielles `@anthropic-ai/sdk`, per esbuild als ESM-Browser-Bundle; wird per `import()` erst bei Bedarf geladen |
 | `lernen/sw.js` | Service Worker, Netzwerk zuerst; nur same-origin. **`VERSION` bei jeder Änderung hochzählen** |
@@ -27,6 +28,8 @@ Motivation: Abfragen in Häppchen (`biteCounter()`, `cfg.bite` = `settings.bite`
 Effizienz: Wort-Abfrage mischt fällige und neue Wörter 70/30 (`mixNew()`, `NEW_SHARE`, Pool `newWordPool()`, Tagesrest `newWordsLeft()`), ebenso die Satz-Abfrage; neue Karten werden zuerst gezeigt (`cfg.introNew`, Lernschritte fragen sie danach ab); „⏭ Später“ (`cfg.later` = `postpone()`, 3 Tage, Sätze mit `s.later`); geteilte Sätze: ganzer Satz erst, wenn alle Teile gelernt sind (`partsLearned()` in `withParts()`), neue Sätze über `LONG_SENT` Wörter nach den kurzen; `log.secured` = heute sicher gewordene Wörter (in `cheer()`), ohne messbares Tempo Wenn-dann-Rechnung mit dem Tagesziel neuer Wörter. „Heute zuerst“ hat keinen eigenen Neue-Wörter-Schritt mehr.
 
 Karteikarten-Abfrage `recallSession()`: nach dem Aufdecken deckt „🙈 Zudecken“ (`cover()`) die Lösung wieder zu (Einprägen → ohne Hilfe nochmal sagen); bewertet wird erst nach erneutem Aufdecken.
+
+Bilder & Alltag: `data/emoji.js` (`window.EMOJI`, Schlüssel = deutsche Bedeutung über `emojiKey()`, gilt für alle Sprachen), `wordEmoji(id)` (auch `r:`-IDs, `settings.emoji === false` = aus) in `recallSession` (vorne nur ohne `cfg.rev`) und `hearSession` (Lösung). Foto-Jagd: `problemWords()` (`lapses ≥ PHOTO_LAPSES` = 2), `hasPhoto()`, `photoHunt()`, Hinweis `#photo-tip` nach dem Aufdecken. Orte-Karte: `views.islands` als Kacheln, `islandIcon()` (`isl.icon` oder `PLACE_ICONS` nach Titel), `isl.where` (echter Ort), `islandProgress()` mit `sentenceSits()` (= raus aus „Schwierige Sätze“); `views.here` (`#here/<Insel-ID>`, `HERE_COUNT` Sätze, ohne Bewertung, `log.here`). Tagesauftrag: `MISSIONS` (`spot`/`here`/`self`/`photo`), `missionData()` mit festem Tages-Zufall (`seededPick()`), `todayMission()`, `missionCard()`/`bindMission()` auf der Startseite; im Log nur Zahlen (`missionK` = Art + 1, `missionDone`), weil `mergeState()` pro Feld das Maximum nimmt; `missionCheck(kind)` erledigt automatisch.
 
 ## Daten
 - `localStorage`: `sl.settings`, `sl.data.<lang>` (Zustand pro Sprache), `sl.sync`, `sl.talkcfg` (API-Schlüssel), `sl.talk.<lang>` (laufendes Gespräch), `sl.usage`.

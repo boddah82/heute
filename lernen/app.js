@@ -204,7 +204,7 @@ function checkBadges(force) {
 
 // Wochenwerte (Mo–So) für Rückblick und Teilen
 function weekStats(start) {
-  const out = { minutes: 0, days: 0, xp: 0, newWords: 0, reviews: 0, wok: 0, wfail: 0, talks: 0, newSent: 0 };
+  const out = { minutes: 0, days: 0, xp: 0, newWords: 0, reviews: 0, wok: 0, wfail: 0, talks: 0, newSent: 0, missionDone: 0 };
   for (let d = start; d < start + 7 && d <= today(); d++) {
     const l = state.log[d];
     if (!l) continue;
@@ -212,7 +212,7 @@ function weekStats(start) {
     out.minutes += m;
     if (m >= 1) out.days++;
     out.xp += dayXP(d);
-    ['newWords', 'reviews', 'wok', 'wfail', 'talks', 'newSent'].forEach(k => { out[k] += l[k] || 0; });
+    ['newWords', 'reviews', 'wok', 'wfail', 'talks', 'newSent', 'missionDone'].forEach(k => { out[k] += l[k] || 0; });
   }
   out.acc = out.wok + out.wfail ? Math.round(out.wok / (out.wok + out.wfail) * 100) : null;
   return out;
@@ -588,6 +588,25 @@ const photoDB = (() => {
   };
 })();
 function photoKey(id) { return settings.lang + '|' + id; }
+// Emoji für konkrete Wörter (data/emoji.js), Schlüssel = deutsche Bedeutung → gilt für alle Sprachen; abschaltbar
+function emojiKey(d) { return String(d || '').split(' / ')[0].replace(/\(.*?\)/g, '').trim().toLowerCase(); }
+// Foto-Jagd: Wörter, die immer wieder vergessen werden, bekommen den Vorschlag, sie draußen zu fotografieren
+const PHOTO_LAPSES = 2;
+function problemWords() { return allWords().filter(w => isWordId(w.id) && (state.srs[w.id] || {}).lapses >= PHOTO_LAPSES); }
+async function hasPhoto(id) { try { return !!(await photoDB.get(photoKey(id))); } catch (e) { return false; } }
+async function photoHunt(max = 5) {
+  const out = [];
+  for (const w of problemWords().sort((a, b) => state.srs[b.id].lapses - state.srs[a.id].lapses)) {
+    if (!(await hasPhoto(w.id))) out.push(w);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+function wordEmoji(id) {
+  if (settings.emoji === false || !window.EMOJI || !id) return '';
+  const w = wordById(id.replace(/^r:/, ''));
+  return w ? window.EMOJI[emojiKey(w.d)] || '' : '';
+}
 // Foto verkleinern (max. 720 px) und als JPEG-Daten-URL speichern
 function resizeImage(file, max = 720) {
   return new Promise((res, rej) => {
@@ -867,14 +886,16 @@ function recallSession(root, ids, cfg) {
     const cx = cfg.ctx && cfg.ctx(id);
     steps.begin(id);
     const m = cfg.big === 'target' ? splitMeaning(it.d, id) : { de: it.d };
+    const emo = cfg.big === 'target' ? wordEmoji(id) : ''; // im Hören (rev) erst auf der Lösung, sonst verrät es die Antwort
     root.innerHTML = `
       ${bite ? bite.head(it.isNew) : `<div class="row between muted small"><span>${queue.length} übrig</span>${it.isNew ? '<span class="pill">neu</span>' : ''}</div>`}
       <div class="card flash">
         <img data-photo="${esc(id)}" class="photo" hidden alt="">
+        ${!cfg.rev && emo ? `<div class="emoji-big" aria-hidden="true">${emo}</div>` : ''}
         ${cfg.rev ? `<div class="${cfg.big}">${esc(it.t)}</div><button class="btn small" id="q-say">🔊</button>` : `<div class="native">${esc(m.de)}</div>`}
         ${it.note ? `<button class="btn small" id="hint" style="margin-top:8px">💡 Eselsbrücke</button><div class="hint" id="hint-t" hidden>${esc(it.note)}</div>` : ''}
         ${cx ? `<button class="btn small" id="cx-b" style="margin-top:8px">📖 Satz zeigen</button><div class="small muted" id="cx-f" hidden style="margin-top:6px">${cx.front}</div>` : ''}
-        <div id="answer" hidden>${cfg.rev ? `<div class="native">${esc(m.de)}</div>` : `<div class="${cfg.big}">${esc(it.t)}</div>`}<div id="mx">${meaningExtra(m)}</div><div id="cmp" class="small"></div><div id="wordhelp"></div>${cx ? `<div style="margin-top:8px">${cx.back}</div>` : ''}</div>
+        <div id="answer" hidden>${cfg.rev ? `${emo ? `<div class="emoji-big" aria-hidden="true">${emo}</div>` : ''}<div class="native">${esc(m.de)}</div>` : `<div class="${cfg.big}">${esc(it.t)}</div>`}<div id="mx">${meaningExtra(m)}</div><div id="cmp" class="small"></div><div id="wordhelp"></div>${cx ? `<div style="margin-top:8px">${cx.back}</div>` : ''}</div>
       </div>
       ${cfg.rev ? '<p class="muted small">Laut sagen, was es auf Deutsch heißt → aufdecken.</p>' : ''}
       ${cfg.typing && !cfg.rev ? `<input type="text" id="typed" placeholder="Antwort tippen (optional)" autocomplete="off" autocapitalize="off" spellcheck="false">` : ''}
@@ -933,6 +954,12 @@ function recallSession(root, ids, cfg) {
         if (ws.length) $('#wordhelp', root).innerHTML = `<div class="wordhelp">${ws.map(w => `<span><b>${esc(w.t)}</b> – ${esc(w.d)}${state.srs[w.id] ? '' : ' <span class="pill">neu</span>'}</span>`).join('')}</div><div class="muted small">aus der Wortliste – im Satz kann ein Wort etwas anderes heißen${talkCfg.key ? ' (🔍 Prüfen)' : ''}</div>`;
       }
       if (!cfg.rev) speak(it.t);
+      // Klemmt das Wort? Eigenes Foto vorschlagen (nur einmal pro Karte, nur ohne Foto)
+      if (cfg.big === 'target' && isWordId(id) && (state.srs[id] || {}).lapses >= PHOTO_LAPSES && !$('#photo-tip', root)) hasPhoto(id).then(has => {
+        if (has || !revealed || $('#photo-tip', root) || !$('#post', root)) return;
+        $('#post', root).insertAdjacentHTML('afterbegin', `<div class="notice small" id="photo-tip">📷 Dieses Wort klemmt (${state.srs[id].lapses}× vergessen). Mach ein Foto davon, wenn du ${emo || 'es'} das nächste Mal siehst – ein eigenes Bild bleibt besser hängen. <button class="btn small" id="photo-go">Foto hinzufügen</button></div>`);
+        $('#photo-go', root).onclick = () => { const d = $('#memo', root); d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+      });
     };
     // Lösung wieder verstecken: einprägen, zudecken, ohne Hilfe nochmal sagen, erneut aufdecken
     const cover = () => {
@@ -1080,6 +1107,117 @@ function todayPlan() {
   return { steps: steps.slice(0, 3), pause: pauseDays() };
 }
 
+// ---------- Tagesauftrag: jeden Tag eine kleine Aufgabe draußen im echten Leben ----------
+// Im Log nur Zahlen (Sync nimmt pro Feld das Maximum): missionK = gewählte Art + 1, missionDone = 1.
+// Inhalte werden pro Tag fest ausgelost (gleicher Tag → gleicher Auftrag), „🔄 Anderer Auftrag“ wechselt die Art.
+const MISSIONS = ['spot', 'here', 'self', 'photo'];
+const SELF_SITUATIONS = ['Beim Kochen', 'Beim Autofahren', 'Beim Zähneputzen', 'Auf dem Weg zur Arbeit', 'Beim Spazierengehen', 'Beim Aufräumen', 'Im Fitnessstudio'];
+function seeded(seed) { let x = Math.abs(Math.floor(seed)) % 2147483646 + 1; return () => (x = x * 16807 % 2147483647) / 2147483647; }
+function seededPick(arr, n, seed) {
+  const r = seeded(seed), a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a.slice(0, n);
+}
+function missionData(kind, seed) {
+  if (kind === 'spot') {
+    // Dinge mit Bild, die schon sitzen (sonst wenigstens im Training) – draußen entdecken und laut sagen
+    const withEmo = allWords().filter(w => state.srs[w.id] && wordEmoji(w.id));
+    const sure = withEmo.filter(w => state.srs[w.id].iv >= 3);
+    const pool = sure.length >= 5 ? sure : withEmo;
+    return pool.length >= 3 ? { words: seededPick(pool, 5, seed) } : null;
+  }
+  if (kind === 'here') {
+    const isls = state.islands.filter(i => i.sentences.some(x => state.srs[x.id]));
+    const withWhere = isls.filter(i => i.where);
+    const pool = withWhere.length ? withWhere : isls;
+    return pool.length ? { isl: seededPick(pool, 1, seed)[0] } : null;
+  }
+  if (kind === 'self') {
+    const sits = allSentences().filter(x => !x.partOf && sentenceSits(state.srs[x.id]));
+    return sits.length >= 3 ? { sents: seededPick(sits, 3, seed), when: seededPick(SELF_SITUATIONS, 1, seed + 1)[0] } : null;
+  }
+  if (kind === 'photo') {
+    const pw = problemWords();
+    return pw.length ? { words: seededPick(pw, 3, seed) } : null;
+  }
+  return null;
+}
+function missionOptions() {
+  const t = today();
+  return MISSIONS.map((k, i) => ({ k, i, d: missionData(k, t * 7 + i) })).filter(x => x.d);
+}
+function todayMission() {
+  const l = dayLog(), avail = missionOptions();
+  if (!avail.length) return null;
+  let idx = l.missionK ? avail.findIndex(x => x.i === l.missionK - 1) : -1;
+  if (idx < 0) idx = today() % avail.length;
+  return Object.assign({ done: !!l.missionDone, others: avail.length > 1 }, avail[idx]);
+}
+function missionNext() {
+  const l = dayLog(), avail = missionOptions(), cur = todayMission();
+  if (!cur || avail.length < 2) return;
+  const k = avail.findIndex(x => x.i === cur.i);
+  l.missionK = avail[(k + 1) % avail.length].i + 1;
+  persist();
+}
+function missionDone() {
+  const l = dayLog();
+  if (l.missionDone) return;
+  l.missionDone = 1;
+  addXP(5);
+  persist();
+}
+// Erledigt sich von selbst, wenn man die passende Funktion nutzt (z. B. „📍 Ich bin hier“)
+function missionCheck(kind) { const m = todayMission(); if (m && m.k === kind) missionDone(); }
+function missionCard() {
+  const m = todayMission();
+  if (!m) return '';
+  if (m.done) return `<div class="card mission done"><b>🌍 Tagesauftrag erledigt</b> <span class="muted small">– stark, genau so kommt die Sprache raus in den Alltag.</span></div>`;
+  const wordChip = w => `<button class="chip" data-say="${esc(w.t)}">${wordEmoji(w.id) || '🔹'} <b>${esc(w.t)}</b> <span class="muted">${esc(splitMeaning(w.d, w.id).de)}</span></button>`;
+  let head = '', body = '', act = '<button class="btn primary" id="ms-done">✅ Geschafft</button>';
+  if (m.k === 'spot') {
+    head = '🔎 Wörter-Jagd';
+    body = `<p class="small">Entdecke diese Dinge heute im Alltag. Wenn du eins siehst: Wort laut sagen.</p><div class="chips">${m.d.words.map(wordChip).join('')}</div>`;
+  } else if (m.k === 'here') {
+    const i = m.d.isl;
+    head = `📍 Ort-Auftrag: ${islandIcon(i)} ${esc(i.title)}`;
+    body = `<p class="small">${i.where ? `Wenn du heute <b>${esc(i.where)}</b> bist` : 'Wenn du heute in dieser Situation bist'}: tipp dort auf „📍 Ich bin hier“ und sag die Sätze.${i.where ? '' : ` <a href="#islands/${i.id}">Ort eintragen</a>`}</p>`;
+    act = `<a class="btn primary" href="#here/${i.id}">📍 Ich bin hier</a>`;
+  } else if (m.k === 'self') {
+    head = '🗣️ Selbstgespräch';
+    body = `<p class="small"><b>${esc(m.d.when)}</b>: Erzähl dir auf ${LANGS[settings.lang].name}, was du gerade machst – mindestens 3 Sätze, gern holprig. Diese Sätze kannst du schon:</p>
+      <ul class="list">${m.d.sents.map(x => `<li><button class="btn small" data-say="${esc(x.t)}">🔊</button><div class="grow"><div class="t">${esc(numText(x.t))}</div><div class="d">${esc(x.d)}</div></div></li>`).join('')}</ul>`;
+  } else if (m.k === 'photo') {
+    head = '📷 Foto-Jagd';
+    body = `<p class="small">Diese Wörter klemmen. Fotografiere sie heute draußen – das Foto erscheint dann auf der Karte.</p>
+      ${m.d.words.map(w => `<div class="row between" style="margin:6px 0">${wordChip(w)}<span class="ms-ph" data-ph="${esc(w.id)}"></span>${photoEditor(w.id, false)}</div>`).join('')}`;
+  }
+  return `<div class="card mission" id="mission">
+    <div class="row between"><b>🌍 Tagesauftrag · ${head}</b></div>
+    ${body}
+    <div class="row" style="margin-top:8px">${act}${m.others ? '<button class="btn" id="ms-next">🔄 Anderer Auftrag</button>' : ''}</div>
+  </div>`;
+}
+function bindMission(root) {
+  const box = $('#mission', root);
+  if (!box) return;
+  const redraw = () => { box.outerHTML = missionCard(); bindMission(root); };
+  $$('[data-say]', box).forEach(b => { b.onclick = () => speak(b.dataset.say); });
+  if ($('#ms-done', box)) $('#ms-done', box).onclick = () => { missionDone(); toast('Tagesauftrag geschafft! +5 Punkte'); redraw(); };
+  if ($('#ms-next', box)) $('#ms-next', box).onclick = () => { missionNext(); redraw(); };
+  if ($('.ms-ph', box)) {
+    bindPhotoEditors(box);
+    // Foto-Jagd: erledigt, sobald alle Wörter ein Foto haben
+    const check = async () => {
+      let all = true;
+      for (const el of $$('.ms-ph', box)) { const has = await hasPhoto(el.dataset.ph); el.textContent = has ? '✅' : ''; all = all && has; }
+      if (all) { missionDone(); redraw(); }
+    };
+    $$('[data-photo-in]', box).forEach(inp => { const prev = inp.onchange; inp.onchange = async () => { await prev(); check(); }; });
+    check();
+  }
+}
+
 // ---------- Fortschritt: Etappenziel, Prognose, Woche, Verlauf ----------
 // Sichere Wörter (Abstand ≥ 3 Tage) werden täglich im Log notiert (l.secure) – daraus Woche, Tempo und Meilensteine.
 const MILESTONES = [50, 100, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10000];
@@ -1193,6 +1331,7 @@ views.home = function (root) {
         ${plan.steps.map((st, i) => `<a class="plan-step" href="${st.href}"><span class="num">${'①②③'[i]}</span><span class="grow"><b>${esc(st.title)}</b><span class="meta">${esc(st.why)}</span></span><span>›</span></a>`).join('')}
       </div>`;
     })()}
+    ${missionCard()}
     ${progressCard()}
     <div class="stats">
       <div class="stat"><b>${learnedWords}</b><span>Wörter im Training</span></div>
@@ -1229,6 +1368,7 @@ ${talkLocked() ? '' : `    <a class="card step" href="#talk">
     }).join('')}
     <p class="muted small">Mitgeliefert: ${starterWords(settings.lang).length} Wörter, nach Häufigkeit sortiert. Übersetzungen ungeprüft – Fehler mit ✎ korrigieren. Mehr unter „Wörter → Eigene“ importieren.</p>
     <div class="row"><a class="btn grow" href="#settings">⚙️ Einstellungen & Backup</a><a class="btn grow" href="#method">📖 Methode</a></div>`;
+  bindMission(root);
 };
 
 views.method = function (root) {
@@ -1333,7 +1473,7 @@ function hearSession(pane) {
         <button class="btn big" id="h-play">🔊 Anhören</button>
         <div class="target" id="h-t" hidden>${esc(w.t)}</div>
         <div id="h-answer" hidden>
-          <div class="native">${esc(splitMeaning(w.d, wid).de)}</div>${meaningExtra(splitMeaning(w.d, wid))}
+          ${wordEmoji(wid) ? `<div class="emoji-big" aria-hidden="true">${wordEmoji(wid)}</div>` : ''}<div class="native">${esc(splitMeaning(w.d, wid).de)}</div>${meaningExtra(splitMeaning(w.d, wid))}
           ${state.notes[wid] ? `<div class="hint">💡 ${esc(state.notes[wid])}</div>` : ''}
         </div>
       </div>
@@ -4277,20 +4417,52 @@ function textDetail(root, tx) {
   };
 }
 
+// ---------- Orte-Karte: Inseln als Kacheln mit Bild, echtem Ort und Fortschritt ----------
+// Idee: Sätze an echte Orte im eigenen Alltag binden (wie ein Gedächtnispalast) – „📍 Ich bin hier“ holt sie vor Ort hervor.
+const PLACE_ICONS = [
+  [/caf|restaur|bar\b|essen|kneipe/i, '☕'], [/unterwegs|reise|bahn|zug|verkehr|auto/i, '🚆'], [/über mich/i, '🙋'],
+  [/smalltalk|gespräch|kennenlernen/i, '💬'], [/arbeit|job|büro|kolleg/i, '💼'], [/famil/i, '👨‍👩‍👧'],
+  [/einkauf|markt|laden|shop/i, '🛒'], [/arzt|gesund|apothe|kranken/i, '🩺'], [/wohnung|zuhause|haus|küche/i, '🏠'],
+  [/hobby|freizeit|sport|fitness|training/i, '⚽'], [/schule|uni/i, '🏫'], [/freund/i, '🧑‍🤝‍🧑'], [/hotel|urlaub/i, '🏨'],
+  [/wetter/i, '🌦️'], [/telefon|handy/i, '📞'], [/meinung/i, '🗣️'], [/wochenende/i, '🛋️'],
+];
+function islandIcon(isl) {
+  if (isl.icon) return isl.icon;
+  if (isl.id.startsWith('txt-')) return '📄';
+  if (isl.id.startsWith('read-')) return '📖';
+  if (isl.id.startsWith('ex-')) return '✏️';
+  const hit = PLACE_ICONS.find(([re]) => re.test(isl.title));
+  return hit ? hit[1] : '🏝️';
+}
+// Sitzt = 2× Gut/Leicht an verschiedenen Tagen (wie bei „Schwierige Sätze“) oder ≥ 3 Wochen Abstand
+function sentenceSits(c) { return !!c && (c.iv >= 21 || goodStreak(c) >= SENT_KNOWN); }
+function islandProgress(isl) {
+  const ss = isl.sentences.filter(s => !s.partOf);
+  const cs = ss.map(s => state.srs[s.id]);
+  return { n: ss.length, train: cs.filter(Boolean).length, sits: cs.filter(sentenceSits).length };
+}
 views.islands = function (root, id) {
   const isl = id && state.islands.find(i => i.id === id);
   if (isl) { islandDetail(root, isl); return; }
   root.innerHTML = `
     ${islandsSeg('islands')}
-    <p class="muted small">10–20 Sätze pro Thema, die du im echten Leben sagen wirst. Die mitgelieferten Inseln sind Vorlagen – Namen, Orte und Details an dich anpassen.</p>
-    ${state.islands.map(i => `
-      <a class="card step" href="#islands/${i.id}">
-        <div class="num">${i.sentences.length}</div>
-        <div class="grow"><b>${esc(i.title)}</b><div class="meta">${i.sentences.length} Sätze</div></div><div>›</div>
-      </a>`).join('')}
+    <p class="muted small">Deine Orte: 10–20 Sätze pro Situation, die du im echten Leben sagst. Trag bei jeder Insel ein, <b>wo</b> du das brauchst (z. B. „Bar an der Ecke“) – und tipp dort auf <b>📍 Ich bin hier</b>.</p>
+    <div class="places">
+      ${state.islands.map(i => { const pr = islandProgress(i); return `
+        <div class="place">
+          <a href="#islands/${i.id}" class="place-main">
+            <div class="place-icon" aria-hidden="true">${islandIcon(i)}</div>
+            <b>${esc(i.title)}</b>
+            ${i.where ? `<span class="meta">📍 ${esc(i.where)}</span>` : ''}
+            <div class="progress thin"><div style="width:${pr.n ? Math.round(pr.sits / pr.n * 100) : 0}%"></div></div>
+            <span class="meta">${pr.sits} von ${pr.n} sitzen</span>
+          </a>
+          ${pr.n ? `<a class="btn small" href="#here/${i.id}">📍 Ich bin hier</a>` : ''}
+        </div>`; }).join('')}
+    </div>
     <div class="card">
       <b>Neue Insel</b>
-      <p class="muted small">Ideen: Arbeit, Hobbys, Familie, Wohnung, Wochenende, Arztbesuch, Einkaufen, Meinungen.</p>
+      <p class="muted small">Ideen: Arbeit, Fitnessstudio, Familie, Wohnung, Wochenende, Arztbesuch, Einkaufen, Meinungen.</p>
       <div class="row"><input type="text" id="i-title" class="grow" placeholder="Thema"><button class="btn primary" id="i-add">Anlegen</button></div>
     </div>`;
   bindGo(root);
@@ -4304,11 +4476,45 @@ views.islands = function (root, id) {
   };
 };
 
+// „📍 Ich bin hier“: ein paar Sätze dieses Ortes jetzt sagen (laut oder im Kopf). Ohne Bewertung – die bleibt in der Satz-Abfrage.
+const HERE_COUNT = 5;
+views.here = function (root, id) {
+  const isl = state.islands.find(i => i.id === id);
+  if (!isl) { location.hash = '#islands'; return; }
+  const ss = isl.sentences.filter(s => !s.partOf);
+  // Was schon im Training ist, zuerst (das soll raus in den Alltag), davon die wackligen; Rest zufällig
+  const trained = shuffle(ss.filter(s => state.srs[s.id])).sort((a, b) => sentenceSits(state.srs[a.id]) - sentenceSits(state.srs[b.id]));
+  const list = trained.concat(shuffle(ss.filter(s => !state.srs[s.id]))).slice(0, HERE_COUNT);
+  root.innerHTML = `
+    <a href="#islands/${isl.id}" class="small">‹ ${esc(isl.title)}</a>
+    <h1>${islandIcon(isl)} ${esc(isl.where || isl.title)}</h1>
+    <p class="muted small">Du bist gerade hier: Sag diese Sätze jetzt – laut oder im Kopf. Erst selbst versuchen, dann antippen.</p>
+    <div class="stack">
+      ${list.map((s, k) => `<button class="card here-item" data-k="${k}"><div class="native">${esc(s.d)}</div><div class="sentence" hidden>${esc(numText(s.t))}</div></button>`).join('')}
+    </div>
+    <button class="btn primary big" id="here-done" style="width:100%;margin-top:12px">✅ Gesagt</button>
+    <p class="muted small">Zählt als Tagesauftrag, wenn der heute „📍 Ich bin hier“ heißt.</p>`;
+  $$('.here-item', root).forEach(b => {
+    b.onclick = () => { const t = $('.sentence', b); t.hidden = false; speak(list[Number(b.dataset.k)].t); };
+  });
+  $('#here-done', root).onclick = () => {
+    const l = dayLog();
+    l.here = (l.here || 0) + 1;
+    addXP(list.length);
+    missionCheck('here');
+    persist();
+    toast('Stark – genau so kommt es raus in den Alltag.');
+    location.hash = '#home';
+  };
+};
+
 function islandDetail(root, isl) {
   const code = LANGS[settings.lang].name;
   root.innerHTML = `
     <a href="#islands" class="small">‹ Alle Inseln</a>
-    <input type="text" id="i-name" value="${esc(isl.title)}" style="font-size:20px;font-weight:700;margin:8px 0 12px">
+    <div class="row" style="margin:8px 0 4px"><button class="btn place-icon-btn" id="i-icon" title="Bild ändern">${islandIcon(isl)}</button><input type="text" id="i-name" class="grow" value="${esc(isl.title)}" style="font-size:20px;font-weight:700"></div>
+    <label for="i-where">📍 Wo brauchst du das im echten Leben?</label>
+    <div class="row" style="margin-bottom:12px"><input type="text" id="i-where" class="grow" value="${esc(isl.where || '')}" placeholder="z. B. Bar an der Ecke, im Auto, Fitnessstudio">${isl.sentences.length ? `<a class="btn" href="#here/${isl.id}">📍 Ich bin hier</a>` : ''}</div>
     ${isl.id.startsWith('txt-') ? '<p class="muted small">Sätze aus deinen eigenen Texten. Einen ganzen Text einfügen und übersetzen lassen: <a href="#texts">📄 Texte</a>.</p>' : ''}
     <div class="card">
       <b>Satz hinzufügen</b>
@@ -4336,6 +4542,15 @@ function islandDetail(root, isl) {
   const find = id => isl.sentences.find(s => s.id === id);
   bindPhotoEditors(root);
   $('#i-name', root).onchange = e => { isl.title = e.target.value.trim() || isl.title; isl.ts = Date.now(); persist(); };
+  $('#i-where', root).onchange = e => { isl.where = e.target.value.trim(); isl.ts = Date.now(); persist(); };
+  $('#i-icon', root).onclick = () => {
+    const v = prompt('Ein Emoji für diesen Ort (z. B. ☕ 🏋️ 🚗 🛒):', islandIcon(isl));
+    if (v === null) return;
+    isl.icon = v.trim().slice(0, 8); // leer = automatisch nach dem Titel
+    isl.ts = Date.now();
+    persist();
+    islandDetail(root, isl);
+  };
   $('#s-add', root).onclick = () => {
     const d = $('#s-d', root).value.trim(), t = $('#s-t', root).value.trim();
     if (!d || !t) { toast('Beide Felder ausfüllen'); return; }
@@ -5009,6 +5224,7 @@ views.week = function (root, arg) {
         ${row('🎯 Treffer Wörter', a.acc ?? '–', b.acc ?? '–', v => (v === '–' ? v : v + ' %'))}
         ${row('💬 Neue Sätze', a.newSent, b.newSent)}
         ${row('🎙️ Gespräche', a.talks, b.talks)}
+        ${row('🌍 Tagesaufträge', a.missionDone, b.missionDone)}
       </table>
     </div>
     <div class="card">
@@ -5058,6 +5274,7 @@ views.settings = function (root) {
       <label for="o-vit">Stimme Italienisch</label><select id="o-vit">${voiceOpts('it')}</select>
       <label for="o-ven">Stimme Englisch</label><select id="o-ven">${voiceOpts('en')}</select>
       <button class="btn" id="o-test" style="margin-top:10px">🔊 Stimme testen</button>
+      <label class="inline" style="margin-top:12px"><input type="checkbox" id="o-emoji" ${settings.emoji === false ? '' : 'checked'}> Emoji auf Wortkarten (nur konkrete Wörter: 🍞 Brot, 🚉 Bahnhof)</label>
     </div>
     <div class="card">
       <b>Über dich</b> <span class="muted small">(für Satzbaukasten & Dialoge)</span>
@@ -5102,6 +5319,7 @@ views.settings = function (root) {
   const num = (el, min, max, fallback) => { const v = parseInt(el.value, 10); return isNaN(v) ? fallback : Math.min(max, Math.max(min, v)); };
   $('#o-new', root).onchange = e => { settings.newWords = num(e.target, 5, 200, 30); saveSettings(); };
   $('#o-bite', root).onchange = e => { settings.bite = Number(e.target.value); saveSettings(); };
+  $('#o-emoji', root).onchange = e => { settings.emoji = e.target.checked; saveSettings(); };
   $('#o-gw', root).onchange = e => { settings.goalWords = Math.max(0, Math.min(20000, Number(e.target.value) || 0)); saveSettings(); };
   $('#o-gd', root).onchange = e => { settings.goalDate = e.target.value; saveSettings(); };
   $('#o-sent', root).onchange = e => { settings.newSentences = num(e.target, 0, 100, 10); saveSettings(); };
@@ -5371,8 +5589,8 @@ function route() {
   let view = views[name] ? name : 'home';
   if (view === 'talk' && talkLocked() && arg !== 'setup') view = 'locked';
   applyLock();
-  activeStep = view === 'builder' || view === 'grammar' ? 'islands' : view === 'texts' || view === 'read' ? 'listen' : view === 'talk' ? 'talk' : STEPS.some(s => s.key === view) ? view : null;
-  const tab = view === 'builder' || view === 'texts' || view === 'grammar' ? 'islands' : view === 'week' ? 'home' : view;
+  activeStep = view === 'builder' || view === 'grammar' || view === 'here' ? 'islands' : view === 'texts' || view === 'read' ? 'listen' : view === 'talk' ? 'talk' : STEPS.some(s => s.key === view) ? view : null;
+  const tab = view === 'builder' || view === 'texts' || view === 'grammar' || view === 'here' ? 'islands' : view === 'week' ? 'home' : view;
   $$('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
   const root = $('#view');
   views[view](root, arg);

@@ -17,6 +17,15 @@ Zu jedem Wort und jedem Inselsatz lässt sich ein eigenes Foto speichern (Kamera
 ## Beschreiben (Claude)
 Modus „🔎 Beschreiben“ unter Reden: Claude gibt eine Aufgabe („Such etwas Grünes und beschreib es“), du beschreibst in 2–3 Sätzen, Claude korrigiert und fragt nach. Optional mit Foto (📷).
 
+## Bilder: Emoji & Foto-Jagd
+Konkrete Wörter (Dinge, Essen, Orte, Tiere, Wetter, Tätigkeiten) zeigen auf der Wortkarte ein Emoji (🍞 Brot, 🚉 Bahnhof), beim „Verstehen“ erst auf der Lösung. Abstrakte Wörter bekommen bewusst keins. Abschaltbar in den Einstellungen. Wörter, die du mehrmals vergessen hast (ab 2× „Nochmal“), schlagen nach dem Aufdecken ein eigenes Foto vor – am besten draußen vom echten Ding.
+
+## Orte-Karte & „📍 Ich bin hier“
+Inseln erscheinen als Kacheln mit Bild und Fortschritt („x von y sitzen“). Pro Insel eintragen, **wo** du das im echten Leben brauchst (z. B. „Bar an der Ecke“), Bild per Tipp aufs Emoji ändern. Vor Ort „📍 Ich bin hier“: 5 Sätze dieses Ortes (zuerst die, die du schon übst, wacklige vorn) – Deutsch sehen, selbst sagen, antippen zum Prüfen. Ohne Bewertung.
+
+## Tagesauftrag
+Auf der Startseite jeden Tag ein kleiner Auftrag für draußen, je nach Lernstand: 🔎 Wörter-Jagd (Dinge mit Bild im Alltag entdecken und laut sagen), 📍 Ort-Auftrag („Ich bin hier“ an einem deiner Orte), 🗣️ Selbstgespräch (z. B. beim Kochen, mit 3 Sätzen, die schon sitzen), 📷 Foto-Jagd (klemmende Wörter fotografieren). „🔄 Anderer Auftrag“ wechselt, „✅ Geschafft“ gibt 5 Punkte; Ort- und Foto-Auftrag erledigen sich von selbst. Zählt im Wochenrückblick.
+
 ## Eigene Texte
 Unter Inseln → „📄 Texte“: eigene Texte einfügen (z. B. Liedtexte zum Mitlesen). Claude übersetzt Zeile für Zeile, Wort für Wort und erklärt Redewendungen (einmalige Kosten pro Text). Vorlesen mit Markierung, Wörter in die Wortliste übernehmen, einzelne Zeilen per ➕ in die Insel „Texte“ (Wiederholung & Shadowing).
 Beim Speichern wird automatisch in ganze Sätze geordnet: Claude setzt kopierte Liedzeilen an echten Satzgrenzen neu zusammen (nur Wort-Nummern, der Wortlaut bleibt), übrig gebliebene Bruchstücke (≤ 2 Wörter) werden angehängt, dann wird übersetzt. Ohne Schlüssel nur Teilung an Satzzeichen. „🔄 Neu ordnen“ geht immer vom Originaltext aus; „↩ Ursprüngliche Zeilen“ stellt ihn wieder her.

@@ -54,9 +54,10 @@ Zusammenfassung der bisherigen Arbeit (Sept./Okt. 2026, Claude Code im Web) für
 
 34. **Kein Wort ohne Satz**: zweite Idee aus dem Video. Neue Wortkarte zeigt einen eigenen Satz mit dem Wort, sonst einen kurzen Alltagssatz von Claude (auf Knopfdruck oder automatisch, 10 Wörter pro Aufruf); Satz nur auf Wunsch („➕ Satz lernen“) als Satz-Karte, damit sich die Abfragen nicht verdoppeln. In der Wort-Abfrage „📖 Satz zeigen“ vorne auf Deutsch, hinten der Satz.
 35. **Schwierige Sätze aktuell + gemischt** (29.10.2026): Nutzer: gekonnte Sätze fielen gefühlt nie raus, immer gleiche Reihenfolge (Folgesätze vorhersagbar). Ursachen: feste Sortierung, `lapses` zählten für immer, raus erst ab 21 Tagen Abstand. Jetzt: „gut gekonnt“ = 2× hintereinander Gut/Leicht an verschiedenen Tagen (Feld `ok`/`okd`, mit Nutzer festgelegt), danach raus aus Hören/Shadowing (bleibt in der Satz-Abfrage, kommt bei Nochmal/Schwer zurück); Wiedergabe gemischt. Muster-Drill-Auswahl bleibt sortiert. Bewertung weiterhin nur in der Satz-Abfrage.
+36. **Bilder + raus in den Alltag** (02.11.2026): Nutzer: App zu monoton/textlastig, Gelerntes kommt nicht „nach draußen“. Gebaut: Emoji für konkrete Wörter (früher als „Emoji-Bilder“ abgelehnt, Grund unbekannt – jetzt gewünscht; abstrakte Wörter bewusst ohne), Foto-Vorschlag nur bei Problemwörtern (Mühe nur, wo sie sich lohnt; Belege für Bilder: v. a. bei konkreten Wörtern, Bilder können Sicherheit vortäuschen), Orte-Karte (Inseln mit echtem Ort, „📍 Ich bin hier“, Gedächtnispalast-Idee), Tagesauftrag (Wörter-Jagd, Ort, Selbstgespräch, Foto-Jagd). Bewusst nicht: KI-Bilder (Claude erzeugt keine Bilder, anderer Dienst kostet), Standort-Erkennung/Push (bräuchte Server bzw. Gerätefreigaben; Gerät des Nutzers unbekannt).
 
 ## Bewusst nicht gemacht / abgelehnt
-- KI-Übersetzung für eigene Sprachinseln (manuell gewünscht), Emoji-Bilder, KI-Merkbild als Text. (Prüfknopf zuerst abgelehnt, später gewünscht – siehe 21.)
+- KI-Übersetzung für eigene Sprachinseln (manuell gewünscht), KI-Merkbild als Text. (Emoji-Bilder zuerst abgelehnt, seit 02.11.2026 gewünscht – siehe 36.) (Prüfknopf zuerst abgelehnt, später gewünscht – siehe 21.)
 - Sprachaufnahme der eigenen Stimme als Eselsbrücke (Text-Diktat gebaut; Audio wäre möglich, nicht angefragt).
 - Fotos im Sync/Backup (zu groß).
 - Fester 90-Tage-Lernplan (App plant täglich adaptiv).

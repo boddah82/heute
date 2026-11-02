@@ -788,6 +788,25 @@ document.addEventListener('keydown', e => { if (keyHandler) keyHandler(e); });
 // Hochrechnung: „Wenn du jeden Tag so lernst wie heute …“. Tempo = sichere Wörter pro Tag (Schnitt 2 Wochen),
 // skaliert mit dem heutigen Einsatz im Vergleich zum Schnitt (Abfragen, im groben Modus neue Wörter).
 // Mehr Einsatz bringt nicht 1:1 mehr sichere Wörter – deshalb auf das 0,5- bis 1,5-Fache begrenzt.
+// Motivation: immer ein NAHES Ziel zeigen (nächste Marke, notfalls die nächsten 25 Wörter); große Stufen nur,
+// wenn sie höchstens NEAR_DAYS entfernt sind – „in mehr als einem Jahr“ bremst mehr, als es hilft (Rückmeldung 02.11.2026).
+const NEAR_DAYS = 60, NEAR_STEP = 25, EXTRA_MIN = 10;
+const clampF = x => Math.max(0.5, Math.min(1.5, x));
+function nearGoal(sec, rate) {
+  const marks = [...new Set(MILESTONES.concat(STAGES.map(x => x.min)))].sort((a, b) => a - b);
+  let n = marks.find(x => x > sec), prev = marks.filter(x => x <= sec).pop() || 0;
+  const far = () => !n || (rate > 0 && (n - sec) / rate > NEAR_DAYS);
+  const step = k => { n = Math.floor(sec / k) * k + k; prev = n - k; };
+  if (far()) step(NEAR_STEP);
+  if (far()) step(10); // sehr langsames Tempo: lieber kleine Schritte als ferne Zahlen
+  return { n, prev, left: n - sec, days: rate > 0 ? Math.ceil((n - sec) / rate) : null };
+}
+// Durchschnittliche Lernminuten pro Lerntag (2 Wochen) – für „Mit 10 Minuten mehr pro Tag …“
+function avgMinutes() {
+  let sum = 0, n = 0;
+  for (let d = today() - 13; d <= today(); d++) { const m = dayMinutes(d); if (m >= 1) { sum += m; n++; } }
+  return n ? sum / n : 0;
+}
 function projection() {
   const sec = secureWordCount(), tg = nextTarget(sec), tempo = secureTempo();
   if (!tempo || tempo.rate <= 0) return null;
@@ -795,33 +814,45 @@ function projection() {
   let sum = 0;
   for (let d = t - 13; d <= t; d++) sum += (state.log[d] || {})[key] || 0;
   const avg = sum / 14, mine = l[key] || 0;
-  const clamp = x => Math.max(0.5, Math.min(1.5, x));
-  const left = tg.n - sec;
-  const daysAt = factor => Math.ceil(left / (tempo.rate * factor));
-  const todayF = mine && avg ? clamp(mine / avg) : 1;
-  const days = daysAt(todayF);
-  // 1 Häppchen mehr pro Tag (nur mit echten Notizen zu sicheren Wörtern)
-  const faster = !tempo.rough && avg ? daysAt(clamp((mine || avg) / avg + settings.bite / avg)) : null;
-  return { tg, days, faster: faster && faster < days ? faster : null, rough: tempo.rough, fromToday: !!mine };
+  const todayF = mine && avg ? clampF(mine / avg) : 1;
+  const rate = tempo.rate * todayF;
+  const near = nearGoal(sec, rate);
+  const stageDays = Math.ceil((tg.n - sec) / rate);
+  // Hebel: 10 Minuten mehr pro Tag (grobe Schätzung, gleiche Begrenzung)
+  const am = avgMinutes();
+  const faster = am ? Math.ceil(near.left / (tempo.rate * clampF(todayF * (am + EXTRA_MIN) / am))) : null;
+  return { sec, tg, near, stageDays, saved: faster !== null && near.days - faster >= 1 ? near.days - faster : 0, rough: tempo.rough, fromToday: !!mine };
+}
+// Heute sicher gewordene Wörter als Steinchen – sichtbar, was der Tag gebracht hat
+function todayStones() {
+  const n = dayLog().secured || 0;
+  if (!n) return '';
+  return `<div class="stones" title="Heute sicher gewordene Wörter">${'🟢'.repeat(Math.min(n, 12))}${n > 12 ? ` <b>+${n - 12}</b>` : ''} <span class="small">heute ${n} ${n === 1 ? 'Wort' : 'Wörter'} sicher</span></div>`;
+}
+function nearBar(g) {
+  const pct = Math.max(3, Math.min(100, (g.n - g.prev - g.left) / (g.n - g.prev) * 100));
+  return `<div class="progress" style="margin:6px 0"><div style="width:${pct}%"></div></div>`;
 }
 function cheer() {
   const l = dayLog();
   const praise = ['Stark!', 'Sehr gut!', 'Weiter so!', 'Klasse!'][(l.bites || 0) % 4];
-  const todayLine = `Heute bis jetzt: <b>${l.reviews}</b> Abfragen · <b>${l.newWords || 0}</b> neue Wörter${l.secured ? ` · <b>+${l.secured}</b> Wörter sicher` : ''}${minutesToday() ? ` · ${minutesToday()} Min.` : ''}`;
+  const todayLine = `Heute bis jetzt: <b>${l.reviews}</b> Abfragen · <b>${l.newWords || 0}</b> neue Wörter${minutesToday() ? ` · ${minutesToday()} Min.` : ''}`;
   const pr = projection();
   if (!pr) {
-    // Noch kein messbares Tempo (z. B. nur Wiederholungen): ehrliche Wenn-dann-Rechnung mit dem Tagesziel neuer Wörter
-    const sec = secureWordCount(), tg = nextTarget(sec), n = newWordTempo().n;
-    return `<p class="small">💪 ${praise} ${todayLine}
-      <br>Für <b>${tg.label}</b> fehlen noch <b>${tg.n - sec}</b> sichere Wörter. Mit ${n} neuen Wörtern pro Tag – wenn sie sitzen – wärst du in ca. <b>${Math.ceil((tg.n - sec) / n)} Tagen</b> da.
-      ${l.newWords ? '' : '<br>Heute ist noch kein neues Wort dabei – neue Wörter bringen dich zur nächsten Stufe.'}</p>`;
+    // Noch kein messbares Tempo (z. B. nur Wiederholungen): Wenn-dann-Rechnung mit dem Tagesziel neuer Wörter, auf das nahe Ziel
+    const sec = secureWordCount(), n = newWordTempo().n, g = nearGoal(sec, n);
+    return `<p class="small">💪 ${praise} ${todayLine}</p>${todayStones()}
+      <p class="small">🎯 Nächstes Ziel: <b>${g.n} sichere Wörter</b> – noch ${g.left}.</p>${nearBar(g)}
+      <p class="small">Mit ${n} neuen Wörtern pro Tag – wenn sie sitzen – ${g.days <= 1 ? '<b>schon morgen</b>' : `in ca. <b>${g.days} Tagen</b>`}.
+      ${l.newWords ? '' : '<br>Heute ist noch kein neues Wort dabei – neue Wörter bringen dich zum nächsten Ziel.'}</p>`;
   }
-  const when = d => d > 365 ? 'mehr als einem Jahr' : `ca. ${d} Tagen`;
-  return `<p class="small">💪 ${praise} ${todayLine}
-    <br>${pr.fromToday ? 'Wenn du jeden Tag so lernst wie heute' : 'Bei deinem Tempo'}: <b>${pr.tg.label} in ${when(pr.days)}</b>${pr.days <= 365 ? ` (≈ ${fmtDate(today() + pr.days)})` : ''}.
-    ${pr.tg.text ? `<br><span class="muted">${pr.tg.label}: „${esc(pr.tg.text)}“</span>` : ''}
-    ${pr.faster ? `<br>Mit <b>1 Häppchen mehr pro Tag</b>: in ${when(pr.faster)}.` : ''}
-    <br><span class="muted">Grobe Hochrechnung aus deinen letzten 2 Wochen.</span></p>`;
+  const g = pr.near, days = d => d <= 1 ? 'morgen' : `ca. ${d} Tagen`;
+  return `<p class="small">💪 ${praise} ${todayLine}</p>${todayStones()}
+    <p class="small" style="margin-bottom:0">🎯 Nächstes Ziel: <b>${g.n} sichere Wörter</b> – noch ${g.left}. ${pr.fromToday ? 'Wenn du jeden Tag so lernst wie heute' : 'Bei deinem Tempo'}: in <b>${days(g.days)}</b> (≈ ${fmtDate(today() + g.days)}).</p>
+    ${nearBar(g)}
+    ${pr.stageDays <= NEAR_DAYS && pr.tg.n !== g.n ? `<p class="small">Danach in Reichweite: <b>${pr.tg.label}</b> in ca. ${pr.stageDays} Tagen${pr.tg.text ? ` – <span class="muted">„${esc(pr.tg.text)}“</span>` : ''}</p>` : pr.tg.n === g.n && pr.tg.text ? `<p class="small muted">${pr.tg.label}: „${esc(pr.tg.text)}“</p>` : ''}
+    ${pr.saved ? `<p class="small">⏱ Mit <b>${EXTRA_MIN} Minuten mehr pro Tag</b>: ${pr.saved} Tag${pr.saved > 1 ? 'e' : ''} früher.</p>` : ''}
+    <p class="small muted">Grobe Hochrechnung aus deinen letzten 2 Wochen.</p>`;
 }
 // 70 % Wiederholung, 30 % neu: neue Karten gleichmäßig einstreuen (etwa jede 3.–4. Karte)
 const NEW_SHARE = 0.3;
@@ -1271,10 +1302,10 @@ function progressCard() {
   const sec = noteSecure();
   const l = dayLog();
   const tg = nextTarget(sec);
-  const pct = Math.max(2, Math.min(100, (sec - tg.prev) / (tg.n - tg.prev) * 100));
   const tempo = secureTempo();
-  const left = tg.n - sec;
-  const eta = tempo && tempo.rate > 0 ? today() + Math.ceil(left / tempo.rate) : null;
+  const rate = tempo ? tempo.rate : 0;
+  const g = nearGoal(sec, rate);
+  const stageDays = rate > 0 ? Math.ceil((tg.n - sec) / rate) : null;
   const wk = weekStart(today()), ws = weekStats(wk), atWk = secureAt(wk - 1);
   const weekLine = atWk ? `<b>+${Math.max(0, sec - atWk.n)}</b> sichere Wörter diese Woche` : `<b>${ws.newWords}</b> neue Wörter diese Woche`;
   let goal = '';
@@ -1289,9 +1320,11 @@ function progressCard() {
   }
   return `${l.mile ? `<div class="card celebrate"><div class="target">🎉</div><p><b>${l.mile.toLocaleString('de-DE')} sichere Wörter!</b></p><p class="small">${(STAGES.find(x => x.min === l.mile) || {}).text || 'Stark – jedes davon hast du dir mehrfach selbst abgerufen.'}</p></div>` : ''}
     <a class="card" href="#level" style="display:block;text-decoration:none;color:var(--text)">
-      <div class="row between"><b>Nächstes Etappenziel: ${tg.label}</b><span class="muted small">${sec} / ${tg.n}</span></div>
-      <div class="progress" style="margin-top:8px"><div style="width:${pct}%"></div></div>
-      <p class="small" style="margin:8px 0 0">Noch <b>${left}</b> sichere Wörter${eta ? ` · bei deinem Tempo etwa am <b>${fmtDate(eta)}</b>${tempo.rough ? ' (grob geschätzt)' : ''}` : ''}</p>
+      <div class="row between"><b>🎯 Nächstes Ziel: ${g.n} sichere Wörter</b><span class="muted small">${sec} / ${g.n}</span></div>
+      ${nearBar(g)}
+      <p class="small" style="margin:8px 0 0">Noch <b>${g.left}</b>${g.days ? ` · bei deinem Tempo in ca. <b>${g.days} Tag${g.days > 1 ? 'en' : ''}</b> (≈ ${fmtDate(today() + g.days)})${tempo.rough ? ' – grob geschätzt' : ''}` : ''}</p>
+      ${todayStones()}
+      <p class="small" style="margin:4px 0 0">${tg.n === g.n ? `Das ist <b>${tg.label}</b>${tg.text ? `: ${esc(tg.text)}` : ''}.` : `Danach: <b>${tg.label}</b> bei ${tg.n}${stageDays && stageDays <= NEAR_DAYS ? ` – in ca. ${stageDays} Tagen in Reichweite` : ''}.`}</p>
       <p class="small" style="margin:4px 0 0">${weekLine} · ${ws.reviews} Abfragen · ${ws.days} Lerntage</p>
       ${goal}
       ${activityBars()}

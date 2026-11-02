@@ -20,7 +20,7 @@ const URL = 'http://localhost:8765/';
   });
   await p.goto(URL + '#home'); await p.reload(); await p.waitForTimeout(300);
   const home = (await p.textContent('#view')).replace(/\s+/g, ' ');
-  console.log('Etappe:', home.match(/Nächstes Etappenziel.*?Lerntage/)[0]);
+  console.log('Etappe:', home.match(/Nächstes Ziel.*?Lerntage/)[0]);
   console.log('Feier 500:', home.includes('500 sichere Wörter!'), '| 137 sichtbar:', home.includes('137'), '| 10.000:', home.includes('10.000'));
   console.log('Heute zuerst:', (await p.textContent('.plan')).replace(/\s+/g, ' ').trim().slice(0, 160));
   console.log('Balken:', await p.$$eval('.bars rect', x => x.length));
@@ -43,7 +43,18 @@ const URL = 'http://localhost:8765/';
   // Eigenes Ziel
   await p.evaluate(() => { settings.goalWords = 10000; settings.goalDate = new Date((today() + 72) * 86400000).toISOString().slice(0, 10); saveSettings(); });
   await p.goto(URL + '#home'); await p.waitForTimeout(200);
-  console.log('Ziel:', (await p.textContent('#view')).replace(/\s+/g, ' ').match(/🎯.*?pro Tag.*?\)\.( Das.*?realistischer\.)?/)[0]);
+  console.log('Ziel:', (await p.textContent('#view')).replace(/\s+/g, ' ').match(/🎯 Dein Ziel.*?pro Tag.*?\)\.( Das.*?realistischer\.)?/)[0]);
+  // Langsames Tempo (Rückmeldung 02.11.2026): 6 sichere Wörter, kaum Zuwachs → nie „mehr als einem Jahr“, nahes Ziel statt A2
+  await p.evaluate(() => {
+    const t = today(); settings.goalWords = 0; saveSettings();
+    state.srs = {}; allWords().slice(0, 6).forEach(w => { state.srs[w.id] = { iv: 10, ef: 2.5, reps: 4, lapses: 0, due: t + 5, ts: 1 }; });
+    state.log = {}; state.log[t - 20] = { sec: { vocab: 720 }, newWords: 3, reviews: 20, secure: 2 }; state.log[t] = { sec: { vocab: 720 }, newWords: 2, reviews: 20, secure: 6, secured: 2 };
+    persist();
+  });
+  await p.goto(URL + '#home'); await p.reload(); await p.waitForTimeout(300);
+  const slow = (await p.textContent('#view')).replace(/\s+/g, ' ');
+  console.log('langsam:', slow.match(/Nächstes Ziel.*?Lerntage/)[0], '| Jahr:', slow.includes('Jahr'), '| Steine:', await p.$$eval('.stones', x => x.length));
+  console.log('Hebel:', await p.evaluate(() => { const pr = projection(); return pr && { near: pr.near, saved: pr.saved, stage: pr.stageDays }; }));
   console.log('ERRORS:', errs);
   await b.close();
 })();

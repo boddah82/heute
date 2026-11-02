@@ -234,3 +234,5 @@ mark { background: var(--accent-soft); color: var(--accent); font-weight: 700; b
 .mission { border-left: 4px solid var(--accent); }
 .mission.done { border-left-color: var(--good); }
 .mission .chips { margin-top: 6px; }
+.stones { font-size: 15px; letter-spacing: 1px; margin: 4px 0; }
+.stones .small { letter-spacing: 0; color: var(--muted); }

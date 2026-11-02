@@ -54,7 +54,8 @@ Erst diese Datei lesen. Details nur bei Bedarf (Tabelle „Wo steht was?“).
   - #46 Neue Wörter mit Beispielsatz (Claude holt Sätze für je 10 Wörter, geschätzt 1–3 Cent pro Abruf)
   - #48–#50 Hochrechnung nach jedem Häppchen, Effizienz (70 % Fälliges / 30 % Neues, „⏭ Später“)
   - #52 Schwierige Sätze: gemischt, Satz fällt raus nach 2× Gut/Leicht an verschiedenen Tagen
-  - Bilder + Alltag: Emoji auf Wortkarten, Foto-Jagd für Problemwörter, Orte-Karte mit „📍 Ich bin hier“, Tagesauftrag
+  - #53–#55 Bilder + Alltag: Emoji auf (fast allen) Wortkarten, Foto-Jagd für Problemwörter, Orte-Karte mit „📍 Ich bin hier“, Tagesauftrag
+  - Hochrechnung mit nahem Ziel statt ferner Stufe, 🟢-Steinchen für heute sichere Wörter
 - Rhetorik-App live (gebaut ab 23.10.2026).
 
 ## 7. Offene Punkte

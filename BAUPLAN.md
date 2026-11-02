@@ -47,7 +47,8 @@ Die App folgt wenigen Grundsätzen. Sie gelten für jedes Lernthema, nicht nur f
 | **Sätze** | Satz-Abfrage aus den Sprachinseln, mit Wort-Hilfe | nein |
 | **Hören** | Sätze in Schleife; gelernte Wörter als Hör-Abfrage; Hör-Check ohne Bewertung; Hör-Dialoge mit mehreren Stimmen | Dialoge: ja |
 | **Shadowing** | Einzählen, Wort-Markierung, Pause zum Nachsprechen, Aufnahme und Vergleich; schwierige Sätze zuerst | nein |
-| **Inseln** | Satzsammlungen pro Thema (eigene und Vorlagen); Satzbaukasten mit Drill; Grammatik; eigene Texte | Grammatik und Texte: ja |
+| **Inseln** | Satzsammlungen pro Thema (eigene und Vorlagen) als Orte-Karte mit echtem Ort und „📍 Ich bin hier“; Satzbaukasten mit Drill; Grammatik; eigene Texte | Grammatik und Texte: ja |
+| **Alltag** | Tagesauftrag auf der Startseite (Wörter-Jagd, Ort, Selbstgespräch, Foto-Jagd); Emoji auf Wortkarten für konkrete Wörter; Foto-Vorschlag bei Problemwörtern | nein |
 | **Grammatik** | feste Reihenfolge; „Muster zuerst“ → Frage → Auflösung → 8 Spielformen (umbauen, auswählen, übersetzen); „❓ Frag nach“ und „❓ Warum?“ | ja, einmal pro Lektion, Fragen extra |
 | **Lesen** | Geschichten in Kapiteln auf dem eigenen Niveau; Wort antippen; Vorlesen; 3 Verständnisfragen; Wörter des Kapitels in Runden mit der normalen Abfrage (SM-2); nachgeschlagene Wörter kommen wieder | ja, pro Kapitel |
 | **Texte** | eigene Texte (z. B. Liedtexte) automatisch in Sätze ordnen und übersetzen, Wort für Wort, Redewendungen; darunter Wörter und Sätze in kleinen Runden mit der normalen Abfrage (4 Bewertungen, SM-2), alle Sätze mit einem Tipp in eine Insel (→ Satz-Abfrage) | ja, einmal pro Text |

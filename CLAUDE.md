@@ -43,7 +43,7 @@ Erst diese Datei lesen. Details nur bei Bedarf (Tabelle „Wo steht was?“).
 5. `VERSION` in `lernen/sw.js` (`sl-…`) bzw. `rhetorik/sw.js` (`rh-…`) bei jeder Änderung erhöhen.
 6. Live = Branch → PR → nach `main` mergen. GitHub Pages baut automatisch.
 
-## 6. Was ist live (Stand 29.10.2026)
+## 6. Was ist live (Stand 02.11.2026)
 - Alle Grundfunktionen (Liste: `lernen/README.md`, `BAUPLAN.md` Abschnitt 2).
 - Zuletzt dazugekommen:
   - #38 Kartenrückseite einfach erklärt („💡 Warum so?“)
@@ -53,7 +53,8 @@ Erst diese Datei lesen. Details nur bei Bedarf (Tabelle „Wo steht was?“).
   - #45 🔁 Varianten / Muster-Drill (Idee aus Video „1000 nützliche Sätze, Sprachinseln“)
   - #46 Neue Wörter mit Beispielsatz (Claude holt Sätze für je 10 Wörter, geschätzt 1–3 Cent pro Abruf)
   - #48–#50 Hochrechnung nach jedem Häppchen, Effizienz (70 % Fälliges / 30 % Neues, „⏭ Später“)
-  - Schwierige Sätze: gemischt, Satz fällt raus nach 2× Gut/Leicht an verschiedenen Tagen
+  - #52 Schwierige Sätze: gemischt, Satz fällt raus nach 2× Gut/Leicht an verschiedenen Tagen
+  - Bilder + Alltag: Emoji auf Wortkarten, Foto-Jagd für Problemwörter, Orte-Karte mit „📍 Ich bin hier“, Tagesauftrag
 - Rhetorik-App live (gebaut ab 23.10.2026).
 
 ## 7. Offene Punkte
@@ -61,6 +62,7 @@ Erst diese Datei lesen. Details nur bei Bedarf (Tabelle „Wo steht was?“).
 - Alter Test zum Einstufungstest stürzt seit der Effizienz-Änderung ab (Hilfsfunktion fehlt). App nicht betroffen. Reparieren noch nicht entschieden.
 - #46 Beispielsätze mit echter Claude-API noch ungetestet.
 - Nie echt getestet (nur simuliert): Claude-API, Mikrofon/Kamera, Gerätestimmen, Gist-Sync.
+- Bilder/Orte/Tagesauftrag (02.11.2026) nur simuliert getestet; Emoji-Darstellung hängt vom Gerät ab.
 - Weitere Ideen aus dem Video (nicht gebaut): Vorlage-Insel „Kennenlernen“ als Frage-Antwort-Paare, Zähler „sichere Sätze“.
 - Rhetorik-Ideen (nicht gebaut): Einwand-Rollenspiel, Ausdruck-Karteikarten, Sync.
 

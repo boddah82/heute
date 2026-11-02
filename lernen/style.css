@@ -127,6 +127,7 @@ label.inline input { width: auto; }
 .flash .target { font-size: 30px; font-weight: 700; margin: 6px 0; word-break: break-word; }
 .flash .sentence { font-size: 22px; font-weight: 600; margin: 6px 0; }
 .flash .native { font-size: 19px; color: var(--muted); }
+.flash .emoji-big { font-size: 56px; line-height: 1.1; margin: 0 0 6px; }
 .flash .why { font-size: 15px; margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); text-align: left; }
 .flash .hint { font-size: 14px; color: var(--muted); font-style: italic; margin-top: 8px; }
 .pill { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
@@ -216,3 +217,20 @@ mark { background: var(--accent-soft); color: var(--accent); font-weight: 700; b
 .bars rect.zero { fill: var(--line); }
 .celebrate { text-align: center; border: 2px solid var(--accent); }
 .ex { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+/* Orte-Karte: Inseln als Kacheln */
+.places { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 10px 0 14px; }
+.place { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.place-main { display: flex; flex-direction: column; gap: 4px; color: var(--text); text-decoration: none; min-width: 0; }
+.place-main b { overflow-wrap: anywhere; }
+.place-main .meta { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.place-icon { font-size: 40px; line-height: 1.1; }
+.place .btn { text-align: center; }
+.place-icon-btn { font-size: 28px; padding: 4px 10px; }
+.progress.thin { height: 6px; margin-top: 4px; }
+.here-item { display: block; width: 100%; text-align: left; font: inherit; color: var(--text); cursor: pointer; }
+.here-item .native { font-size: 17px; }
+.here-item .sentence { font-size: 19px; font-weight: 600; margin-top: 6px; }
+/* Tagesauftrag */
+.mission { border-left: 4px solid var(--accent); }
+.mission.done { border-left-color: var(--good); }
+.mission .chips { margin-top: 6px; }

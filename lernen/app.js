@@ -1382,7 +1382,7 @@ ${talkLocked() ? '' : `    <a class="card step" href="#talk">
       <div>›</div></a>`}
     <a class="card step" href="#drive">
       <div class="num">🚗</div>
-      <div class="grow"><b>Auto-Modus</b><div class="meta">${dueW + dueS ? `${Math.min(dueW, wordBudget())} Wörter · ${dueS} Sätze fällig – nur per Sprache` : 'nichts fällig'}</div></div>
+      <div class="grow"><b>Auto-Modus</b><div class="meta">${(() => { const n = Math.min(dueW, wordBudget()) + dueS + hearQueue().length; return n ? `${n} Karten (Wörter, Sätze, Verstehen) – nur per Sprache` : 'nichts fällig'; })()}</div></div>
       <div>›</div></a>
     <a class="card step" href="#builder/${learnedWords < 300 ? 'modal' : 'drill'}">
       <div class="num">🧱</div>
@@ -2763,7 +2763,7 @@ function driveSay(text, de) {
 }
 // Eine Äußerung erkennen; startet neu, wenn Android nach Stille abbricht, bis maxMs vorbei sind.
 // settleMs: nach dem ersten Erkannten noch so lange auf Fortsetzung warten (Denkpausen beim Antworten)
-function driveListen(maxMs, lang, onHeard, settleMs) {
+function driveListen(maxMs, lang, onHeard, settleMs, cmds = true) {
   if (!SR || !driveRun) return Promise.resolve('');
   return new Promise(resolve => {
     const deadline = Date.now() + maxMs;
@@ -2790,7 +2790,7 @@ function driveListen(maxMs, lang, onHeard, settleMs) {
         if (!t) return;
         got.push(t);
         onHeard && onHeard(got.join(' '));
-        if (!settleMs || driveParseCommand(t.toLowerCase(), true)) { finish(t); return; }
+        if (!settleMs || (cmds && driveParseCommand(t.toLowerCase(), true))) { finish(t); return; }
         clearTimeout(settle);
         settle = setTimeout(() => finish(got.join(' ')), settleMs);
       };
@@ -2831,10 +2831,22 @@ function driveDue() {
     if (j >= sents.length || (i < words.length && state.srs[words[i]].due <= state.srs[sents[j]].due)) out.push(words[i++]);
     else out.push(sents[j++]);
   }
-  return out;
+  // „Verstehen“-Karten (r:, Zielsprache → Deutsch) wie im Tab „Verstehen“ samt Tageslimits, gleichmäßig eingestreut
+  const hear = hearQueue();
+  if (!out.length) return hear;
+  const mixed = [], step = out.length / (hear.length + 1);
+  let h = 0;
+  out.forEach((id, k) => { mixed.push(id); while (h < hear.length && k + 1 >= step * (h + 1)) mixed.push(hear[h++]); });
+  return mixed.concat(hear.slice(h));
 }
 // Vorne nur die Bedeutung (ohne Grundform), Zahlen ausgeschrieben – wie auf der Karte
 function driveItem(id) {
+  if (id.startsWith('r:')) {
+    const wid = id.slice(2), w = wordById(wid);
+    if (!w) return null;
+    const it = numberCard({ t: w.t, d: w.d });
+    return { t: it.t, d: splitMeaning(it.d, wid).de, rev: true };
+  }
   if (isWordId(id)) {
     const w = wordById(id);
     if (!w) return null;
@@ -2847,7 +2859,7 @@ function driveItem(id) {
 
 views.drive = function (root) {
   const due = driveDue();
-  const nW = due.filter(isWordId).length, nS = due.length - nW;
+  const nW = due.filter(isWordId).length, nH = due.filter(id => id.startsWith('r:')).length, nS = due.length - nW - nH;
   const lname = LANGS[settings.lang].name;
   if (!SR) {
     root.innerHTML = `<h1>🚗 Auto-Modus</h1><div class="notice warn">Dieser Browser hat keine Spracherkennung. Auf dem Handy Chrome verwenden.</div>`;
@@ -2857,12 +2869,12 @@ views.drive = function (root) {
     <h1>🚗 Auto-Modus</h1>
     ${voiceNotice()}
     <div class="drive">
-      <div class="row between muted small" id="dv-stats"><span>${nW} Wörter · ${nS} Sätze fällig</span><span></span></div>
+      <div class="row between muted small" id="dv-stats"><span>${nW} Wörter · ${nS} Sätze · ${nH} verstehen</span><span></span></div>
       <div class="drive-main">
         <div id="dv-phase" class="drive-phase">${due.length ? `${due.length} Wiederholungen` : 'Nichts fällig'}</div>
         <div id="dv-text" class="drive-text"></div>
         <div id="dv-heard" class="muted small"></div>
-        ${due.length ? `<p class="muted small" id="dv-help">Vor der Fahrt starten, Handy in die Halterung, Display bleibt an. Ich sage es auf Deutsch, du antwortest laut auf ${lname}, dann höre ich die Lösung vor und du sagst „gewusst“, „schwer“, „nochmal“ oder „leicht“. „Pause“, „weiter“ und „Stopp“ gehen jederzeit. Nur fällige Wiederholungen, keine neuen. Braucht Internet für die Spracherkennung.</p>` : ''}
+        ${due.length ? `<p class="muted small" id="dv-help">Vor der Fahrt starten, Handy in die Halterung, Display bleibt an. Ich sage es auf Deutsch, du antwortest laut auf ${lname} – bei „Verstehen“-Karten umgekehrt: ich sage es auf ${lname}, du sagst, was es heißt. Dann höre ich die Lösung vor und du sagst „gewusst“, „schwer“, „nochmal“ oder „leicht“. „Pause“, „weiter“ und „Stopp“ gehen jederzeit. Keine neuen Wörter oder Sätze. Braucht Internet für die Spracherkennung.</p>` : ''}
       </div>
       <div class="row">
         ${due.length ? '<button class="btn primary drive-btn grow" id="dv-start">Starten</button>' : '<a class="btn drive-btn grow" href="#home">Zurück</a>'}
@@ -2904,7 +2916,7 @@ views.drive = function (root) {
     const alive = () => driveRun === run && !run.stop;
     const broken = () => !alive() || run.paused;
     paintStats(queue.length);
-    await driveSay(`Auto-Modus. ${queue.length} Wiederholungen. Antworte laut auf ${lname}, danach sag gewusst, schwer oder nochmal. Mit Pause hältst du an, mit Stopp hörst du auf.`, true);
+    await driveSay(`Auto-Modus. ${queue.length} Wiederholungen. Antworte laut, danach sag gewusst, schwer oder nochmal. Mit Pause hältst du an, mit Stopp hörst du auf.`, true);
 
     while (queue.length && alive()) {
       if (run.paused) {
@@ -2922,25 +2934,30 @@ views.drive = function (root) {
       const id = queue[0];
       const it = driveItem(id);
       if (!it) { queue.shift(); continue; }
-      activeStep = isWordId(id) ? 'vocab' : 'review';
+      activeStep = isWordId(id) || it.rev ? 'vocab' : 'review';
+      const isNew = !state.srs[id];
       steps.begin(id);
+      // Frage und Lösung je Richtung: normal Deutsch → Zielsprache, „Verstehen“ umgekehrt
+      const q = it.rev ? { label: lname, text: it.t, de: false } : { label: 'Deutsch', text: it.d, de: true };
+      const a = it.rev ? { label: 'Deutsch', text: it.d, de: true } : { label: lname, text: it.t, de: false };
 
-      paint('Deutsch', it.d);
-      await driveSay(it.d, true);
+      paint(q.label, q.text);
+      await driveSay(q.text, q.de);
       if (broken()) continue;
 
-      paint('Ich höre zu …', it.d, 'live');
-      const ans = await driveListen(DRIVE_ANSWER_MS, langCode(), heard, 2500);
-      const c1 = driveParseCommand(ans, true);
+      paint(it.rev ? 'Was heißt das?' : 'Ich höre zu …', q.text, 'live');
+      // Deutsche Antwort nicht als Befehl werten: „la pausa“ → „Pause“ würde sonst anhalten
+      const ans = await driveListen(DRIVE_ANSWER_MS, it.rev ? 'de-DE' : langCode(), heard, 2500, !it.rev);
+      const c1 = it.rev ? null : driveParseCommand(ans, true);
       if (c1 === 'stop') run.stop = true;
       if (c1 === 'pause') run.paused = true;
       if (broken()) continue;
 
-      paint(lname, it.t);
-      await driveSay(it.t);
+      paint(a.label, a.text);
+      await driveSay(a.text, a.de);
       if (broken()) continue;
 
-      paint('Gewusst oder nochmal?', it.t, 'live');
+      paint('Gewusst oder nochmal?', a.text, 'live');
       let r = null;
       for (let attempt = 0; attempt < 2 && r === null && !broken(); attempt++) {
         const t = await driveListen(DRIVE_RATE_MS, 'de-DE', heard);
@@ -2956,6 +2973,7 @@ views.drive = function (root) {
         stats.skipped++;
         await driveSay('Ohne Bewertung weiter.', true);
       } else {
+        if (isNew && it.rev) { const l = dayLog(); l.newHear = (l.newHear || 0) + 1; }
         // Lernschritte wie in der normalen Abfrage: Neues/Vergessenes kommt nach LEARN_GAP Karten wieder
         if (steps.rate(id, r)) queue.splice(Math.min(LEARN_GAP, queue.length), 0, id);
         if (r === 0) stats.again++; else stats.ok++;

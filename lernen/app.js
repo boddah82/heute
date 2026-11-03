@@ -2733,8 +2733,9 @@ views.review = function (root) {
 // Fällige Wörter + Sätze nur per Sprache: Deutsch vorlesen → laut in der Zielsprache antworten
 // (wird nicht ausgewertet) → Lösung vorlesen → „gewusst“/„schwer“/„nochmal“/„leicht“ sagen.
 // Ohne erkannte Bewertung bleibt die Karte fällig. „Pause“, „weiter“, „Stopp“ jederzeit.
-const DRIVE_ANSWER_MS = 15000;
-const DRIVE_RATE_MS = 7000;
+const DRIVE_ANSWER_MS = 7500;
+const DRIVE_RATE_MS = 3500;
+const DRIVE_SETTLE_MS = 1250; // Nachdenkpause beim Antworten
 let driveRun = null; // { stop, paused, abort, wake }
 
 // Verneinung zuerst prüfen: „nicht gewusst“ enthält „gewusst“
@@ -2947,7 +2948,7 @@ views.drive = function (root) {
 
       paint(it.rev ? 'Was heißt das?' : 'Ich höre zu …', q.text, 'live');
       // Deutsche Antwort nicht als Befehl werten: „la pausa“ → „Pause“ würde sonst anhalten
-      const ans = await driveListen(DRIVE_ANSWER_MS, it.rev ? 'de-DE' : langCode(), heard, 2500, !it.rev);
+      const ans = await driveListen(DRIVE_ANSWER_MS, it.rev ? 'de-DE' : langCode(), heard, DRIVE_SETTLE_MS, !it.rev);
       const c1 = it.rev ? null : driveParseCommand(ans, true);
       if (c1 === 'stop') run.stop = true;
       if (c1 === 'pause') run.paused = true;

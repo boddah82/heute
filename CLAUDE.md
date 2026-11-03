@@ -65,7 +65,7 @@ Erst diese Datei lesen. Details nur bei Bedarf (Tabelle „Wo steht was?“).
 - #46 Beispielsätze mit echter Claude-API noch ungetestet.
 - Nie echt getestet (nur simuliert): Claude-API, Mikrofon/Kamera, Gerätestimmen, Gist-Sync.
 - Bilder/Orte/Tagesauftrag (02.11.2026) nur simuliert getestet; Emoji-Darstellung hängt vom Gerät ab.
-- Auto-Modus nur simuliert getestet (Test 34); Erkennung bei Fahrgeräusch/Bluetooth unbekannt. „Verstehen“-Karten (`r:`) sind nicht dabei.
+- Auto-Modus nur simuliert getestet (Test 34); Erkennung bei Fahrgeräusch/Bluetooth unbekannt. „Verstehen“-Karten (`r:`) seit #58 dabei.
 - Weitere Ideen aus dem Video (nicht gebaut): Vorlage-Insel „Kennenlernen“ als Frage-Antwort-Paare, Zähler „sichere Sätze“.
 - Rhetorik-Ideen (nicht gebaut): Einwand-Rollenspiel, Ausdruck-Karteikarten, Sync.
 

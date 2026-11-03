@@ -1,0 +1,90 @@
+// Browser-Test (Playwright): Auto-Modus #drive mit nachgebauter Sprachausgabe/-erkennung.
+process.env.S = process.env.S || require('os').tmpdir();
+const { chromium } = require(process.env.PW || 'playwright');
+const fail = m => { console.log('FEHLER:', m); process.exitCode = 1; };
+(async () => {
+  const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
+  const seedState = t => ({
+    words: [{ id: 'u:1', t: 'la mela', d: 'der Apfel', ts: 1 }, { id: 'u:2', t: 'il cane', d: 'der Hund', ts: 1 }],
+    islands: [{ id: 'i1', title: 'T', ts: 1, sentences: [{ id: 's:1', t: 'Ho 40 anni.', d: 'Ich bin vierzig.', ts: 1 }] }],
+    srs: { 'u:1': { iv: 3, ef: 2.5, reps: 2, lapses: 0, due: t - 2 }, 's:1': { iv: 3, ef: 2.5, reps: 2, lapses: 0, due: t - 1 }, 'u:2': { iv: 5, ef: 2.5, reps: 2, lapses: 0, due: t + 3 } },
+    log: {},
+  });
+  const page = async script => {
+    const p = await b.newPage({ viewport: { width: 390, height: 844 } });
+    const errs = [];
+    p.on('pageerror', e => errs.push(e.message));
+    await p.addInitScript(({ script, seed }) => {
+      window.__said = [];
+      window.SpeechSynthesisUtterance = function (t) { this.text = t; };
+      Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
+        getVoices: () => [{ name: 'it', lang: 'it-IT' }, { name: 'de', lang: 'de-DE' }], cancel() {},
+        speak(u) { __said.push(u.lang + ': ' + u.text); setTimeout(() => u.onend && u.onend(), 10); } } });
+      window.__script = script;
+      window.SpeechRecognition = window.webkitSpeechRecognition = function () {
+        const r = this;
+        r.start = () => setTimeout(() => {
+          const q = __script[r.lang] || [];
+          if (q.length) r.onresult && r.onresult({ results: [[{ transcript: q.shift() }]] });
+          setTimeout(() => r.onend && r.onend(), 200);
+        }, 20);
+        r.stop = r.abort = () => {};
+      };
+      const t = Math.floor(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()) / 86400000);
+      if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('sl.data.it', JSON.stringify(eval('(' + seed + ')')(t))); }
+    }, { script, seed: seedState.toString() });
+    await p.goto('http://localhost:8765/#home');
+    await p.waitForTimeout(300);
+    return { p, errs };
+  };
+  const finish = p => p.waitForFunction(() => /Fertig|Beendet/.test((document.querySelector('#dv-phase') || {}).textContent || ''), null, { timeout: 90000 });
+  const srs = p => p.evaluate(() => JSON.parse(localStorage.getItem('sl.data.it')).srs);
+
+  // 1) Wort gewusst, Satz vergessen → kommt nach Lernschritt wieder, dann gewusst
+  {
+    const { p, errs } = await page({ 'it-IT': ['la mela', 'ho quaranta anni', 'ho quaranta anni'], 'de-DE': ['gewusst', 'nicht gewusst', 'ja'] });
+    const card = await p.textContent('a[href="#drive"] .meta');
+    if (!/1 Wörter · 1 Sätze/.test(card)) fail('Startseite: ' + card);
+    await p.goto('http://localhost:8765/#drive');
+    await p.click('#dv-start');
+    await finish(p);
+    const said = await p.evaluate(() => __said);
+    const s = await srs(p);
+    console.log('Ende:', await p.textContent('#dv-phase'), '|', await p.textContent('#dv-text'));
+    if (!said.includes('de-DE: der Apfel') || !said.includes('it-IT: la mela')) fail('Wort nicht vorgelesen');
+    if (!said.includes('it-IT: Ho quaranta anni.')) fail('Zahl nicht ausgeschrieben: ' + said.join(' / '));
+    if (said.filter(x => x === 'de-DE: Ich bin vierzig.').length !== 2) fail('Vergessener Satz nicht wiederholt');
+    if (!(s['u:1'].iv > 3)) fail('Wort nicht hochgestuft');
+    if (s['s:1'].lapses !== 1 || s['s:1'].iv < 1) fail('Satz falsch geplant: ' + JSON.stringify(s['s:1']));
+    if (s['u:2'].due === undefined || s['u:2'].reps !== 2) fail('Nicht fällige Karte verändert');
+    errs.forEach(fail);
+    await p.close();
+  }
+  // 2) Stille → ohne Bewertung weiter, bleibt fällig
+  {
+    const { p, errs } = await page({ 'it-IT': [], 'de-DE': [] });
+    await p.goto('http://localhost:8765/#drive');
+    const before = await srs(p);
+    await p.click('#dv-start');
+    await finish(p);
+    const after = await srs(p);
+    if (JSON.stringify(before['u:1']) !== JSON.stringify(after['u:1'])) fail('Ohne Bewertung trotzdem geplant');
+    console.log('Stille:', await p.textContent('#dv-text'));
+    errs.forEach(fail);
+    await p.close();
+  }
+  // 3) „Stopp“ während der Antwort, auch wenn danach Geräusch erkannt wird
+  {
+    const { p, errs } = await page({ 'it-IT': ['Stopp.', 'radio', 'radio'], 'de-DE': [] });
+    await p.goto('http://localhost:8765/#drive');
+    await p.click('#dv-start');
+    await finish(p);
+    const ph = await p.textContent('#dv-phase');
+    if (ph !== 'Beendet') fail('Stopp nicht erkannt: ' + ph);
+    console.log('Stopp:', ph);
+    errs.forEach(fail);
+    await p.close();
+  }
+  await b.close();
+  console.log(process.exitCode ? 'Auto-Modus: FEHLER' : 'Auto-Modus: ok');
+})();

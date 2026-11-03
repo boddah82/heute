@@ -56,6 +56,7 @@ Erst diese Datei lesen. Details nur bei Bedarf (Tabelle „Wo steht was?“).
   - #52 Schwierige Sätze: gemischt, Satz fällt raus nach 2× Gut/Leicht an verschiedenen Tagen
   - #53–#55 Bilder + Alltag: Emoji auf (fast allen) Wortkarten, Foto-Jagd für Problemwörter, Orte-Karte mit „📍 Ich bin hier“, Tagesauftrag
   - Hochrechnung mit nahem Ziel statt ferner Stufe, 🟢-Steinchen für heute sichere Wörter
+  - 🚗 Auto-Modus (03.11.2026): fällige Wörter + Sätze nur per Sprache abfragen, Bewertung per Sprache
 - Rhetorik-App live (gebaut ab 23.10.2026).
 
 ## 7. Offene Punkte
@@ -64,6 +65,7 @@ Erst diese Datei lesen. Details nur bei Bedarf (Tabelle „Wo steht was?“).
 - #46 Beispielsätze mit echter Claude-API noch ungetestet.
 - Nie echt getestet (nur simuliert): Claude-API, Mikrofon/Kamera, Gerätestimmen, Gist-Sync.
 - Bilder/Orte/Tagesauftrag (02.11.2026) nur simuliert getestet; Emoji-Darstellung hängt vom Gerät ab.
+- Auto-Modus nur simuliert getestet (Test 34); Erkennung bei Fahrgeräusch/Bluetooth unbekannt. „Verstehen“-Karten (`r:`) sind nicht dabei.
 - Weitere Ideen aus dem Video (nicht gebaut): Vorlage-Insel „Kennenlernen“ als Frage-Antwort-Paare, Zähler „sichere Sätze“.
 - Rhetorik-Ideen (nicht gebaut): Einwand-Rollenspiel, Ausdruck-Karteikarten, Sync.
 

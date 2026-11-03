@@ -26,6 +26,9 @@ Inseln erscheinen als Kacheln mit Bild und Fortschritt („x von y sitzen“). P
 ## Tagesauftrag
 Auf der Startseite jeden Tag ein kleiner Auftrag für draußen, je nach Lernstand: 🔎 Wörter-Jagd (Dinge mit Bild im Alltag entdecken und laut sagen), 📍 Ort-Auftrag („Ich bin hier“ an einem deiner Orte), 🗣️ Selbstgespräch (z. B. beim Kochen, mit 3 Sätzen, die schon sitzen), 📷 Foto-Jagd (klemmende Wörter fotografieren). „🔄 Anderer Auftrag“ wechselt, „✅ Geschafft“ gibt 5 Punkte; Ort- und Foto-Auftrag erledigen sich von selbst. Zählt im Wochenrückblick.
 
+## 🚗 Auto-Modus
+Startseite → „Auto-Modus“: fällige Wörter und Sätze nur per Sprache, z. B. beim Autofahren (vor der Fahrt starten, Handy in die Halterung, Display bleibt an). Die App sagt es auf Deutsch, du antwortest laut, sie liest die Lösung vor, du sagst „gewusst“, „schwer“, „nochmal“ oder „leicht“. „Pause“, „weiter“, „Stopp“ gehen jederzeit. Nur Wiederholungen, keine neuen Karten. Braucht Internet für die Spracherkennung.
+
 ## Eigene Texte
 Unter Inseln → „📄 Texte“: eigene Texte einfügen (z. B. Liedtexte zum Mitlesen). Claude übersetzt Zeile für Zeile, Wort für Wort und erklärt Redewendungen (einmalige Kosten pro Text). Vorlesen mit Markierung, Wörter in die Wortliste übernehmen, einzelne Zeilen per ➕ in die Insel „Texte“ (Wiederholung & Shadowing).
 Beim Speichern wird automatisch in ganze Sätze geordnet: Claude setzt kopierte Liedzeilen an echten Satzgrenzen neu zusammen (nur Wort-Nummern, der Wortlaut bleibt), übrig gebliebene Bruchstücke (≤ 2 Wörter) werden angehängt, dann wird übersetzt. Ohne Schlüssel nur Teilung an Satzzeichen. „🔄 Neu ordnen“ geht immer vom Originaltext aus; „↩ Ursprüngliche Zeilen“ stellt ihn wieder her.

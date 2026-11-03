@@ -1380,6 +1380,10 @@ ${talkLocked() ? '' : `    <a class="card step" href="#talk">
       <div class="num">💬</div>
       <div class="grow"><b>Gespräch führen</b><div class="meta">${talkCfg.key ? `frei sprechen mit Claude · heute ${l.talks || 0} Gespräche · ${minutesToday('talk')} Min.` : 'KI-Gesprächspartner einrichten'}</div></div>
       <div>›</div></a>`}
+    <a class="card step" href="#drive">
+      <div class="num">🚗</div>
+      <div class="grow"><b>Auto-Modus</b><div class="meta">${dueW + dueS ? `${Math.min(dueW, wordBudget())} Wörter · ${dueS} Sätze fällig – nur per Sprache` : 'nichts fällig'}</div></div>
+      <div>›</div></a>
     <a class="card step" href="#builder/${learnedWords < 300 ? 'modal' : 'drill'}">
       <div class="num">🧱</div>
       <div class="grow"><b>Satzbaukasten</b><div class="meta">${learnedWords < 300 ? 'Für den Start: mit wenigen Mustern erste Gespräche führen' : 'Drill: zufällige Sätze laut bilden'} · heute ${l.drill || 0} Sätze</div></div>
@@ -2725,8 +2729,257 @@ views.review = function (root) {
   });
 };
 
+// ---------- Auto-Modus ----------
+// Fällige Wörter + Sätze nur per Sprache: Deutsch vorlesen → laut in der Zielsprache antworten
+// (wird nicht ausgewertet) → Lösung vorlesen → „gewusst“/„schwer“/„nochmal“/„leicht“ sagen.
+// Ohne erkannte Bewertung bleibt die Karte fällig. „Pause“, „weiter“, „Stopp“ jederzeit.
+const DRIVE_ANSWER_MS = 15000;
+const DRIVE_RATE_MS = 7000;
+let driveRun = null; // { stop, paused, abort, wake }
+
+// Verneinung zuerst prüfen: „nicht gewusst“ enthält „gewusst“
+function driveParseRating(t) {
+  if (/nicht gewusst|nicht gut|nochmal|noch mal|\bnein\b|falsch|wusste ich nicht|keine ahnung|vergessen/.test(t)) return 0;
+  if (/schwer|knapp/.test(t)) return 1;
+  if (/leicht|einfach/.test(t)) return 3;
+  if (/gewusst|\bgut\b|\bja\b|richtig|wusste ich/.test(t)) return 2;
+  return null;
+}
+function driveParseCommand(t, strict) {
+  // Während der Antwort nur, wenn das Wort allein gesagt wird – sonst stoppt z. B. ein „stop“ im Satz die Runde
+  const s = strict ? t.replace(/[.!?,]/g, '').trim() : t;
+  const m = re => strict ? new RegExp('^(' + re + ')$').test(s) : new RegExp('\\b(' + re + ')\\b').test(s);
+  if (m('stopp|stop|beenden|aufhören|schluss')) return 'stop';
+  if (m('pause|pausa')) return 'pause';
+  if (!strict && m('weiter|los|fortsetzen')) return 'resume';
+  return null;
+}
+function driveSay(text, de) {
+  return new Promise(res => {
+    if (!driveRun) { res(); return; }
+    driveRun.abort = () => speechSynthesis.cancel();
+    speak(text, { lang: de ? 'de' : undefined, onend: () => { if (driveRun) driveRun.abort = null; res(); } });
+  });
+}
+// Eine Äußerung erkennen; startet neu, wenn Android nach Stille abbricht, bis maxMs vorbei sind.
+// settleMs: nach dem ersten Erkannten noch so lange auf Fortsetzung warten (Denkpausen beim Antworten)
+function driveListen(maxMs, lang, onHeard, settleMs) {
+  if (!SR || !driveRun) return Promise.resolve('');
+  return new Promise(resolve => {
+    const deadline = Date.now() + maxMs;
+    let done = false, rec = null, got = [], settle = null;
+    const finish = t => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      clearTimeout(settle);
+      if (driveRun) driveRun.abort = null;
+      try { rec && rec.abort(); } catch (e) {}
+      resolve(String(t || '').toLowerCase().trim());
+    };
+    const timer = setTimeout(() => finish(got.join(' ')), maxMs);
+    driveRun.abort = () => finish('');
+    const start = () => {
+      if (done) return;
+      rec = new SR();
+      rec.lang = lang;
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.onresult = e => {
+        const t = ((e.results[0] && e.results[0][0].transcript) || '').trim();
+        if (!t) return;
+        got.push(t);
+        onHeard && onHeard(got.join(' '));
+        if (!settleMs || driveParseCommand(t.toLowerCase(), true)) { finish(t); return; }
+        clearTimeout(settle);
+        settle = setTimeout(() => finish(got.join(' ')), settleMs);
+      };
+      rec.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { toast('Mikrofon nicht erlaubt'); if (driveRun) driveRun.stop = true; finish(''); } };
+      rec.onend = () => {
+        if (done) return;
+        if (Date.now() < deadline - 500) setTimeout(start, 150); else finish(got.join(' '));
+      };
+      try { rec.start(); } catch (e) { finish(''); }
+    };
+    start();
+  });
+}
+// Display wach halten – Chrome stoppt Sprachausgabe/-erkennung bei ausgeschaltetem Display
+async function driveWake() {
+  try { if (driveRun && navigator.wakeLock) driveRun.wake = await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { if (driveRun && document.visibilityState === 'visible') driveWake(); });
+function driveStop() {
+  if (!driveRun) return;
+  const r = driveRun;
+  r.stop = true;
+  r.abort && r.abort();
+  try { r.wake && r.wake.release(); } catch (e) {}
+  driveRun = null;
+  listening = false;
+  if (window.speechSynthesis) speechSynthesis.cancel();
+}
+// Wie die normale Abfrage: Wörter mit Tagesportion, Sätze ohne „Später“, Teile vor dem ganzen Satz – nur Fälliges, nichts Neues
+function driveDue() {
+  const byId = Object.fromEntries(allSentences().map(s => [s.id, s]));
+  const words = dueIds(id => isWordId(id) && !!wordById(id)).slice(0, wordBudget());
+  const sents = withParts(dueIds(id => id.startsWith('s:') && byId[id] && laterOk(byId[id]))).filter(id => state.srs[id]);
+  // Beide Listen nach Fälligkeit verzahnen, Reihenfolge innerhalb der Sätze (Teile zuerst) bleibt
+  const out = [];
+  let i = 0, j = 0;
+  while (i < words.length || j < sents.length) {
+    if (j >= sents.length || (i < words.length && state.srs[words[i]].due <= state.srs[sents[j]].due)) out.push(words[i++]);
+    else out.push(sents[j++]);
+  }
+  return out;
+}
+// Vorne nur die Bedeutung (ohne Grundform), Zahlen ausgeschrieben – wie auf der Karte
+function driveItem(id) {
+  if (isWordId(id)) {
+    const w = wordById(id);
+    if (!w) return null;
+    const it = numberCard({ t: w.t, d: w.d });
+    return { t: it.t, d: splitMeaning(it.d, id).de };
+  }
+  const s = findSentence(id);
+  return s && { t: numText(s.t), d: s.d };
+}
+
+views.drive = function (root) {
+  const due = driveDue();
+  const nW = due.filter(isWordId).length, nS = due.length - nW;
+  const lname = LANGS[settings.lang].name;
+  if (!SR) {
+    root.innerHTML = `<h1>🚗 Auto-Modus</h1><div class="notice warn">Dieser Browser hat keine Spracherkennung. Auf dem Handy Chrome verwenden.</div>`;
+    return;
+  }
+  root.innerHTML = `
+    <h1>🚗 Auto-Modus</h1>
+    ${voiceNotice()}
+    <div class="drive">
+      <div class="row between muted small" id="dv-stats"><span>${nW} Wörter · ${nS} Sätze fällig</span><span></span></div>
+      <div class="drive-main">
+        <div id="dv-phase" class="drive-phase">${due.length ? `${due.length} Wiederholungen` : 'Nichts fällig'}</div>
+        <div id="dv-text" class="drive-text"></div>
+        <div id="dv-heard" class="muted small"></div>
+        ${due.length ? `<p class="muted small" id="dv-help">Vor der Fahrt starten, Handy in die Halterung, Display bleibt an. Ich sage es auf Deutsch, du antwortest laut auf ${lname}, dann höre ich die Lösung vor und du sagst „gewusst“, „schwer“, „nochmal“ oder „leicht“. „Pause“, „weiter“ und „Stopp“ gehen jederzeit. Nur fällige Wiederholungen, keine neuen. Braucht Internet für die Spracherkennung.</p>` : ''}
+      </div>
+      <div class="row">
+        ${due.length ? '<button class="btn primary drive-btn grow" id="dv-start">Starten</button>' : '<a class="btn drive-btn grow" href="#home">Zurück</a>'}
+        <button class="btn drive-btn grow" id="dv-pause" hidden>Pause</button>
+        <button class="btn drive-btn grow" id="dv-end" hidden>Beenden</button>
+      </div>
+    </div>`;
+  if (!due.length) return;
+
+  const stats = { ok: 0, again: 0, skipped: 0 };
+  const paint = (phase, text, cls) => {
+    const p = $('#dv-phase', root);
+    if (!p) return;
+    p.textContent = phase;
+    p.className = 'drive-phase ' + (cls || '');
+    $('#dv-text', root).textContent = text || '';
+    $('#dv-heard', root).textContent = '';
+  };
+  const paintStats = left => {
+    const s = $('#dv-stats', root);
+    if (s) s.innerHTML = `<span>${left} übrig</span><span>${stats.ok} gewusst · ${stats.again} nochmal</span>`;
+  };
+  const heard = t => { const h = $('#dv-heard', root); if (h) h.textContent = '„' + t + '“'; };
+
+  $('#dv-start', root).onclick = async () => {
+    driveStop();
+    const run = driveRun = { stop: false, paused: false, abort: null, wake: null };
+    listening = true; // Zeit zählt auch ohne Antippen
+    $('#dv-start', root).hidden = true;
+    $('#dv-help', root).hidden = true;
+    $('#dv-pause', root).hidden = false;
+    $('#dv-end', root).hidden = false;
+    $('#dv-pause', root).onclick = () => { run.paused = !run.paused; run.abort && run.abort(); };
+    $('#dv-end', root).onclick = () => { run.stop = true; run.abort && run.abort(); };
+    await driveWake();
+
+    const queue = due.slice();
+    const steps = learnSteps();
+    const alive = () => driveRun === run && !run.stop;
+    const broken = () => !alive() || run.paused;
+    paintStats(queue.length);
+    await driveSay(`Auto-Modus. ${queue.length} Wiederholungen. Antworte laut auf ${lname}, danach sag gewusst, schwer oder nochmal. Mit Pause hältst du an, mit Stopp hörst du auf.`, true);
+
+    while (queue.length && alive()) {
+      if (run.paused) {
+        paint('Pausiert – sag „weiter“', '', 'warn');
+        $('#dv-pause', root).textContent = 'Weiter';
+        await driveSay('Pausiert. Sag weiter, wenn es weitergehen soll.', true);
+        while (run.paused && alive()) {
+          const cmd = driveParseCommand(await driveListen(30000, 'de-DE', heard));
+          if (cmd === 'stop') run.stop = true;
+          if (cmd === 'resume') run.paused = false;
+        }
+        $('#dv-pause', root).textContent = 'Pause';
+        if (!alive()) break;
+      }
+      const id = queue[0];
+      const it = driveItem(id);
+      if (!it) { queue.shift(); continue; }
+      activeStep = isWordId(id) ? 'vocab' : 'review';
+      steps.begin(id);
+
+      paint('Deutsch', it.d);
+      await driveSay(it.d, true);
+      if (broken()) continue;
+
+      paint('Ich höre zu …', it.d, 'live');
+      const ans = await driveListen(DRIVE_ANSWER_MS, langCode(), heard, 2500);
+      const c1 = driveParseCommand(ans, true);
+      if (c1 === 'stop') run.stop = true;
+      if (c1 === 'pause') run.paused = true;
+      if (broken()) continue;
+
+      paint(lname, it.t);
+      await driveSay(it.t);
+      if (broken()) continue;
+
+      paint('Gewusst oder nochmal?', it.t, 'live');
+      let r = null;
+      for (let attempt = 0; attempt < 2 && r === null && !broken(); attempt++) {
+        const t = await driveListen(DRIVE_RATE_MS, 'de-DE', heard);
+        const cmd = driveParseCommand(t);
+        if (cmd === 'stop') run.stop = true;
+        else if (cmd === 'pause') run.paused = true;
+        else r = driveParseRating(t);
+        if (r === null && attempt === 0 && !broken()) await driveSay('Gewusst oder nochmal?', true);
+      }
+      if (broken()) continue;
+      queue.shift();
+      if (r === null) {
+        stats.skipped++;
+        await driveSay('Ohne Bewertung weiter.', true);
+      } else {
+        // Lernschritte wie in der normalen Abfrage: Neues/Vergessenes kommt nach LEARN_GAP Karten wieder
+        if (steps.rate(id, r)) queue.splice(Math.min(LEARN_GAP, queue.length), 0, id);
+        if (r === 0) stats.again++; else stats.ok++;
+        await driveSay(r === 0 ? 'Kommt nochmal.' : 'Gut.', true);
+      }
+      paintStats(queue.length);
+    }
+
+    const finished = !queue.length;
+    const stillHere = driveRun === run;
+    driveStop();
+    persist();
+    if (syncCfg.token) syncNow();
+    if (!stillHere) return; // Ansicht wurde verlassen
+    paint(finished ? 'Fertig' : 'Beendet', `${stats.ok} gewusst · ${stats.again} nochmal${stats.skipped ? ` · ${stats.skipped} ohne Bewertung` : ''}`);
+    $('#dv-pause', root).hidden = true;
+    $('#dv-end', root).hidden = true;
+    speak(finished ? 'Alle fälligen Wiederholungen geschafft.' : 'Auto-Modus beendet.', { lang: 'de' });
+  };
+};
+
 let listenToken = null;
 function stopAudio() {
+  driveStop();
   if (shadowToken) { shadowToken.stop = true; shadowToken = null; }
   if (textPlayToken) { textPlayToken.stop = true; textPlayToken = null; }
   if (listenToken) listenToken.stop = true;
@@ -5603,7 +5856,8 @@ async function syncNow(opts = {}) {
 }
 // Nach einem Sync, der Daten geändert hat, die Ansicht neu aufbauen (sonst arbeitet sie mit altem Stand).
 async function autoSync() {
-  if (await syncNow()) route();
+  // Laufenden Auto-Modus nicht durch Neuaufbau abbrechen – grade() arbeitet ohnehin mit dem neuen state
+  if (await syncNow() && !driveRun) route();
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) autoSync(); });
 setInterval(() => { if (!document.hidden && Date.now() - syncCfg.last > 10 * 60000) autoSync(); }, 60000);

@@ -912,22 +912,25 @@ function recallSession(root, ids, cfg) {
       return;
     }
     const id = queue[0];
-    const raw = cfg.get(id);
+    // Vokabel, die die Satz-Hilfe in eine Satz-Runde eingeschoben hat
+    const helpW = isWordId(id) && cfg.big !== 'target' && !cfg.rev;
+    const big = helpW ? 'target' : cfg.big;
+    const raw = helpW ? (w => w && { t: w.t, d: w.d, note: state.notes[id], isNew: !state.srs[id] })(wordById(id)) : cfg.get(id);
     if (!raw) { queue.shift(); show(); return; }
-    const it = cfg.big === 'target' ? numberCard(raw) : Object.assign({}, raw, { t: numText(raw.t) });
-    const cx = cfg.ctx && cfg.ctx(id);
+    const it = big === 'target' ? numberCard(raw) : Object.assign({}, raw, { t: numText(raw.t) });
+    const cx = !helpW && cfg.ctx && cfg.ctx(id);
     steps.begin(id);
-    const m = cfg.big === 'target' ? splitMeaning(it.d, id) : { de: it.d };
-    const emo = cfg.big === 'target' ? wordEmoji(id) : ''; // im Hören (rev) erst auf der Lösung, sonst verrät es die Antwort
+    const m = big === 'target' ? splitMeaning(it.d, id) : { de: it.d };
+    const emo = big === 'target' ? wordEmoji(id) : ''; // im Hören (rev) erst auf der Lösung, sonst verrät es die Antwort
     root.innerHTML = `
       ${bite ? bite.head(it.isNew) : `<div class="row between muted small"><span>${queue.length} übrig</span>${it.isNew ? '<span class="pill">neu</span>' : ''}</div>`}
       <div class="card flash">
         <img data-photo="${esc(id)}" class="photo" hidden alt="">
         ${!cfg.rev && emo ? `<div class="emoji-big" aria-hidden="true">${emo}</div>` : ''}
-        ${cfg.rev ? `<div class="${cfg.big}">${esc(it.t)}</div><button class="btn small" id="q-say">🔊</button>` : `<div class="native">${esc(m.de)}</div>`}
+        ${cfg.rev ? `<div class="${big}">${esc(it.t)}</div><button class="btn small" id="q-say">🔊</button>` : `<div class="native">${esc(m.de)}</div>`}
         ${it.note ? `<button class="btn small" id="hint" style="margin-top:8px">💡 Eselsbrücke</button><div class="hint" id="hint-t" hidden>${esc(it.note)}</div>` : ''}
         ${cx ? `<button class="btn small" id="cx-b" style="margin-top:8px">📖 Satz zeigen</button><div class="small muted" id="cx-f" hidden style="margin-top:6px">${cx.front}</div>` : ''}
-        <div id="answer" hidden>${cfg.rev ? `${emo ? `<div class="emoji-big" aria-hidden="true">${emo}</div>` : ''}<div class="native">${esc(m.de)}</div>` : `<div class="${cfg.big}">${esc(it.t)}</div>`}<div id="mx">${meaningExtra(m)}</div><div id="cmp" class="small"></div><div id="wordhelp"></div>${cx ? `<div style="margin-top:8px">${cx.back}</div>` : ''}</div>
+        <div id="answer" hidden>${cfg.rev ? `${emo ? `<div class="emoji-big" aria-hidden="true">${emo}</div>` : ''}<div class="native">${esc(m.de)}</div>` : `<div class="${big}">${esc(it.t)}</div>`}<div id="mx">${meaningExtra(m)}</div><div id="cmp" class="small"></div><div id="wordhelp"></div>${cx ? `<div style="margin-top:8px">${cx.back}</div>` : ''}</div>
       </div>
       ${cfg.rev ? '<p class="muted small">Laut sagen, was es auf Deutsch heißt → aufdecken.</p>' : ''}
       ${cfg.typing && !cfg.rev ? `<input type="text" id="typed" placeholder="Antwort tippen (optional)" autocomplete="off" autocapitalize="off" spellcheck="false">` : ''}
@@ -937,7 +940,7 @@ function recallSession(root, ids, cfg) {
         <button class="btn primary grow" id="reveal">Aufdecken</button>
       </div>
       <div id="post" hidden class="stack">
-        <div class="row"><button class="btn" id="cover" title="Lösung wieder verstecken, dann ohne Hilfe nochmal sagen">🙈 Zudecken</button><button class="btn grow" id="replay">🔊 Nochmal hören</button>${cfg.correct ? '<button class="btn" id="fix">✎ Korrigieren</button>' : ''}${cfg.check && talkCfg.key ? '<button class="btn" id="chk" title="Mit Claude prüfen (≈ 1–3 Cent)">🔍 Prüfen</button>' : ''}${cfg.split && talkCfg.key && canSplit(id) ? '<button class="btn" id="split" title="Langen Satz in Teile zerlegen (≈ 1–3 Cent)">✂️ Aufteilen</button>' : ''}</div>
+        <div class="row"><button class="btn" id="cover" title="Lösung wieder verstecken, dann ohne Hilfe nochmal sagen">🙈 Zudecken</button><button class="btn grow" id="replay">🔊 Nochmal hören</button>${cfg.correct && !helpW ? '<button class="btn" id="fix">✎ Korrigieren</button>' : ''}${cfg.check && !helpW && talkCfg.key ? '<button class="btn" id="chk" title="Mit Claude prüfen (≈ 1–3 Cent)">🔍 Prüfen</button>' : ''}${cfg.split && talkCfg.key && canSplit(id) ? '<button class="btn" id="split" title="Langen Satz in Teile zerlegen (≈ 1–3 Cent)">✂️ Aufteilen</button>' : ''}</div>
         <div id="chk-out"></div>
         ${rateButtons(steps.labels(id))}
         <p class="muted small">Laut nachsprechen, dann ehrlich bewerten. Tasten 1–4 gehen auch. Zum Einprägen: 🙈 zudecken und ohne Lösung nochmal sagen.</p>
@@ -979,15 +982,15 @@ function recallSession(root, ids, cfg) {
         $('#cmp', root).innerHTML = `<p>${said ? 'Gesagt' : 'Getippt'}: „${esc(attempt)}“</p><p>${c.html} <b>${c.score}%</b></p>`;
       }
       // Wörter des Satzes, die noch nicht sicher sitzen – damit man nicht an einem unbekannten Wort hängen bleibt
-      const gl = cfg.gloss && cfg.gloss(id);
+      const gl = !helpW && cfg.gloss && cfg.gloss(id);
       if (gl) $('#wordhelp', root).innerHTML = `<div class="muted small" style="margin-top:8px">Wort für Wort (geprüft)</div>${glossRow(gl, false)}`;
-      else if (cfg.wordHelp) {
+      else if (cfg.wordHelp && !helpW) {
         const ws = wordsInSentence(it.t).map(wid => wordById(wid)).filter(w => w && !(state.srs[w.id] && state.srs[w.id].iv >= 3));
         if (ws.length) $('#wordhelp', root).innerHTML = `<div class="wordhelp">${ws.map(w => `<span><b>${esc(w.t)}</b> – ${esc(w.d)}${state.srs[w.id] ? '' : ' <span class="pill">neu</span>'}</span>`).join('')}</div><div class="muted small">aus der Wortliste – im Satz kann ein Wort etwas anderes heißen${talkCfg.key ? ' (🔍 Prüfen)' : ''}</div>`;
       }
       if (!cfg.rev) speak(it.t);
       // Klemmt das Wort? Eigenes Foto vorschlagen (nur einmal pro Karte, nur ohne Foto)
-      if (cfg.big === 'target' && isWordId(id) && (state.srs[id] || {}).lapses >= PHOTO_LAPSES && !$('#photo-tip', root)) hasPhoto(id).then(has => {
+      if (big === 'target' && isWordId(id) && (state.srs[id] || {}).lapses >= PHOTO_LAPSES && !$('#photo-tip', root)) hasPhoto(id).then(has => {
         if (has || !revealed || $('#photo-tip', root) || !$('#post', root)) return;
         $('#post', root).insertAdjacentHTML('afterbegin', `<div class="notice small" id="photo-tip">📷 Dieses Wort klemmt (${state.srs[id].lapses}× vergessen). Mach ein Foto davon, wenn du ${emo || 'es'} das nächste Mal siehst – ein eigenes Bild bleibt besser hängen. <button class="btn small" id="photo-go">Foto hinzufügen</button></div>`);
         $('#photo-go', root).onclick = () => { const d = $('#memo', root); d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
@@ -1007,26 +1010,34 @@ function recallSession(root, ids, cfg) {
       if ($('#typed', root)) $('#typed', root).value = '';
     };
     if (cfg.rev) { speak(it.t); $('#q-say', root).onclick = () => speak(it.t); }
-    const rate = r => {
-      cfg.onRate && cfg.onRate(id, r, it.isNew);
+    const rate = async r => {
+      if (helpW) { if (it.isNew) dayLog().newWords++; } else cfg.onRate && cfg.onRate(id, r, it.isNew);
       const again = steps.rate(id, r);
       done++;
       queue.shift();
       if (again) queue.splice(Math.min(LEARN_GAP, queue.length), 0, id);
+      // Satz klemmt: erst seine Wörter, beim nächsten Mal in Teile
+      const h = r === 0 && id.startsWith('s:') && !cfg.rev ? sentenceHelp(id) : null;
+      if (h) {
+        keyHandler = null;
+        $$('.rate .btn', root).forEach(x => { x.disabled = true; });
+        if (h.kind === 'split') toast('Der Satz klemmt – ich teile ihn in kleinere Stücke …');
+        if (await applySentenceHelp(id, h, queue) && h.kind === 'words') toast(`Der Satz klemmt – erst ${h.ids.length === 1 ? 'ein Wort' : h.ids.length + ' Wörter'} daraus`);
+      }
       if (bite && bite.rated(r) && queue.length) { keyHandler = null; bite.pause(root, new Set(queue).size, cfg.quitHref, show); return; }
       show();
     };
     const setMeaning = d => {
-      const n = cfg.big === 'target' ? splitMeaning(d, id) : { de: d };
+      const n = big === 'target' ? splitMeaning(d, id) : { de: d };
       $('.native', root).textContent = n.de;
       $('#mx', root).innerHTML = meaningExtra(n);
     };
     $('#reveal', root).onclick = reveal;
     $('#replay', root).onclick = () => speak(it.t);
     $('#cover', root).onclick = cover;
-    if ($('#chk', root)) $('#chk', root).onclick = () => cfg.check(id, $('#chk', root), $('#chk-out', root), n => {
+    if ($('#chk', root) && !helpW) $('#chk', root).onclick = () => cfg.check(id, $('#chk', root), $('#chk-out', root), n => {
       it.t = n.t; it.d = n.d;
-      $('#answer .' + cfg.big, root).textContent = n.t;
+      $('#answer .' + big, root).textContent = n.t;
       setMeaning(n.d);
     });
     // Teile kommen sofort dran, der ganze Satz danach
@@ -1039,7 +1050,7 @@ function recallSession(root, ids, cfg) {
       queue.unshift(...parts);
       show();
     };
-    if (cfg.correct) $('#fix', root).onclick = () => cfg.correct(id, () => { const n = cfg.get(id); if (n) { it.t = n.t; it.d = n.d; $$('.flash .' + cfg.big, root).forEach(e => { e.textContent = n.t; }); setMeaning(n.d); } });
+    if (cfg.correct && !helpW) $('#fix', root).onclick = () => cfg.correct(id, () => { const n = cfg.get(id); if (n) { it.t = n.t; it.d = n.d; $$('.flash .' + big, root).forEach(e => { e.textContent = n.t; }); setMeaning(n.d); } });
     $$('.rate .btn', root).forEach(b => { b.onclick = () => rate(Number(b.dataset.r)); });
     if ($('#hint', root)) $('#hint', root).onclick = () => { $('#hint-t', root).hidden = false; };
     if ($('#cx-b', root)) $('#cx-b', root).onclick = () => { $('#cx-f', root).hidden = false; $('#cx-b', root).hidden = true; };
@@ -2733,8 +2744,9 @@ views.review = function (root) {
 // Fällige Wörter + Sätze nur per Sprache: Deutsch vorlesen → laut in der Zielsprache antworten
 // (wird nicht ausgewertet) → Lösung vorlesen → „gewusst“/„schwer“/„nochmal“/„leicht“ sagen.
 // Ohne erkannte Bewertung bleibt die Karte fällig. „Pause“, „weiter“, „Stopp“ jederzeit.
-const DRIVE_ANSWER_MS = 15000;
-const DRIVE_RATE_MS = 7000;
+const DRIVE_ANSWER_MS = 7500;
+const DRIVE_RATE_MS = 3500;
+const DRIVE_SETTLE_MS = 1250; // Nachdenkpause beim Antworten
 let driveRun = null; // { stop, paused, abort, wake }
 
 // Verneinung zuerst prüfen: „nicht gewusst“ enthält „gewusst“
@@ -2874,7 +2886,7 @@ views.drive = function (root) {
         <div id="dv-phase" class="drive-phase">${due.length ? `${due.length} Wiederholungen` : 'Nichts fällig'}</div>
         <div id="dv-text" class="drive-text"></div>
         <div id="dv-heard" class="muted small"></div>
-        ${due.length ? `<p class="muted small" id="dv-help">Vor der Fahrt starten, Handy in die Halterung, Display bleibt an. Ich sage es auf Deutsch, du antwortest laut auf ${lname} – bei „Verstehen“-Karten umgekehrt: ich sage es auf ${lname}, du sagst, was es heißt. Dann höre ich die Lösung vor und du sagst „gewusst“, „schwer“, „nochmal“ oder „leicht“. „Pause“, „weiter“ und „Stopp“ gehen jederzeit. Keine neuen Wörter oder Sätze. Braucht Internet für die Spracherkennung.</p>` : ''}
+        ${due.length ? `<p class="muted small" id="dv-help">Vor der Fahrt starten, Handy in die Halterung, Display bleibt an. Ich sage es auf Deutsch, du antwortest laut auf ${lname} – bei „Verstehen“-Karten umgekehrt: ich sage es auf ${lname}, du sagst, was es heißt. Dann höre ich die Lösung vor und du sagst „gewusst“, „schwer“, „nochmal“ oder „leicht“ – „später“ stellt eine Karte 3 Tage zurück. Klemmt ein Satz (2× nochmal), kommen erst seine Wörter, beim nächsten Mal wird er geteilt. „Pause“, „weiter“ und „Stopp“ gehen jederzeit. Keine neuen Wörter oder Sätze. Braucht Internet für die Spracherkennung.</p>` : ''}
       </div>
       <div class="row">
         ${due.length ? '<button class="btn primary drive-btn grow" id="dv-start">Starten</button>' : '<a class="btn drive-btn grow" href="#home">Zurück</a>'}
@@ -2947,7 +2959,7 @@ views.drive = function (root) {
 
       paint(it.rev ? 'Was heißt das?' : 'Ich höre zu …', q.text, 'live');
       // Deutsche Antwort nicht als Befehl werten: „la pausa“ → „Pause“ würde sonst anhalten
-      const ans = await driveListen(DRIVE_ANSWER_MS, it.rev ? 'de-DE' : langCode(), heard, 2500, !it.rev);
+      const ans = await driveListen(DRIVE_ANSWER_MS, it.rev ? 'de-DE' : langCode(), heard, DRIVE_SETTLE_MS, !it.rev);
       const c1 = it.rev ? null : driveParseCommand(ans, true);
       if (c1 === 'stop') run.stop = true;
       if (c1 === 'pause') run.paused = true;
@@ -2964,20 +2976,36 @@ views.drive = function (root) {
         const cmd = driveParseCommand(t);
         if (cmd === 'stop') run.stop = true;
         else if (cmd === 'pause') run.paused = true;
+        else if (/sp(ä|ae)ter/.test(t)) { r = 'later'; break; }
         else r = driveParseRating(t);
         if (r === null && attempt === 0 && !broken()) await driveSay('Gewusst oder nochmal?', true);
       }
       if (broken()) continue;
       queue.shift();
-      if (r === null) {
+      if (r === 'later') {
+        // wie „⏭ Später“: 3 Tage zurückstellen, heute nicht mehr
+        for (let k = queue.length - 1; k >= 0; k--) if (queue[k] === id) queue.splice(k, 1);
+        postpone(id);
+        stats.later = (stats.later || 0) + 1;
+        await driveSay('Kommt in drei Tagen wieder.', true);
+      } else if (r === null) {
         stats.skipped++;
         await driveSay('Ohne Bewertung weiter.', true);
       } else {
         if (isNew && it.rev) { const l = dayLog(); l.newHear = (l.newHear || 0) + 1; }
+        if (isNew && isWordId(id)) dayLog().newWords++; // von der Satz-Hilfe eingeschobenes neues Wort
         // Lernschritte wie in der normalen Abfrage: Neues/Vergessenes kommt nach LEARN_GAP Karten wieder
         if (steps.rate(id, r)) queue.splice(Math.min(LEARN_GAP, queue.length), 0, id);
         if (r === 0) stats.again++; else stats.ok++;
-        await driveSay(r === 0 ? 'Kommt nochmal.' : 'Gut.', true);
+        const h = r === 0 && id.startsWith('s:') ? sentenceHelp(id) : null;
+        if (h && h.kind === 'words') {
+          await applySentenceHelp(id, h, queue);
+          await driveSay(`Der Satz klemmt. Erst ${h.ids.length === 1 ? 'ein Wort' : h.ids.length + ' Wörter'} daraus.`, true);
+        } else if (h) {
+          paint('Teile den Satz …', it.d);
+          await driveSay('Der Satz klemmt. Ich teile ihn in kleinere Stücke.', true);
+          if (!await applySentenceHelp(id, h, queue)) await driveSay('Teilen hat nicht geklappt. Kommt nochmal.', true);
+        } else await driveSay(r === 0 ? 'Kommt nochmal.' : 'Gut.', true);
       }
       paintStats(queue.length);
     }
@@ -2988,7 +3016,7 @@ views.drive = function (root) {
     persist();
     if (syncCfg.token) syncNow();
     if (!stillHere) return; // Ansicht wurde verlassen
-    paint(finished ? 'Fertig' : 'Beendet', `${stats.ok} gewusst · ${stats.again} nochmal${stats.skipped ? ` · ${stats.skipped} ohne Bewertung` : ''}`);
+    paint(finished ? 'Fertig' : 'Beendet', `${stats.ok} gewusst · ${stats.again} nochmal${stats.skipped ? ` · ${stats.skipped} ohne Bewertung` : ''}${stats.later ? ` · ${stats.later} später` : ''}`);
     $('#dv-pause', root).hidden = true;
     $('#dv-end', root).hidden = true;
     speak(finished ? 'Alle fälligen Wiederholungen geschafft.' : 'Auto-Modus beendet.', { lang: 'de' });
@@ -4008,12 +4036,67 @@ function withParts(ids) {
   return out;
 }
 const LONG_SENT = 12; // Wörter – längere neue Sätze kommen nach den kurzen
+// ---------- Klemmende Sätze ----------
+// Nach jedem 2. „Nochmal“ (in einer Runde oder über Tage): erst die unsicheren Wörter des Satzes,
+// beim nächsten Mal den Satz in Teile zerlegen (Claude). Stand auf der Karte: help (1 = Wörter, 2 = geteilt), helpL = lapses bei der Hilfe.
+const HELP_LAPSES = 2;
+const HELP_WORDS = 5;
+function helpWords(s) {
+  const seen = new Set(); // dasselbe Wort aus Grundliste und eigener Liste nur einmal
+  return wordsInSentence(s.t).map(id => wordById(id))
+    .filter(w => w && !isSmallWord(w.t) && !(state.srs[w.id] && state.srs[w.id].iv >= 3))
+    .filter(w => {
+      // gleiche Zielform oder gleiche deutsche Bedeutung (rosso/rossa = rot) zählt als dasselbe Wort
+      const t = 't:' + w.t.toLowerCase().replace(/^(il|lo|la|l'|i|gli|le|the|a|an)\s+/, '');
+      const d = 'd:' + splitMeaning(w.d, w.id).de.toLowerCase().replace(/^(der|die|das)\s+/, '').trim();
+      if (seen.has(t) || seen.has(d)) return false;
+      seen.add(t); seen.add(d);
+      return true;
+    })
+    .slice(0, HELP_WORDS).map(w => w.id);
+}
+// null = keine Hilfe; { kind: 'words', ids } oder { kind: 'split' } (Aufteilen über applySentenceHelp)
+function sentenceHelp(id) {
+  const s = findSentence(id), c = state.srs[id];
+  if (!s || !c || (c.lapses || 0) - (c.helpL || 0) < HELP_LAPSES) return null;
+  if (!c.help) {
+    const ws = helpWords(s);
+    c.help = 1; c.helpL = c.lapses; c.ts = Date.now();
+    persist();
+    if (ws.length) return { kind: 'words', ids: ws };
+  }
+  if (c.help === 1) {
+    if (!canSplit(id)) { c.help = 2; c.ts = Date.now(); persist(); return null; } // zu kurz oder schon geteilt
+    if (!talkCfg.key) return null; // ohne Schlüssel beim nächsten Mal wieder versuchen
+    return { kind: 'split' };
+  }
+  return null;
+}
+// Satz-Hilfe in eine Warteschlange einbauen; true = Warteschlange geändert
+async function applySentenceHelp(id, h, queue) {
+  const drop = x => { for (let k = queue.length - 1; k >= 0; k--) if (queue[k] === x) queue.splice(k, 1); };
+  if (h.kind === 'words') {
+    drop(id);
+    h.ids.forEach(drop);
+    queue.unshift(...h.ids);
+    queue.splice(Math.min(h.ids.length + LEARN_GAP, queue.length), 0, id);
+    return true;
+  }
+  const parts = await splitSentenceUI(id);
+  if (!parts) return false;
+  const c = state.srs[id];
+  if (c) { c.help = 2; c.helpL = c.lapses; c.ts = Date.now(); persist(); }
+  drop(id);
+  parts.forEach(drop);
+  queue.unshift(...parts); // der ganze Satz kommt in einer späteren Runde, wenn die Teile gelernt sind
+  return true;
+}
 async function splitSentenceUI(id, btn) {
   const s = findSentence(id);
   if (!s) return null;
   const words = s.t.split(/\s+/).filter(Boolean);
   const lang = settings.lang === 'it' ? 'Italian' : 'British English';
-  btn.disabled = true; btn.textContent = '✂️ Teile …';
+  if (btn) { btn.disabled = true; btn.textContent = '✂️ Teile …'; }
   try {
     const r = await callClaude(
       `A German-speaking learner of ${lang} finds this sentence too long to learn in one go. Split it into 2–4 consecutive parts that each make sense on their own and are easy to say, e.g. one clause or one action each (a part may lack its subject when the language allows that). Never cut inside a phrase that belongs together. Every word below is prefixed with its index. Return "parts" in order: "start" = the word index where the part begins (the first is 0), "de" = a natural German translation of just this part, as it is meant in this sentence. The parts must cover the whole sentence; do not change or add any words.`,
@@ -4021,7 +4104,7 @@ async function splitSentenceUI(id, btn) {
     const ps = (r.data.parts || []).filter(x => Number.isInteger(x.start) && x.start >= 0 && x.start < words.length).sort((a, b) => a.start - b.start);
     if (ps.length) ps[0].start = 0;
     const uniq = ps.filter((x, k) => !k || x.start !== ps[k - 1].start);
-    if (uniq.length < 2) { toast('Dieser Satz lässt sich nicht sinnvoll teilen'); btn.remove(); return null; }
+    if (uniq.length < 2) { toast('Dieser Satz lässt sich nicht sinnvoll teilen'); if (btn) btn.remove(); const c = state.srs[id]; if (c) { c.help = 2; c.ts = Date.now(); persist(); } return null; }
     const gloss = s.gloss && s.gloss.length === words.length ? s.gloss : null;
     const isl = state.islands.find(i => i.sentences.includes(s));
     const ids = uniq.map((x, k) => {
@@ -4038,7 +4121,7 @@ async function splitSentenceUI(id, btn) {
     persist();
     toast(`${ids.length} Teile – erst die Teile, dann der ganze Satz`);
     return ids;
-  } catch (e) { toast(e.message); btn.disabled = false; btn.textContent = '✂️ Aufteilen'; return null; }
+  } catch (e) { toast(e.message); if (btn) { btn.disabled = false; btn.textContent = '✂️ Aufteilen'; } return null; }
 }
 function setWordCard(id, t, d) {
   if (id.startsWith('u:')) {

@@ -56,7 +56,8 @@ Erst diese Datei lesen. Details nur bei Bedarf (Tabelle „Wo steht was?“).
   - #52 Schwierige Sätze: gemischt, Satz fällt raus nach 2× Gut/Leicht an verschiedenen Tagen
   - #53–#55 Bilder + Alltag: Emoji auf (fast allen) Wortkarten, Foto-Jagd für Problemwörter, Orte-Karte mit „📍 Ich bin hier“, Tagesauftrag
   - Hochrechnung mit nahem Ziel statt ferner Stufe, 🟢-Steinchen für heute sichere Wörter
-  - 🚗 Auto-Modus (03.11.2026): fällige Wörter + Sätze nur per Sprache abfragen, Bewertung per Sprache; #59 Wartezeiten halbiert; 13.11.2026: Wartezeit nach Länge (Wörter kürzer), „richtig“/„falsch“, Töne statt Ansagen, keine Nachfrage
+  - 🚗 Auto-Modus (03.11.2026): fällige Wörter + Sätze nur per Sprache abfragen, Bewertung per Sprache; #59 Wartezeiten halbiert; 13.11.2026: Wartezeit nach Länge (Wörter kürzer), „richtig“/„falsch“, Töne statt Ansagen, keine Nachfrage, „später“ per Sprache
+  - Klemmende Sätze (13.11.2026 live, ohne Zusatzkosten): nach jedem 2. „Nochmal“ erst die noch unsicheren Wörter des Satzes – überall, auch im Auto-Modus. Kein automatisches Teilen (würde Claude-API kosten, von Ricky abgelehnt); ✂️ Aufteilen bleibt nur als Knopf von Hand
 - Rhetorik-App live (gebaut ab 23.10.2026).
 
 ## 7. Offene Punkte
@@ -65,6 +66,8 @@ Erst diese Datei lesen. Details nur bei Bedarf (Tabelle „Wo steht was?“).
 - #46 Beispielsätze mit echter Claude-API noch ungetestet.
 - Nie echt getestet (nur simuliert): Claude-API, Mikrofon/Kamera, Gerätestimmen, Gist-Sync.
 - Bilder/Orte/Tagesauftrag (02.11.2026) nur simuliert getestet; Emoji-Darstellung hängt vom Gerät ab.
+- Leises Sprechen wird im Auto schlecht erkannt (Rückmeldung 04.11.) – Chrome-Erkennung hat keine Empfindlichkeits-Einstellung.
+- Klemmende Sätze (Test 35) und automatisches Teilen nur simuliert getestet.
 - Auto-Modus nur simuliert getestet (Test 34); Erkennung bei Fahrgeräusch/Bluetooth unbekannt. „Verstehen“-Karten (`r:`) seit #58 dabei.
 - Weitere Ideen aus dem Video (nicht gebaut): Vorlage-Insel „Kennenlernen“ als Frage-Antwort-Paare, Zähler „sichere Sätze“.
 - Rhetorik-Ideen (nicht gebaut): Einwand-Rollenspiel, Ausdruck-Karteikarten, Sync.

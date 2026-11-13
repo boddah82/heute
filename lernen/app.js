@@ -2731,19 +2731,56 @@ views.review = function (root) {
 
 // ---------- Auto-Modus ----------
 // Fällige Wörter + Sätze nur per Sprache: Deutsch vorlesen → laut in der Zielsprache antworten
-// (wird nicht ausgewertet) → Lösung vorlesen → „gewusst“/„schwer“/„nochmal“/„leicht“ sagen.
-// Ohne erkannte Bewertung bleibt die Karte fällig. „Pause“, „weiter“, „Stopp“ jederzeit.
-const DRIVE_ANSWER_MS = 15000;
-const DRIVE_RATE_MS = 7000;
+// (wird nicht ausgewertet) → Lösung vorlesen → „richtig“/„falsch“ (auch „gewusst“/„schwer“/„nochmal“/„leicht“) sagen.
+// Ohne erkannte Bewertung: tiefer Ton, Karte kommt einmal am Ende der Runde wieder und bleibt sonst fällig.
+// Rückmeldung nur als kurzer Ton statt Ansage. „Pause“, „weiter“, „Stopp“ jederzeit.
+const DRIVE_ANSWER_MS = 7500; // Sätze
+const DRIVE_RATE_MS = 4500;
+const DRIVE_SETTLE_MS = 1250; // Nachdenkpause beim Antworten (Sätze)
+const DRIVE_WORD_SETTLE_MS = 700;
+// Wartezeit auf die Antwort nach Länge: Einzelwort ca. 3 s, Sätze wie bisher
+function driveAnswerMs(text, isSentence) {
+  if (isSentence) return DRIVE_ANSWER_MS;
+  const n = String(text || '').trim().split(/\s+/).filter(Boolean).length || 1;
+  return Math.min(5000, 2200 + 800 * n);
+}
 let driveRun = null; // { stop, paused, abort, wake }
 
 // Verneinung zuerst prüfen: „nicht gewusst“ enthält „gewusst“
+// Auch ähnlich Klingendes werten („bewusst“ statt „gewusst“, „wichtig“ statt „richtig“).
+// t kann mehrere Erkennungs-Varianten enthalten, getrennt mit „|“ – die erste verwertbare zählt.
 function driveParseRating(t) {
-  if (/nicht gewusst|nicht gut|nochmal|noch mal|\bnein\b|falsch|wusste ich nicht|keine ahnung|vergessen/.test(t)) return 0;
-  if (/schwer|knapp/.test(t)) return 1;
-  if (/leicht|einfach/.test(t)) return 3;
-  if (/gewusst|\bgut\b|\bja\b|richtig|wusste ich/.test(t)) return 2;
+  for (const v of String(t || '').split('|')) {
+    if (/nicht (gewusst|bewusst|gut|richtig|wichtig)|nochmal|noch mal|\bnein\b|\bnee\b|\bnö\b|falsch|\bfalls\b|wusste ich nicht|keine ahnung|vergessen/.test(v)) return 0;
+    if (/schwer|knapp/.test(v)) return 1;
+    if (/leicht|einfach/.test(v)) return 3;
+    if (/gewusst|bewusst|gewust|\bgut\b|\bja\b|richtig|wichtig|korrekt|stimmt|wusste ich/.test(v)) return 2;
+  }
   return null;
+}
+// Kurzer Ton statt Ansage: ok = ein hoher, again = zwei mittlere, sonst ein tiefer langer (nicht verstanden)
+let driveAudio = null;
+function driveBeep(kind) {
+  return new Promise(res => {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!driveAudio) driveAudio = new AC();
+      if (driveAudio.state === 'suspended') driveAudio.resume();
+      const tones = kind === 'ok' ? [[880, 0.12]] : kind === 'again' ? [[440, 0.1], [440, 0.1]] : [[200, 0.3]];
+      let at = driveAudio.currentTime + 0.02;
+      for (const [f, d] of tones) {
+        const o = driveAudio.createOscillator(), g = driveAudio.createGain();
+        o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, at);
+        g.gain.exponentialRampToValueAtTime(0.4, at + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001, at + d);
+        o.connect(g); g.connect(driveAudio.destination);
+        o.start(at); o.stop(at + d + 0.02);
+        at += d + 0.07;
+      }
+      setTimeout(res, Math.round((at - driveAudio.currentTime) * 1000) + 60);
+    } catch (e) { res(); }
+  });
 }
 function driveParseCommand(t, strict) {
   // Während der Antwort nur, wenn das Wort allein gesagt wird – sonst stoppt z. B. ein „stop“ im Satz die Runde
@@ -2763,7 +2800,8 @@ function driveSay(text, de) {
 }
 // Eine Äußerung erkennen; startet neu, wenn Android nach Stille abbricht, bis maxMs vorbei sind.
 // settleMs: nach dem ersten Erkannten noch so lange auf Fortsetzung warten (Denkpausen beim Antworten)
-function driveListen(maxMs, lang, onHeard, settleMs, cmds = true) {
+// alts: mehrere Erkennungs-Varianten mit „|“ getrennt zurückgeben (für die Bewertung)
+function driveListen(maxMs, lang, onHeard, settleMs, cmds = true, alts = false) {
   if (!SR || !driveRun) return Promise.resolve('');
   return new Promise(resolve => {
     const deadline = Date.now() + maxMs;
@@ -2785,11 +2823,14 @@ function driveListen(maxMs, lang, onHeard, settleMs, cmds = true) {
       rec.lang = lang;
       rec.continuous = false;
       rec.interimResults = false;
+      if (alts) rec.maxAlternatives = 5;
       rec.onresult = e => {
-        const t = ((e.results[0] && e.results[0][0].transcript) || '').trim();
-        if (!t) return;
+        const res0 = e.results[0];
+        const first = ((res0 && res0[0].transcript) || '').trim();
+        if (!first) return;
+        const t = alts ? Array.from({ length: res0.length || 1 }, (_, k) => ((res0[k] && res0[k].transcript) || '').trim()).filter(Boolean).join(' | ') : first;
         got.push(t);
-        onHeard && onHeard(got.join(' '));
+        onHeard && onHeard(alts ? first : got.join(' '));
         if (!settleMs || (cmds && driveParseCommand(t.toLowerCase(), true))) { finish(t); return; }
         clearTimeout(settle);
         settle = setTimeout(() => finish(got.join(' ')), settleMs);
@@ -2874,7 +2915,7 @@ views.drive = function (root) {
         <div id="dv-phase" class="drive-phase">${due.length ? `${due.length} Wiederholungen` : 'Nichts fällig'}</div>
         <div id="dv-text" class="drive-text"></div>
         <div id="dv-heard" class="muted small"></div>
-        ${due.length ? `<p class="muted small" id="dv-help">Vor der Fahrt starten, Handy in die Halterung, Display bleibt an. Ich sage es auf Deutsch, du antwortest laut auf ${lname} – bei „Verstehen“-Karten umgekehrt: ich sage es auf ${lname}, du sagst, was es heißt. Dann höre ich die Lösung vor und du sagst „gewusst“, „schwer“, „nochmal“ oder „leicht“. „Pause“, „weiter“ und „Stopp“ gehen jederzeit. Keine neuen Wörter oder Sätze. Braucht Internet für die Spracherkennung.</p>` : ''}
+        ${due.length ? `<p class="muted small" id="dv-help">Vor der Fahrt starten, Handy in die Halterung, Display bleibt an. Ich sage es auf Deutsch, du antwortest laut auf ${lname} – bei „Verstehen“-Karten umgekehrt: ich sage es auf ${lname}, du sagst, was es heißt. Dann lese ich die Lösung vor und du sagst „richtig“ oder „falsch“ (auch „gewusst“, „nochmal“, „schwer“, „leicht“). Hoher Ton = richtig, zwei Töne = kommt nochmal, tiefer Ton = nicht verstanden (Karte kommt am Ende nochmal). „Pause“, „weiter“ und „Stopp“ gehen jederzeit. Keine neuen Wörter oder Sätze. Braucht Internet für die Spracherkennung.</p>` : ''}
       </div>
       <div class="row">
         ${due.length ? '<button class="btn primary drive-btn grow" id="dv-start">Starten</button>' : '<a class="btn drive-btn grow" href="#home">Zurück</a>'}
@@ -2913,10 +2954,12 @@ views.drive = function (root) {
 
     const queue = due.slice();
     const steps = learnSteps();
+    const retried = new Set(); // ohne Bewertung schon einmal ans Ende gestellt
+    try { const AC = window.AudioContext || window.webkitAudioContext; if (!driveAudio) driveAudio = new AC(); driveAudio.resume(); } catch (e) {} // Töne mit dem Antippen freischalten
     const alive = () => driveRun === run && !run.stop;
     const broken = () => !alive() || run.paused;
     paintStats(queue.length);
-    await driveSay(`Auto-Modus. ${queue.length} Wiederholungen. Antworte laut, danach sag gewusst, schwer oder nochmal. Mit Pause hältst du an, mit Stopp hörst du auf.`, true);
+    await driveSay(`Auto-Modus. ${queue.length} Wiederholungen. Antworte laut, danach sag richtig oder falsch. Mit Pause hältst du an, mit Stopp hörst du auf.`, true);
 
     while (queue.length && alive()) {
       if (run.paused) {
@@ -2947,7 +2990,8 @@ views.drive = function (root) {
 
       paint(it.rev ? 'Was heißt das?' : 'Ich höre zu …', q.text, 'live');
       // Deutsche Antwort nicht als Befehl werten: „la pausa“ → „Pause“ würde sonst anhalten
-      const ans = await driveListen(DRIVE_ANSWER_MS, it.rev ? 'de-DE' : langCode(), heard, 2500, !it.rev);
+      const isSent = !it.rev && !isWordId(id);
+      const ans = await driveListen(driveAnswerMs(a.text, isSent), it.rev ? 'de-DE' : langCode(), heard, isSent ? DRIVE_SETTLE_MS : DRIVE_WORD_SETTLE_MS, !it.rev);
       const c1 = it.rev ? null : driveParseCommand(ans, true);
       if (c1 === 'stop') run.stop = true;
       if (c1 === 'pause') run.paused = true;
@@ -2957,27 +3001,29 @@ views.drive = function (root) {
       await driveSay(a.text, a.de);
       if (broken()) continue;
 
-      paint('Gewusst oder nochmal?', a.text, 'live');
+      paint('Richtig oder falsch?', a.text, 'live');
       let r = null;
-      for (let attempt = 0; attempt < 2 && r === null && !broken(); attempt++) {
-        const t = await driveListen(DRIVE_RATE_MS, 'de-DE', heard);
+      {
+        // Keine gesprochene Nachfrage: einmal zuhören, mehrere Erkennungs-Varianten auswerten
+        const t = await driveListen(DRIVE_RATE_MS, 'de-DE', heard, 0, true, true);
         const cmd = driveParseCommand(t);
         if (cmd === 'stop') run.stop = true;
         else if (cmd === 'pause') run.paused = true;
         else r = driveParseRating(t);
-        if (r === null && attempt === 0 && !broken()) await driveSay('Gewusst oder nochmal?', true);
       }
       if (broken()) continue;
       queue.shift();
       if (r === null) {
-        stats.skipped++;
-        await driveSay('Ohne Bewertung weiter.', true);
+        // Nicht verstanden: tiefer Ton, Karte einmal ans Ende der Runde, sonst bleibt sie fällig
+        if (!retried.has(id) && !queue.includes(id)) { retried.add(id); queue.push(id); }
+        else stats.skipped++;
+        await driveBeep('unclear');
       } else {
         if (isNew && it.rev) { const l = dayLog(); l.newHear = (l.newHear || 0) + 1; }
         // Lernschritte wie in der normalen Abfrage: Neues/Vergessenes kommt nach LEARN_GAP Karten wieder
         if (steps.rate(id, r)) queue.splice(Math.min(LEARN_GAP, queue.length), 0, id);
         if (r === 0) stats.again++; else stats.ok++;
-        await driveSay(r === 0 ? 'Kommt nochmal.' : 'Gut.', true);
+        await driveBeep(r === 0 ? 'again' : 'ok');
       }
       paintStats(queue.length);
     }

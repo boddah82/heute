@@ -56,7 +56,7 @@ Erst diese Datei lesen. Details nur bei Bedarf (Tabelle „Wo steht was?“).
   - #52 Schwierige Sätze: gemischt, Satz fällt raus nach 2× Gut/Leicht an verschiedenen Tagen
   - #53–#55 Bilder + Alltag: Emoji auf (fast allen) Wortkarten, Foto-Jagd für Problemwörter, Orte-Karte mit „📍 Ich bin hier“, Tagesauftrag
   - Hochrechnung mit nahem Ziel statt ferner Stufe, 🟢-Steinchen für heute sichere Wörter
-  - 🚗 Auto-Modus (03.11.2026): fällige Wörter + Sätze nur per Sprache abfragen, Bewertung per Sprache
+  - 🚗 Auto-Modus (03.11.2026): fällige Wörter + Sätze nur per Sprache abfragen, Bewertung per Sprache; #59 Wartezeiten halbiert; 13.11.2026: Wartezeit nach Länge (Wörter kürzer), „richtig“/„falsch“, Töne statt Ansagen, keine Nachfrage
 - Rhetorik-App live (gebaut ab 23.10.2026).
 
 ## 7. Offene Punkte

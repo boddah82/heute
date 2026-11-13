@@ -27,7 +27,9 @@ const fail = m => { console.log('FEHLER:', m); process.exitCode = 1; };
       window.SpeechRecognition = window.webkitSpeechRecognition = function () {
         const r = this;
         r.start = () => setTimeout(() => {
-          const q = __script[r.lang] || [];
+          // „rate“: eigene Liste für die Bewertungs-Phase, unabhängig von den Wartezeiten
+          const rating = __script.rate && (document.querySelector('#dv-phase') || {}).textContent === 'Richtig oder falsch?';
+          const q = (rating ? __script.rate : __script[r.lang]) || [];
           const v = q.length ? q.shift() : ''; // '' = Stille
           if (v) r.onresult && r.onresult({ results: [[{ transcript: v }]] });
           setTimeout(() => r.onend && r.onend(), 200);
@@ -91,7 +93,7 @@ const fail = m => { console.log('FEHLER:', m); process.exitCode = 1; };
   }
   // 4) „Verstehen“-Karte: Zielsprache vorlesen → deutsche Antwort (auch „Pause“ ist kein Befehl) → Deutsch vorlesen
   {
-    const { p, errs } = await page({ 'it-IT': ['la mela', 'ho quaranta anni'], 'de-DE': ['gewusst', 'Pause', ...Array(15).fill(''), 'gewusst', 'gewusst'] }, true);
+    const { p, errs } = await page({ 'it-IT': ['la mela', 'ho quaranta anni'], 'de-DE': ['Pause'], rate: ['gewusst', 'gewusst', 'gewusst'] }, true);
     await p.goto('http://localhost:8765/#drive');
     const head = await p.textContent('#dv-stats');
     if (!/1 Wörter · 1 Sätze · 1 verstehen/.test(head)) fail('Zählung: ' + head);
@@ -106,6 +108,24 @@ const fail = m => { console.log('FEHLER:', m); process.exitCode = 1; };
     const s = await srs(p);
     if (!(s['r:u:2'].iv > 4)) fail('Verstehen-Karte nicht geplant: ' + JSON.stringify(s['r:u:2']));
     console.log('Verstehen:', ph, '|', await p.textContent('#dv-text'));
+    errs.forEach(fail);
+    await p.close();
+  }
+  // 5) „richtig“/„falsch“, ähnlich Klingendes („wichtig“), nicht Verstandenes kommt am Ende nochmal – ohne gesprochene Nachfrage
+  {
+    const { p, errs } = await page({ 'it-IT': ['la mela', 'ho quaranta anni', 'la mela', 'ho quaranta anni'], rate: ['quatsch', 'falsch', 'wichtig', 'richtig'] });
+    await p.goto('http://localhost:8765/#drive');
+    await p.click('#dv-start');
+    await finish(p);
+    const said = await p.evaluate(() => __said);
+    const s = await srs(p);
+    const end = await p.textContent('#dv-text');
+    if (said.some(x => /Gewusst oder nochmal|Ohne Bewertung|: Gut\.|Kommt nochmal/.test(x))) fail('Noch gesprochene Rückmeldung: ' + said.join(' / '));
+    if (said.filter(x => x === 'de-DE: der Apfel').length !== 2) fail('Nicht verstandene Karte kam nicht nochmal');
+    if (!(s['u:1'].iv >= 3)) fail('„wichtig“ nicht als richtig gewertet: ' + JSON.stringify(s['u:1']));
+    if (s['s:1'].lapses !== 1) fail('„falsch“ nicht gewertet: ' + JSON.stringify(s['s:1']));
+    if (/ohne Bewertung/.test(end)) fail('Unerwartet ohne Bewertung: ' + end);
+    console.log('Richtig/falsch:', end);
     errs.forEach(fail);
     await p.close();
   }

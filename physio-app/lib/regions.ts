@@ -83,3 +83,17 @@ export const REGIONS: BodyRegion[] = [
 export function getRegion(id: string): BodyRegion {
   return REGIONS.find((r) => r.id === id) ?? REGIONS[0];
 }
+
+// Vorschläge für ein Leitsymptom je Region (frei änderbar). Typische
+// Situationen, die Patienten oft am meisten stören – entscheidend ist aber
+// immer, was DIESEN Patienten stört.
+export const LEAD_SYMPTOM_SUGGESTIONS: Record<string, string[]> = {
+  knie: ["Erste Schritte morgens", "Treppe abwärts", "Aufstehen nach langem Sitzen"],
+  ruecken: ["Nach dem Aufstehen (Steifigkeit)", "Nach längerem Sitzen", "Bücken (z. B. Socken anziehen)"],
+  schulter: ["Arm über Kopf heben", "Nachts auf der Seite liegen", "Jacke anziehen"],
+  nacken: ["Nach längerem Sitzen", "Nach dem Aufwachen", "Kopfschmerz am Abend"],
+  sehne: ["Erste Schritte morgens", "Anlaufschmerz nach Pause"],
+  ellbogen: ["Morgens beim ersten Greifen (Tasse)", "Greifen / Türklinke", "Händedruck"],
+  huefte: ["Anlaufschmerz morgens", "Aufstehen nach Sitzen", "Auf der Seite liegen"],
+  individuell: ["Nach dem Aufstehen", "Am Abend"],
+};

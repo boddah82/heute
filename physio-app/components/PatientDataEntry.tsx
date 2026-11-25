@@ -9,6 +9,7 @@ import {
   usePatientPSFSRatings,
   usePatientQuestionnaireResults,
   usePatientRecord,
+  useLeadSymptoms,
 } from "@/lib/storage";
 import RegionSelector from "./RegionSelector";
 import CheckInForm from "./CheckInForm";
@@ -21,8 +22,9 @@ import GoalActionSummary from "./GoalActionSummary";
 import QuestionnairePanel from "./QuestionnairePanel";
 import ActivityReliability from "./ActivityReliability";
 import LoadProgress from "./LoadProgress";
+import LeadSymptomPanel from "./LeadSymptomPanel";
 
-type DataTab = "heute" | "verlauf" | "pddm" | "ziele" | "fragebogen";
+type DataTab = "heute" | "verlauf" | "leitsymptom" | "pddm" | "ziele" | "fragebogen";
 
 // Direkte Dateneingabe für einen Mandanten durch die Therapeutin/den
 // Therapeuten (z. B. Erstanamnese im Termin) – schreibt direkt in den
@@ -56,6 +58,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
   const { goals, addGoal, deleteGoal } = usePatientPSFSGoals(patientId, regionId);
   const { ratings, addRating } = usePatientPSFSRatings(patientId, regionId);
   const { results, addResult, deleteResult } = usePatientQuestionnaireResults(patientId, regionId);
+  const lead = useLeadSymptoms(patientId, regionId);
 
   // Sanfte Führung: erst Bestandsaufnahme (Bereiche), dann Ziele, erst
   // danach das laufende Tracking – frei änderbar, sobald einmal geladen.
@@ -75,6 +78,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
           { id: "ziele" as DataTab, label: "Ziele" },
           { id: "heute" as DataTab, label: "Heute" },
           { id: "verlauf" as DataTab, label: `Verlauf (${entries.length})` },
+          { id: "leitsymptom" as DataTab, label: "Leitsymptom" },
           { id: "fragebogen" as DataTab, label: "Fragebögen" },
         ].map((t) => (
           <button
@@ -165,6 +169,20 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
             ))}
           </div>
         ))}
+
+      {tab === "leitsymptom" && (
+        <LeadSymptomPanel
+          regionId={regionId}
+          symptoms={lead.symptoms}
+          ratings={lead.ratings}
+          sleep={lead.sleep}
+          checkIns={entries}
+          onAddSymptom={lead.addSymptom}
+          onDeleteSymptom={lead.deleteSymptom}
+          onRate={lead.rate}
+          onRateSleep={lead.rateSleep}
+        />
+      )}
 
       {tab === "ziele" && (
         <div className="space-y-2">

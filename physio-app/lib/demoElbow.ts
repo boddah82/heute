@@ -1,4 +1,4 @@
-import { CheckIn, HistoryBundle, PDDMAssessment, PDDMPainBaseline, PSFSGoal, PSFSRating } from "./types";
+import { CheckIn, HistoryBundle, LeadSymptom, LeadSymptomRating, PDDMAssessment, PDDMPainBaseline, PSFSGoal, PSFSRating, SleepEntry } from "./types";
 import { evaluatePDDM } from "./pddm";
 
 // Zwei erfundene Demo-Mandanten für die Region "Ellbogen", beide wollen
@@ -73,6 +73,53 @@ function goalWithRatings(label: string, values: [daysAgo: number, value: number]
     createdAt: new Date().toISOString(),
   }));
   return { goal, ratings };
+}
+
+
+// Deterministischer Zufall, damit die Demo bei jedem Laden gleich aussieht.
+function rng(seed: number) {
+  return () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296;
+  };
+}
+
+function clamp(v: number) {
+  return Math.max(0, Math.min(10, Math.round(v)));
+}
+
+// Leitsymptom + Schlaf für ca. 5 von 7 Tagen über 12 Wochen.
+// level(t, sleep, afterDrums) liefert den Schmerzwert (t = 0..1 Zeitfortschritt).
+function leadSeries(
+  label: string,
+  seed: number,
+  drumDays: Set<number>,
+  sleepFor: (t: number, r: () => number) => number,
+  level: (t: number, sleep: number, afterDrums: boolean, r: () => number) => number,
+  startup?: (t: number, value: number) => number
+): { symptom: LeadSymptom; ratings: LeadSymptomRating[]; sleep: SleepEntry[] } {
+  const r = rng(seed);
+  const symptom: LeadSymptom = { id: id("l"), regionId: REGION, label, createdAt: new Date().toISOString() };
+  const ratings: LeadSymptomRating[] = [];
+  const sleep: SleepEntry[] = [];
+  for (let d = 0; d <= DAYS - 1; d++) {
+    if (r() < 0.25) continue; // nicht jeden Tag eingetragen
+    const t = d / DAYS;
+    const rested = clamp(sleepFor(t, r));
+    const value = clamp(level(t, rested, drumDays.has(d - 1), r));
+    const date = isoDaysAgo(DAYS - d);
+    sleep.push({ id: id("s"), date, rested, createdAt: new Date().toISOString() });
+    ratings.push({
+      id: id("lr"),
+      regionId: REGION,
+      symptomId: symptom.id,
+      date,
+      value,
+      ...(startup ? { startupMin: Math.max(0, Math.round(startup(t, value))) } : {}),
+      createdAt: new Date().toISOString(),
+    });
+  }
+  return { symptom, ratings, sleep };
 }
 
 const DRUMS = "Schlagzeug spielen";
@@ -189,6 +236,15 @@ function progressDemo(): ElbowDemo {
     [84, 5], [56, 7], [28, 8], [2, 10],
   ]);
 
+  const lead = leadSeries(
+    "Morgens beim ersten Greifen (Tasse)",
+    11,
+    new Set(drums.map(([d]) => d)),
+    (_t, r) => 6.5 + r() * 2.5,
+    (t, _s, afterDrums, r) => 5.2 - 4 * t + (afterDrums && t < 0.5 ? 1 : 0) + (r() - 0.5) * 1.6,
+    (t, v) => 3 + v * 3.5 - 10 * t
+  );
+
   return {
     name: "Demo: Tennisellbogen – Fortschritt",
     description: "Schlagzeuger, 12 Wochen: von 30 Min. auf 3 Std. Spielzeit.",
@@ -198,6 +254,9 @@ function progressDemo(): ElbowDemo {
       psfsGoals: [g1.goal, g2.goal],
       psfsRatings: [...g1.ratings, ...g2.ratings],
       questionnaireResults: [],
+      leadSymptoms: [lead.symptom],
+      leadRatings: lead.ratings,
+      sleep: lead.sleep,
     },
   };
 }
@@ -287,6 +346,14 @@ function stuckDemo(): ElbowDemo {
     [84, 4], [56, 3], [28, 4], [2, 4],
   ]);
 
+  const lead = leadSeries(
+    "Greifen / Türklinke",
+    23,
+    new Set(drums.map(([d]) => d)),
+    (_t, r) => (r() < 0.45 ? 2 + r() * 2.5 : 5 + r() * 3),
+    (_t, rested, afterDrums, r) => 4.6 + (rested <= 4 ? 1.8 : 0) + (afterDrums ? 1 : 0) + (r() - 0.5) * 1.4
+  );
+
   return {
     name: "Demo: Golferellbogen – kein Fortschritt",
     description: "Schlagzeuger, 12 Wochen: macht brav Übungen, bleibt aber bei ca. 30 Min.",
@@ -296,6 +363,9 @@ function stuckDemo(): ElbowDemo {
       psfsGoals: [g1.goal, g2.goal],
       psfsRatings: [...g1.ratings, ...g2.ratings],
       questionnaireResults: [],
+      leadSymptoms: [lead.symptom],
+      leadRatings: lead.ratings,
+      sleep: lead.sleep,
     },
   };
 }

@@ -22,11 +22,13 @@ import GoalActionSummary from "@/components/GoalActionSummary";
 import PainTrendChart from "@/components/PainTrendChart";
 import ActivityReliability from "@/components/ActivityReliability";
 import LoadProgress from "@/components/LoadProgress";
+import LeadSymptomPanel from "@/components/LeadSymptomPanel";
 import PDDMPainTrendChart from "@/components/PDDMPainTrendChart";
 import QuestionnairePanel from "@/components/QuestionnairePanel";
 import {
   useActiveRegion,
   useCheckIns,
+  useLeadSymptoms,
   useOtherRegionsWithEntries,
   usePDDMAssessments,
   usePlan,
@@ -41,7 +43,7 @@ import { readPlanFromLocation, clearPlanFromUrl } from "@/lib/planLink";
 import { readHistoryFromLocation, clearHistoryFromUrl } from "@/lib/historyLink";
 import { TrainingPlan, HistoryBundle } from "@/lib/types";
 
-type Tab = "heute" | "rechner" | "verlauf" | "pddm" | "wissen" | "ziele" | "fragebogen";
+type Tab = "heute" | "rechner" | "verlauf" | "leitsymptom" | "pddm" | "wissen" | "ziele" | "fragebogen";
 type Mode = "patient" | "therapist";
 
 // Liest einen evtl. im Link enthaltenen Plan/Verlauf synchron beim ersten
@@ -72,6 +74,7 @@ export default function Home() {
   const { goals, addGoal, deleteGoal } = usePSFSGoals(regionId);
   const { ratings, addRating } = usePSFSRatings(regionId);
   const { results: questionnaireResults, addResult: addQuestionnaireResult, deleteResult: deleteQuestionnaireResult } = useQuestionnaireResults(regionId);
+  const lead = useLeadSymptoms(null, regionId);
   const { patients, addPatient, deletePatient } = usePatients();
   // Sanfte Führung beim Einstieg: erst Bestandsaufnahme (Bereiche), dann
   // Ziele, erst danach das laufende Tracking – aber frei änderbar, sobald
@@ -168,6 +171,7 @@ export default function Home() {
             { id: "ziele" as Tab, label: "Ziele" },
             { id: "heute" as Tab, label: "Heute" },
             { id: "verlauf" as Tab, label: `Verlauf (${entries.length})` },
+            { id: "leitsymptom" as Tab, label: "Leitsymptom" },
             { id: "rechner" as Tab, label: "Rechner" },
             { id: "fragebogen" as Tab, label: "Fragebögen" },
             { id: "wissen" as Tab, label: "Wissen" },
@@ -315,6 +319,20 @@ export default function Home() {
                   onRate={addRating}
                 />
               </div>
+            )}
+
+            {tab === "leitsymptom" && (
+              <LeadSymptomPanel
+                regionId={regionId}
+                symptoms={lead.symptoms}
+                ratings={lead.ratings}
+                sleep={lead.sleep}
+                checkIns={entries}
+                onAddSymptom={lead.addSymptom}
+                onDeleteSymptom={lead.deleteSymptom}
+                onRate={lead.rate}
+                onRateSleep={lead.rateSleep}
+              />
             )}
 
             {tab === "fragebogen" && (

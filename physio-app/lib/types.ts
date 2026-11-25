@@ -156,6 +156,10 @@ export interface PatientRecord {
   psfsGoals: PSFSGoal[];
   psfsRatings: PSFSRating[];
   questionnaireResults: QuestionnaireResult[];
+  // Optional, damit ältere Datensätze/Links ohne diese Felder gültig bleiben.
+  leadSymptoms?: LeadSymptom[];
+  leadRatings?: LeadSymptomRating[];
+  sleep?: SleepEntry[];
   importedAt: string; // ISO timestamp
 }
 
@@ -167,5 +171,37 @@ export interface HistoryBundle {
   psfsGoals: PSFSGoal[];
   psfsRatings: PSFSRating[];
   questionnaireResults: QuestionnaireResult[];
+  leadSymptoms?: LeadSymptom[];
+  leadRatings?: LeadSymptomRating[];
+  sleep?: SleepEntry[];
   exportedAt: string; // ISO timestamp
+}
+
+// Leitsymptom (eigene Umsetzung nach dem Prinzip Wiedertest-/Asterisk-Zeichen
+// + NPRS 0–10): eine feste Situation, die den Patienten am meisten stört
+// (z. B. "Erste Schritte morgens"), unabhängig von einer Aktivität immer
+// gleich bewertet. Zeigt, ob sich das Leitsymptom über Wochen verändert.
+export interface LeadSymptom {
+  id: string;
+  regionId: string;
+  label: string;
+  createdAt: string; // ISO timestamp
+}
+
+export interface LeadSymptomRating {
+  id: string;
+  regionId: string;
+  symptomId: string;
+  date: string; // ISO date (yyyy-mm-dd)
+  value: number; // 0-10
+  startupMin?: number; // optional: Minuten, bis es "eingelaufen"/besser ist
+  createdAt: string; // ISO timestamp
+}
+
+// Schlaf: eine Frage pro Morgen, unabhängig von der Region.
+export interface SleepEntry {
+  id: string;
+  date: string; // ISO date (yyyy-mm-dd)
+  rested: number; // 0 = gar nicht erholt, 10 = voll erholt
+  createdAt: string; // ISO timestamp
 }

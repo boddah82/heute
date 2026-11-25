@@ -9,6 +9,7 @@ import { OEREBRO_SCORE_RANGE, OEREBRO_CUTOFF } from "@/lib/oerebro";
 import TrafficLightBadge from "./TrafficLightBadge";
 import PDDMPainTrendChart from "./PDDMPainTrendChart";
 import LoadProgress from "./LoadProgress";
+import LeadSymptomPanel from "./LeadSymptomPanel";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("de-DE", {
@@ -35,6 +36,7 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
       ...record.pddm.map((a) => a.regionId),
       ...record.psfsGoals.map((g) => g.regionId),
       ...record.questionnaireResults.map((q) => q.regionId),
+      ...(record.leadSymptoms ?? []).map((l) => l.regionId),
     ])
   );
 
@@ -135,6 +137,17 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
                 </div>
               );
             })}
+
+            {(record.leadSymptoms ?? []).some((l) => l.regionId === regionId) && (
+              <LeadSymptomPanel
+                regionId={regionId}
+                readOnly
+                symptoms={(record.leadSymptoms ?? []).filter((l) => l.regionId === regionId)}
+                ratings={(record.leadRatings ?? []).filter((r) => r.regionId === regionId)}
+                sleep={record.sleep ?? []}
+                checkIns={checkIns}
+              />
+            )}
 
             <LoadProgress entries={checkIns} />
 

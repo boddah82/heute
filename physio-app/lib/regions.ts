@@ -54,6 +54,16 @@ export const REGIONS: BodyRegion[] = [
     ],
   },
   {
+    id: "ellbogen",
+    label: "Ellbogen (Tennis- / Golferellbogen)",
+    exampleReize: [
+      "Greifen / Tragen",
+      "Tastatur / Maus",
+      "Instrument spielen",
+      "Handgelenk-Übungen",
+    ],
+  },
+  {
     id: "huefte",
     label: "Hüfte",
     exampleReize: [

@@ -21,6 +21,7 @@ import PSFSPanel from "@/components/PSFSPanel";
 import GoalActionSummary from "@/components/GoalActionSummary";
 import PainTrendChart from "@/components/PainTrendChart";
 import ActivityReliability from "@/components/ActivityReliability";
+import LoadProgress from "@/components/LoadProgress";
 import PDDMPainTrendChart from "@/components/PDDMPainTrendChart";
 import QuestionnairePanel from "@/components/QuestionnairePanel";
 import {
@@ -234,6 +235,7 @@ export default function Home() {
               ) : (
                 <>
                   <PainTrendChart entries={entries} />
+                  <LoadProgress entries={entries} />
                   <ActivityReliability entries={entries} />
                   {entries.map((entry) => (
                     <EntryCard key={entry.id} entry={entry} onUpdate={updateEntry} onDelete={deleteEntry} />

@@ -8,6 +8,7 @@ import { QUESTIONNAIRES } from "@/lib/questionnaires";
 import { OEREBRO_SCORE_RANGE, OEREBRO_CUTOFF } from "@/lib/oerebro";
 import TrafficLightBadge from "./TrafficLightBadge";
 import PDDMPainTrendChart from "./PDDMPainTrendChart";
+import LoadProgress from "./LoadProgress";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("de-DE", {
@@ -119,17 +120,23 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
                 .filter((r) => r.goalId === goal.id)
                 .sort((a, b) => (a.date < b.date ? 1 : -1));
               const latest = ratings[0];
+              const first = ratings[ratings.length - 1];
               return (
                 <div key={goal.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between">
                   <p className="text-sm text-slate-700 dark:text-slate-300">{goal.label}</p>
                   {latest && (
                     <p className="text-sm font-semibold text-brand-800 dark:text-brand-200 shrink-0">
+                      {first && first !== latest && (
+                        <span className="font-normal text-slate-500 dark:text-slate-400">{first.value} → </span>
+                      )}
                       {latest.value}/10 <span className="font-normal text-slate-400 dark:text-slate-500">({formatDate(latest.date)})</span>
                     </p>
                   )}
                 </div>
               );
             })}
+
+            <LoadProgress entries={checkIns} />
 
             {checkIns.length === 0 ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">Keine Check-ins.</p>

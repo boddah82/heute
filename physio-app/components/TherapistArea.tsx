@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { Patient } from "@/lib/types";
-import { usePlan, usePatientRecord, buildHistoryBundle, importPatientRecord } from "@/lib/storage";
+import { usePlan, usePatientRecord, buildHistoryBundle, importPatientRecord, seedDemoPatient } from "@/lib/storage";
 import RegionSelector from "./RegionSelector";
 import PlanBuilder from "./PlanBuilder";
 import PatientRecordView from "./PatientRecordView";
 import PatientDataEntry from "./PatientDataEntry";
 import DemoPatientPicker from "./DemoPatientPicker";
+import { buildElbowDemos } from "@/lib/demoElbow";
 
 type SubTab = "mandanten" | "plan" | "vorschau";
 type MandantView = "eingabe" | "uebersicht";
@@ -173,7 +174,7 @@ export default function TherapistArea({
               </div>
 
               {mandantView === "eingabe" ? (
-                <PatientDataEntry patientId={activePatient.id} />
+                <PatientDataEntry key={activePatient.id} patientId={activePatient.id} />
               ) : (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
@@ -214,6 +215,25 @@ export default function TherapistArea({
             Lädt Testdaten in die Patientenansicht dieses Geräts, um sie auszuprobieren – nicht für echte Mandanten gedacht.
           </p>
           <DemoPatientPicker onLoaded={onDemoLoaded} variant="onLight" />
+
+          <div className="pt-3 mt-1 border-t border-slate-100 dark:border-slate-700 space-y-2">
+            <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Demo-Mandanten Ellbogen</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Zwei erfundene Schlagzeuger über 12 Wochen: einer kommt von 30 Min. auf 3 Std., der andere bleibt trotz
+              Übungen bei ca. 30 Min. Landen als Mandanten unter &quot;Mandanten&quot;.
+            </p>
+            <button
+              onClick={() => {
+                const ids = buildElbowDemos().map((d) => seedDemoPatient(d.name, d.bundle));
+                setSubTab("mandanten");
+                setMandantView("uebersicht");
+                onSelectPatient(ids[0]);
+              }}
+              className="rounded-lg bg-brand-700 text-white px-3 py-2 text-sm font-medium hover:bg-brand-800 transition"
+            >
+              Demo-Mandanten laden
+            </button>
+          </div>
         </div>
       )}
     </div>

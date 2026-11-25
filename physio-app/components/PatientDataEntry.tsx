@@ -8,6 +8,7 @@ import {
   usePatientPSFSGoals,
   usePatientPSFSRatings,
   usePatientQuestionnaireResults,
+  usePatientRecord,
 } from "@/lib/storage";
 import RegionSelector from "./RegionSelector";
 import CheckInForm from "./CheckInForm";
@@ -19,6 +20,7 @@ import PSFSPanel from "./PSFSPanel";
 import GoalActionSummary from "./GoalActionSummary";
 import QuestionnairePanel from "./QuestionnairePanel";
 import ActivityReliability from "./ActivityReliability";
+import LoadProgress from "./LoadProgress";
 
 type DataTab = "heute" | "verlauf" | "pddm" | "ziele" | "fragebogen";
 
@@ -27,7 +29,22 @@ type DataTab = "heute" | "verlauf" | "pddm" | "ziele" | "fragebogen";
 // Mandanten-Datensatz (siehe usePatientCheckIns & Co. in lib/storage.ts),
 // unabhängig vom eigenen Tracking-Stand dieses Geräts.
 export default function PatientDataEntry({ patientId }: { patientId: string }) {
-  const [regionId, setRegionId] = useState("knie");
+  // Startet in der Region mit den meisten Einträgen (z. B. Demo-Mandanten
+  // "Ellbogen"), sonst Knie.
+  const { record } = usePatientRecord(patientId);
+  const [regionId, setRegionId] = useState(() => {
+    const counts = new Map<string, number>();
+    for (const c of record?.checkIns ?? []) counts.set(c.regionId, (counts.get(c.regionId) ?? 0) + 1);
+    let best = "knie";
+    let bestCount = 0;
+    counts.forEach((n, r) => {
+      if (n > bestCount) {
+        best = r;
+        bestCount = n;
+      }
+    });
+    return best;
+  });
   const [pddmMode, setPddmMode] = useState<null | "live" | "paper">(null);
 
   const { entries, updateEntry, deleteEntry, addEntry } = usePatientCheckIns(patientId, regionId);
@@ -89,6 +106,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
           <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-6">Noch keine Check-ins für diesen Bereich.</p>
         ) : (
           <div className="space-y-3">
+            <LoadProgress entries={entries} />
             <ActivityReliability entries={entries} />
             {entries.map((entry) => (
               <EntryCard key={entry.id} entry={entry} onUpdate={updateEntry} onDelete={deleteEntry} />

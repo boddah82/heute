@@ -621,3 +621,14 @@ export function useActiveRegion(defaultRegion: string) {
 
   return { regionId: stored ?? defaultRegion, select };
 }
+
+// Legt einen Demo-Mandanten samt fertigem Datensatz an (Therapeuten-Bereich,
+// "Testvorschau"). Ein schon vorhandener Mandant mit demselben Namen wird
+// ersetzt, damit wiederholtes Laden keine Dubletten erzeugt.
+export function seedDemoPatient(name: string, bundle: Omit<HistoryBundle, "exportedAt">): string {
+  const existing = patientsStore.getSnapshot().find((p) => p.name === name);
+  const patient: Patient = existing ?? { id: crypto.randomUUID(), name, createdAt: new Date().toISOString() };
+  if (!existing) patientsStore.set([patient, ...patientsStore.getSnapshot()]);
+  importPatientRecord(patient.id, { ...bundle, exportedAt: new Date().toISOString() });
+  return patient.id;
+}

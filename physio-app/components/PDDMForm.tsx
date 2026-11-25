@@ -12,6 +12,8 @@ interface Props {
   // Therapeuten-Modus: Antworten von einem ausgehändigten Papierbogen
   // übertragen – mit Ausfülldatum und optional fehlenden Schmerzwerten.
   transcribe?: boolean;
+  // Optionale Überschrift, z. B. "Erstbogen · Teil B" im Erstbogen-Ablauf.
+  title?: string;
 }
 
 function today(): string {
@@ -37,7 +39,7 @@ function PainSliderRow({ label, value, onChange }: { label: string; value: numbe
   );
 }
 
-export default function PDDMForm({ regionId, onSubmit, onDone, transcribe = false }: Props) {
+export default function PDDMForm({ regionId, onSubmit, onDone, transcribe = false, title }: Props) {
   const region = getRegion(regionId);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [current, setCurrent] = useState(0);
@@ -81,7 +83,7 @@ export default function PDDMForm({ regionId, onSubmit, onDone, transcribe = fals
     <form onSubmit={handleSubmit} className="space-y-5 bg-white dark:bg-slate-800 rounded-lg p-5 shadow-sm border border-slate-200 dark:border-slate-700">
       <div>
         <h2 className="font-semibold text-slate-900 dark:text-slate-100">
-          {transcribe ? "Papierbogen übertragen (PDDM)" : "Bereichs-Einschätzung (PDDM)"}
+          {title ?? (transcribe ? "Papierbogen übertragen (PDDM)" : "Bereichs-Einschätzung (PDDM)")}
         </h2>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
           {transcribe ? (

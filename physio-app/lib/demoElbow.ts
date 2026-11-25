@@ -203,6 +203,22 @@ function progressDemo(): ElbowDemo {
     },
     { current: 3, maxLoad: 6, afterMaxLoad: 4 }
   );
+  start.intake = {
+    duration: "über 3 Monate",
+    course: "gleich",
+    redFlags: { trauma: "Nein", fever: "Nein", weightLoss: "Nein", nightPain: "Nein", neuroDeficit: "Nein", bladderBowel: "Nein", cancer: "Nein", dizziness: "Nein" },
+    leadSymptom: "Morgens beim ersten Greifen (Tasse)",
+    leadValue: 5,
+    leadStartupMin: 20,
+    goals: [
+      { label: "Schlagzeug spielen (Probe / Auftritt)", value: 2 },
+      { label: "Einkaufstasche tragen", value: 5 },
+    ],
+    rested: 7,
+    ownExplanation: "Die Sehne ist kaputt vom vielen Spielen.",
+    toldSoFar: "Tennisellbogen, Sehne ausgefranst – Schonung.",
+    expectation: "Wieder Auftritte spielen können.",
+  };
   const end = pddm(
     2,
     {
@@ -337,6 +353,21 @@ function stuckDemo(): ElbowDemo {
     "contextual.nocebo": "Nein",
   };
   const start = pddm(DAYS, answers, { current: 4, maxLoad: 7, afterMaxLoad: 6 });
+  start.intake = {
+    duration: "über 3 Monate",
+    course: "wechselnd",
+    redFlags: { trauma: "Nein", fever: "Nein", weightLoss: "Nein", nightPain: "Nein", neuroDeficit: "Nein", bladderBowel: "Nein", cancer: "Nein", dizziness: "Nein" },
+    leadSymptom: "Greifen / Türklinke",
+    leadValue: 6,
+    goals: [
+      { label: "Schlagzeug spielen (Probe / Auftritt)", value: 3 },
+      { label: "Arbeitstag im Lager ohne Pause wegen Schmerz", value: 4 },
+    ],
+    rested: 3,
+    ownExplanation: "Zu viel Heben im Lager.",
+    toldSoFar: "Golferellbogen.",
+    expectation: "Dass es endlich weggeht.",
+  };
   const end = pddm(2, answers, { current: 4, maxLoad: 7, afterMaxLoad: 6 });
 
   const g1 = goalWithRatings("Schlagzeug spielen (Probe / Auftritt)", [

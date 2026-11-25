@@ -539,6 +539,7 @@ export function usePatientPSFSGoals(patientId: string, regionId: string) {
       const rec = getOrCreatePatientRecord(patientId);
       const goal: PSFSGoal = { id: crypto.randomUUID(), regionId, label, createdAt: new Date().toISOString() };
       updatePatientRecord(patientId, { psfsGoals: [goal, ...rec.psfsGoals] });
+      return goal.id;
     },
     [patientId, regionId]
   );
@@ -570,13 +571,13 @@ export function usePatientPSFSRatings(patientId: string, regionId: string) {
   );
 
   const addRating = useCallback(
-    (goalId: string, value: number) => {
+    (goalId: string, value: number, date?: string) => {
       const rec = getOrCreatePatientRecord(patientId);
       const rating: PSFSRating = {
         id: crypto.randomUUID(),
         regionId,
         goalId,
-        date: new Date().toISOString().slice(0, 10),
+        date: date ?? new Date().toISOString().slice(0, 10),
         value,
         createdAt: new Date().toISOString(),
       };
@@ -693,6 +694,7 @@ export function useLeadSymptoms(patientId: string | null, regionId: string) {
       const cur = readLead(patientId);
       const s: LeadSymptom = { id: crypto.randomUUID(), regionId, label, createdAt: new Date().toISOString() };
       writeLead(patientId, { symptoms: [s, ...cur.symptoms] });
+      return s.id;
     },
     [patientId, regionId]
   );

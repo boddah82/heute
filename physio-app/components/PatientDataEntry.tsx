@@ -23,6 +23,9 @@ import QuestionnairePanel from "./QuestionnairePanel";
 import ActivityReliability from "./ActivityReliability";
 import LoadProgress from "./LoadProgress";
 import LeadSymptomPanel from "./LeadSymptomPanel";
+import IntakeForm from "./IntakeForm";
+import HypothesisCard from "./HypothesisCard";
+import { IntakeData } from "@/lib/types";
 
 type DataTab = "heute" | "verlauf" | "leitsymptom" | "pddm" | "ziele" | "fragebogen";
 
@@ -47,7 +50,8 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
     });
     return best;
   });
-  const [pddmMode, setPddmMode] = useState<null | "live" | "paper">(null);
+  const [pddmMode, setPddmMode] = useState<null | "live" | "paper" | "intakeA" | "intakeB">(null);
+  const [intake, setIntake] = useState<IntakeData | null>(null);
 
   const { entries, updateEntry, deleteEntry, addEntry } = usePatientCheckIns(patientId, regionId);
   const otherRegionIds = usePatientOtherRegionsWithEntries(patientId, regionId);
@@ -119,13 +123,38 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
         ))}
 
       {tab === "pddm" &&
-        (pddmMode ? (
+        (pddmMode === "intakeA" ? (
+          <IntakeForm
+            regionId={regionId}
+            onCancel={() => setPddmMode(null)}
+            onNext={(data) => {
+              setIntake(data);
+              setPddmMode("intakeB");
+            }}
+          />
+        ) : pddmMode ? (
           <PDDMForm
             key={pddmMode}
             regionId={regionId}
-            transcribe={pddmMode === "paper"}
+            transcribe={pddmMode === "paper" || pddmMode === "intakeB"}
+            title={pddmMode === "intakeB" ? "Erstbogen · Teil B: Die 5 Bereiche" : undefined}
             onSubmit={(a) => {
-              addAssessment(a);
+              if (pddmMode === "intakeB" && intake) {
+                addAssessment({ ...a, intake });
+                // Erstbogen-Angaben zusätzlich als laufende Verläufe anlegen.
+                if (intake.leadSymptom) {
+                  const sid = lead.addSymptom(intake.leadSymptom);
+                  if (intake.leadValue !== undefined) lead.rate(sid, a.date, intake.leadValue, intake.leadStartupMin);
+                }
+                for (const g of intake.goals) {
+                  const gid = addGoal(g.label);
+                  if (g.value !== undefined) addRating(gid, g.value, a.date);
+                }
+                if (intake.rested !== undefined) lead.rateSleep(a.date, intake.rested);
+                setIntake(null);
+              } else {
+                addAssessment(a);
+              }
               setPddmMode(null);
             }}
             onDone={() => setPddmMode(null)}
@@ -137,6 +166,12 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
                 Schritt 1 von 3 – Bestandsaufnahme
               </p>
             )}
+            <button
+              onClick={() => setPddmMode("intakeA")}
+              className="w-full rounded-lg bg-brand-800 text-white font-semibold py-2.5 text-sm hover:bg-brand-900 transition"
+            >
+              Erstbogen übertragen (mit Arbeitshypothese)
+            </button>
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setPddmMode("live")}
@@ -164,6 +199,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
                 </button>
               </div>
             )}
+            {sortedAssessments[0] && <HypothesisCard assessment={sortedAssessments[0]} />}
             {sortedAssessments.map((a) => (
               <PDDMResultCard key={a.id} assessment={a} onDelete={deleteAssessment} />
             ))}

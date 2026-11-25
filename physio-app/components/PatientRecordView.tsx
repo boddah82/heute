@@ -10,6 +10,7 @@ import TrafficLightBadge from "./TrafficLightBadge";
 import PDDMPainTrendChart from "./PDDMPainTrendChart";
 import LoadProgress from "./LoadProgress";
 import LeadSymptomPanel from "./LeadSymptomPanel";
+import HypothesisCard from "./HypothesisCard";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("de-DE", {
@@ -62,6 +63,10 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
         return (
           <div key={regionId} className="space-y-3">
             <h3 className="font-semibold text-slate-900 dark:text-slate-100">{region.label}</h3>
+
+            {pddm.length > 0 && (
+              <HypothesisCard assessment={[...pddm].sort((a, b) => (a.date < b.date ? 1 : -1))[0]} />
+            )}
 
             {pddm.filter((a) => a.painBaseline).length > 1 && (
               <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">

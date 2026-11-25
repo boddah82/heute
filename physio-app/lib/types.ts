@@ -107,6 +107,12 @@ export interface PSFSGoal {
   regionId: string;
   label: string;
   createdAt: string; // ISO timestamp
+  // Motivations-Lineal aus der motivierenden Gesprächsführung (MI): Wie
+  // wichtig ist dem Patienten das Ziel, und wie zuversichtlich ist er, es
+  // zu schaffen (je 0-10)? Optional, ältere Ziele haben die Felder nicht.
+  importance?: number;
+  confidence?: number;
+  motivationDate?: string; // ISO date (yyyy-mm-dd) der letzten Einschätzung
 }
 
 export interface PSFSRating {

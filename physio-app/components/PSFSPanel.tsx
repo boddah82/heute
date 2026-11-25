@@ -10,16 +10,122 @@ function formatDate(iso: string): string {
   return `${d}.${m}.${y}`;
 }
 
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Motivations-Lineal (motivierende Gesprächsführung): Wichtigkeit und
+// Zuversicht je 0-10. Die Zahl ist nur der Gesprächseinstieg – die
+// Nachfragen darunter sind der eigentliche Teil.
+function MotivationRuler({
+  goal,
+  onSave,
+}: {
+  goal: PSFSGoal;
+  onSave: (patch: Partial<PSFSGoal>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [importance, setImportance] = useState(goal.importance ?? 5);
+  const [confidence, setConfidence] = useState(goal.confidence ?? 5);
+  const hasValues = goal.importance !== undefined && goal.confidence !== undefined;
+
+  if (!open) {
+    return (
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <p className="text-slate-500 dark:text-slate-400">
+          {hasValues ? (
+            <>
+              Wichtigkeit <span className="font-semibold text-slate-800 dark:text-slate-200">{goal.importance}/10</span> ·
+              Zuversicht <span className="font-semibold text-slate-800 dark:text-slate-200">{goal.confidence}/10</span>
+              {goal.motivationDate && <> ({formatDate(goal.motivationDate)})</>}
+            </>
+          ) : (
+            "Wie wichtig ist Dir das Ziel, und wie zuversichtlich bist Du?"
+          )}
+        </p>
+        <button
+          onClick={() => setOpen(true)}
+          className="text-xs font-medium text-brand-700 dark:text-brand-300 underline underline-offset-2 shrink-0"
+        >
+          {hasValues ? "Neu einschätzen" : "Einschätzen"}
+        </button>
+      </div>
+    );
+  }
+
+  const slider = (
+    label: string,
+    value: number,
+    setValue: (v: number) => void,
+    low: string,
+    high: string
+  ) => (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</label>
+        <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 tabular-nums ml-2">{value}/10</span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={10}
+        value={value}
+        onChange={(e) => setValue(Number(e.target.value))}
+        className="w-full h-2 rounded-lg cursor-pointer accent-brand-700"
+      />
+      <div className="flex justify-between text-xs text-slate-400 dark:text-slate-500 mt-1">
+        <span>{low}</span>
+        <span>{high}</span>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="rounded-lg bg-slate-50 dark:bg-slate-900 p-3 space-y-3">
+      {slider("Wie wichtig ist Dir dieses Ziel?", importance, setImportance, "0 = gar nicht", "10 = sehr wichtig")}
+      {slider(
+        "Wie zuversichtlich bist Du, dass Du es schaffst?",
+        confidence,
+        setConfidence,
+        "0 = gar nicht",
+        "10 = ganz sicher"
+      )}
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        Zum Nachdenken: Warum ist es nicht niedriger? Und was müsste passieren, damit es einen Punkt höher wäre?
+      </p>
+      <div className="flex gap-2">
+        <button
+          onClick={() => {
+            onSave({ importance, confidence, motivationDate: todayIso() });
+            setOpen(false);
+          }}
+          className="flex-1 rounded-lg bg-brand-700 text-white font-semibold py-2 text-sm hover:bg-brand-800 transition"
+        >
+          Speichern
+        </button>
+        <button
+          onClick={() => setOpen(false)}
+          className="rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2 text-sm"
+        >
+          Abbrechen
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function GoalCard({
   goal,
   ratings,
   onRate,
   onDelete,
+  onUpdate,
 }: {
   goal: PSFSGoal;
   ratings: PSFSRating[];
   onRate: (value: number) => void;
   onDelete: () => void;
+  onUpdate?: (patch: Partial<PSFSGoal>) => void;
 }) {
   const [value, setValue] = useState(5);
   const [showHistory, setShowHistory] = useState(false);
@@ -35,6 +141,8 @@ function GoalCard({
           Entfernen
         </button>
       </div>
+
+      {onUpdate && <MotivationRuler goal={goal} onSave={onUpdate} />}
 
       {latest && (
         <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -101,12 +209,14 @@ export default function PSFSPanel({
   onAddGoal,
   onDeleteGoal,
   onRate,
+  onUpdateGoal,
 }: {
   goals: PSFSGoal[];
   ratings: PSFSRating[];
   onAddGoal: (label: string) => void;
   onDeleteGoal: (id: string) => void;
   onRate: (goalId: string, value: number) => void;
+  onUpdateGoal?: (id: string, patch: Partial<PSFSGoal>) => void;
 }) {
   const [newLabel, setNewLabel] = useState("");
 
@@ -164,6 +274,7 @@ export default function PSFSPanel({
             ratings={ratings.filter((r) => r.goalId === goal.id)}
             onRate={(value) => onRate(goal.id, value)}
             onDelete={() => onDeleteGoal(goal.id)}
+            onUpdate={onUpdateGoal ? (patch) => onUpdateGoal(goal.id, patch) : undefined}
           />
         ))
       )}

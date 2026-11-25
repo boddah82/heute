@@ -68,7 +68,7 @@ export default function Home() {
   const otherRegionIds = useOtherRegionsWithEntries(regionId);
   const { assessments, addAssessment, deleteAssessment } = usePDDMAssessments(regionId);
   const { plan } = usePlan(regionId);
-  const { goals, addGoal, deleteGoal } = usePSFSGoals(regionId);
+  const { goals, addGoal, deleteGoal, updateGoal } = usePSFSGoals(regionId);
   const { ratings, addRating } = usePSFSRatings(regionId);
   const { results: questionnaireResults, addResult: addQuestionnaireResult, deleteResult: deleteQuestionnaireResult } = useQuestionnaireResults(regionId);
   const { patients, addPatient, deletePatient } = usePatients();
@@ -309,6 +309,7 @@ export default function Home() {
                   goals={goals}
                   ratings={ratings}
                   onAddGoal={addGoal}
+                  onUpdateGoal={updateGoal}
                   onDeleteGoal={deleteGoal}
                   onRate={addRating}
                 />

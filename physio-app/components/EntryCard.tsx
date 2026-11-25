@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CheckIn } from "@/lib/types";
-import { assess } from "@/lib/trafficLight";
+import { assess, WARNING_SIGNS } from "@/lib/trafficLight";
 import { getRegion } from "@/lib/regions";
 import TrafficLightBadge from "./TrafficLightBadge";
 
@@ -65,6 +65,7 @@ export default function EntryCard({
 
       <p className="text-sm text-slate-700 dark:text-slate-300">{a.explanation}</p>
       <p className="text-sm font-medium text-slate-900 dark:text-slate-100">→ {a.recommendation}</p>
+      <p className="text-xs text-slate-500 dark:text-slate-400">{WARNING_SIGNS}</p>
 
       {entry.notes && <p className="text-xs text-slate-500 dark:text-slate-400 italic">{entry.notes}</p>}
 

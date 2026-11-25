@@ -39,9 +39,9 @@ const PATIENT_SECTIONS: Section[] = [
   },
   {
     title: "Tab \"Verlauf\" – Ampel-Feedback",
-    body: "Jeder Eintrag bekommt automatisch eine Ampel-Bewertung in drei Punkten: Intensität (wie hoch war der Schmerz), Anstieg (wie stark ist er durch die Aktivität gestiegen) und Erholung (wie schnell war er wieder auf dem Ausgangsniveau). Grün = Belastung kann gesteigert werden, Gelb = Belastung halten und beobachten, Rot = Belastung anpassen/reduzieren. Trage 24 und 48 Stunden später den Schmerz über \"Verlauf nachtragen\" nach – die App erinnert Dich beim nächsten Öffnen des \"Heute\"-Tabs automatisch an offene Nachträge. Ab zwei Einträgen zeigt Dir oben ein Diagramm den Verlauf, plus eine Tendenz (rückläufig/gleichbleibend/steigend).",
+    body: "Jeder Eintrag bekommt automatisch eine Ampel-Bewertung in drei Punkten: Intensität (während der Belastung bis ca. 4 von 10 ist in Ordnung, über 5 ist zu viel), Anstieg (mehr als 2 Punkte im Blick behalten) und Erholung (am nächsten Morgen wieder auf dem Ausgangswert?). Grün = beim nächsten Mal eine Stellschraube etwas mehr, Gelb = auf diesem Niveau bleiben, Rot = eine Stellschraube etwas zurücknehmen, nicht aufhören. Trage 24 und 48 Stunden später den Schmerz über \"Verlauf nachtragen\" nach – die App erinnert Dich beim nächsten Öffnen des \"Heute\"-Tabs automatisch an offene Nachträge. Ab zwei Einträgen zeigt Dir oben ein Diagramm den Verlauf, plus eine Tendenz (rückläufig/gleichbleibend/steigend).",
     example:
-      "Beispiel (derselbe Joggen-Eintrag): 24h später Schmerz wieder bei 2 (dem Ausgangsniveau). Ergebnis: Intensität Gelb, Anstieg Gelb, Erholung Grün → Gesamt Gelb. Vorläufiger Rückschluss: \"Belastung auf diesem Niveau stabilisieren, nicht weiter steigern und im Blick behalten.\"",
+      "Beispiel (derselbe Joggen-Eintrag): 24h später Schmerz wieder bei 2 (dem Ausgangsniveau). Ergebnis: Intensität Grün (4 ist erlaubt), Anstieg Grün (+2), Erholung Grün → Gesamt Grün. Rückschluss: beim nächsten Mal eine Stellschraube etwas mehr, z. B. 5 Minuten länger.",
   },
   {
     title: "Tab \"Rechner\"",

@@ -308,7 +308,11 @@ export function usePSFSGoals(regionId: string) {
     psfsRatingsStore.set(psfsRatingsStore.getSnapshot().filter((r) => r.goalId !== id));
   }, []);
 
-  return { goals, addGoal, deleteGoal };
+  const updateGoal = useCallback((id: string, patch: Partial<PSFSGoal>) => {
+    psfsGoalsStore.set(psfsGoalsStore.getSnapshot().map((g) => (g.id === id ? { ...g, ...patch } : g)));
+  }, []);
+
+  return { goals, addGoal, deleteGoal, updateGoal };
 }
 
 export function usePSFSRatings(regionId: string) {
@@ -542,7 +546,17 @@ export function usePatientPSFSGoals(patientId: string, regionId: string) {
     [patientId]
   );
 
-  return { goals, addGoal, deleteGoal };
+  const updateGoal = useCallback(
+    (id: string, patch: Partial<PSFSGoal>) => {
+      const rec = getOrCreatePatientRecord(patientId);
+      updatePatientRecord(patientId, {
+        psfsGoals: rec.psfsGoals.map((g) => (g.id === id ? { ...g, ...patch } : g)),
+      });
+    },
+    [patientId]
+  );
+
+  return { goals, addGoal, deleteGoal, updateGoal };
 }
 
 export function usePatientPSFSRatings(patientId: string, regionId: string) {

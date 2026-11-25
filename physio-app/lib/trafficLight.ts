@@ -7,20 +7,27 @@ function worst(lights: TrafficLight[]): TrafficLight {
   return "GREEN";
 }
 
-// Verbessert sich der Schmerz während der Aktivität (danach < davor), zählt
-// das unabhängig vom absoluten Niveau als Grün – analog zur Vorlage von
-// Gino Lazzaro ("Ampel 1 (Intensität)"). Sonst entscheidet der Wert danach.
+// Schmerzregel (Rickys Regel vom 02.11.2026): Während der Belastung darf
+// der Schmerz bis ca. 3–4/10 gehen. Verbessert er sich während der
+// Aktivität (danach < davor), zählt das unabhängig vom Niveau als Grün
+// (Vorlage Gino Lazzaro). Warnzeichen nach Ahura Kap. 6: über 5/10.
+export const PAIN_OK_MAX = 4;
+export const PAIN_WARN_ABOVE = 5;
+
 function intensityLight(entry: CheckIn): TrafficLight {
   if (entry.painAfter < entry.painBefore) return "GREEN";
-  if (entry.painAfter <= 2) return "GREEN";
-  if (entry.painAfter <= 5) return "YELLOW";
+  if (entry.painAfter <= PAIN_OK_MAX) return "GREEN";
+  if (entry.painAfter <= PAIN_WARN_ABOVE) return "YELLOW";
   return "RED";
 }
 
+// Anstieg: Ein Anstieg um mehr als 2 Punkte ist laut Ahura Kap. 6 ein
+// Warnzeichen. Solange der Wert danach im erlaubten Bereich bleibt, nur
+// "beobachten" (Gelb), kein eigenes Rot – die absolute Grenze und die
+// Erholung am nächsten Tag entscheiden.
 function spikeLight(spike: number): TrafficLight {
-  if (spike <= 0) return "GREEN";
-  if (spike <= 2) return "YELLOW";
-  return "RED";
+  if (spike <= 2) return "GREEN";
+  return "YELLOW";
 }
 
 // Erholung: Rückkehr zum Schmerzniveau von vor der Aktivität (painBefore)
@@ -38,11 +45,16 @@ function recoveryLight(entry: CheckIn): TrafficLight {
 }
 
 const RECOMMENDATIONS: Record<TrafficLight, string> = {
-  GREEN: "Belastung darf vorsichtig gesteigert werden (z. B. +10–20% Umfang oder Intensität).",
-  YELLOW: "Belastung auf diesem Niveau stabilisieren, nicht weiter steigern und im Blick behalten.",
-  RED: "Belastungsvariable anpassen: Umfang oder Intensität reduzieren, Bewegungsausmaß verkleinern oder kurzzeitig auf eine ruhigere Variante wechseln.",
-  PENDING: "Noch keine ausreichende Datenlage – bitte den Schmerzverlauf nach 24 und 48 Stunden ergänzen.",
+  GREEN: "Passt. Beim nächsten Mal darf eine Stellschraube etwas mehr werden (z. B. ein Satz mehr, 5 Minuten länger, etwas mehr Gewicht) – immer nur eine auf einmal.",
+  YELLOW: "Auf diesem Niveau bleiben und noch nicht steigern (stabilisieren). Erst wenn es wieder passt, die nächste Steigerung.",
+  RED: "Beim nächsten Mal eine Stellschraube etwas zurücknehmen (weniger Umfang, kleinerer Bewegungsumfang, leichtere Variante) – nicht ganz aufhören.",
+  PENDING: "Noch offen – bitte den Schmerz am nächsten Morgen (24 h) und falls nötig nach 48 h nachtragen.",
 };
+
+// Gilt unabhängig von der Ampel: neue Beschwerden sind immer ein Anlass,
+// mit der Therapeutin/dem Therapeuten zu sprechen (Ahura Kap. 6).
+export const WARNING_SIGNS =
+  "Neu auftretende Beschwerden (z. B. Schwellung, Taubheit, deutlicher Kraftverlust) immer mit Deinem Therapeuten besprechen.";
 
 export function assess(entry: CheckIn): CheckInAssessment {
   const spikeValue = entry.painAfter - entry.painBefore;
@@ -56,21 +68,21 @@ export function assess(entry: CheckIn): CheckInAssessment {
     entry.painAfter < entry.painBefore
       ? `Der Schmerz ist während der Aktivität gesunken (von ${entry.painBefore} auf ${entry.painAfter}).`
       : intensity === "GREEN"
-      ? "Der Schmerzlevel war unauffällig (0–2)."
+      ? `Der Schmerz blieb im erlaubten Bereich (bis ${PAIN_OK_MAX} von 10).`
       : intensity === "YELLOW"
-      ? "Der Schmerzlevel lag im mittleren Bereich (3–5)."
-      : "Der Schmerzlevel war deutlich erhöht (>5)."
+      ? `Der Schmerz lag knapp über dem erlaubten Bereich (${PAIN_WARN_ABOVE} von 10).`
+      : `Der Schmerz war deutlich erhöht (über ${PAIN_WARN_ABOVE} von 10).`
   );
   parts.push(
     spikeValue <= 0
       ? "Kein Schmerzanstieg durch die Aktivität."
-      : spike === "YELLOW"
+      : spike === "GREEN"
       ? `Leichter Schmerzanstieg um ${spikeValue} Punkt(e).`
-      : `Deutlicher Schmerzanstieg um ${spikeValue} Punkt(e).`
+      : `Anstieg um ${spikeValue} Punkte – mehr als 2, im Blick behalten.`
   );
   parts.push(
     recovery === "GREEN"
-      ? "Rückkehr zum Ausgangsniveau innerhalb von 24 Stunden."
+      ? "Am nächsten Tag (24 h) wieder auf dem Ausgangswert."
       : recovery === "YELLOW"
       ? "Rückkehr zum Ausgangsniveau erst nach 24–48 Stunden."
       : recovery === "RED"

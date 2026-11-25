@@ -36,7 +36,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
   // Nach Ausfülldatum sortiert (neueste zuerst) – ein nachträglich
   // übertragener Papierbogen kann älter sein als eine schon erfasste Einschätzung.
   const sortedAssessments = [...assessments].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-  const { goals, addGoal, deleteGoal } = usePatientPSFSGoals(patientId, regionId);
+  const { goals, addGoal, deleteGoal, updateGoal } = usePatientPSFSGoals(patientId, regionId);
   const { ratings, addRating } = usePatientPSFSRatings(patientId, regionId);
   const { results, addResult, deleteResult } = usePatientQuestionnaireResults(patientId, regionId);
 
@@ -156,7 +156,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
             </p>
           )}
           <GoalActionSummary latestAssessment={sortedAssessments[0]} goals={goals} />
-          <PSFSPanel goals={goals} ratings={ratings} onAddGoal={addGoal} onDeleteGoal={deleteGoal} onRate={addRating} />
+          <PSFSPanel goals={goals} ratings={ratings} onAddGoal={addGoal} onDeleteGoal={deleteGoal} onRate={addRating} onUpdateGoal={updateGoal} />
         </div>
       )}
 

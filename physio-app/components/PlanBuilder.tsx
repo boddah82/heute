@@ -5,6 +5,15 @@ import { ACTIVITY_ICONS } from "@/lib/activityIcons";
 import { PlanExercise, TrainingPlan } from "@/lib/types";
 import { buildPlanLink } from "@/lib/planLink";
 import { getRegion } from "@/lib/regions";
+import {
+  ADJUSTERS,
+  GENERAL_STEPS,
+  PURPOSE_LABELS,
+  SELECTION_QUESTIONS,
+  getLadder,
+  stepNote,
+  LadderStep,
+} from "@/lib/exercises";
 
 interface Props {
   regionId: string;
@@ -12,12 +21,41 @@ interface Props {
   onSave: (plan: TrainingPlan) => void;
 }
 
-function newExercise(label: string): PlanExercise {
-  return { id: crypto.randomUUID(), label };
+function newExercise(label: string, notes?: string): PlanExercise {
+  return { id: crypto.randomUUID(), label, notes };
+}
+
+const PURPOSE_STYLE: Record<string, string> = {
+  lindern: "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-200",
+  aufbauen: "bg-brand-100 text-brand-900 dark:bg-brand-900/40 dark:text-brand-100",
+  alltag: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200",
+};
+
+function StepButton({ step, note, stepNo, onAdd, added }: { step: LadderStep; note: string; stepNo?: number; onAdd: (label: string, note: string) => void; added: boolean }) {
+  return (
+    <button
+      type="button"
+      disabled={added}
+      onClick={() => onAdd(step.label, note)}
+      className="w-full text-left rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+          {stepNo !== undefined && <span className="text-slate-400 mr-1">{stepNo}.</span>}
+          {step.label}
+        </span>
+        <span className={`text-[11px] rounded px-1.5 py-0.5 shrink-0 ${PURPOSE_STYLE[step.purpose]}`}>
+          {PURPOSE_LABELS[step.purpose]}
+        </span>
+      </div>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{added ? "Im Plan ✓" : step.hint}</p>
+    </button>
+  );
 }
 
 export default function PlanBuilder({ regionId, plan, onSave }: Props) {
   const region = getRegion(regionId);
+  const ladder = getLadder(regionId);
   const [exercises, setExercises] = useState<PlanExercise[]>(plan?.exercises ?? []);
   const [customLabel, setCustomLabel] = useState("");
   const [link, setLink] = useState<string | null>(null);
@@ -26,6 +64,12 @@ export default function PlanBuilder({ regionId, plan, onSave }: Props) {
   function addFromIcon(label: string) {
     if (exercises.some((e) => e.label === label)) return;
     setExercises((prev) => [...prev, newExercise(label)]);
+    setLink(null);
+  }
+
+  function addFromCatalog(label: string, note: string) {
+    if (exercises.some((e) => e.label === label)) return;
+    setExercises((prev) => [...prev, newExercise(label, note)]);
     setLink(null);
   }
 
@@ -106,8 +150,59 @@ export default function PlanBuilder({ regionId, plan, onSave }: Props) {
         </div>
       )}
 
+      <div className="space-y-2">
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+          Übungsauswahl – Stufen von leicht nach schwer
+        </p>
+        <details className="rounded-lg bg-slate-50 dark:bg-slate-900 p-3 text-sm">
+          <summary className="cursor-pointer font-medium text-slate-700 dark:text-slate-300">Vor der Auswahl fragen</summary>
+          <ul className="list-disc pl-5 mt-2 space-y-1 text-slate-600 dark:text-slate-400">
+            {SELECTION_QUESTIONS.map((q) => (
+              <li key={q}>{q}</li>
+            ))}
+          </ul>
+        </details>
+        {ladder.length > 0 && (
+          <div className="space-y-1.5">
+            {ladder.map((step, i) => (
+              <StepButton
+                key={step.label}
+                step={step}
+                stepNo={i + 1}
+                note={stepNote(ladder, i)}
+                onAdd={addFromCatalog}
+                added={exercises.some((e) => e.label === step.label)}
+              />
+            ))}
+          </div>
+        )}
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 pt-1">Passt fast immer dazu</p>
+        <div className="space-y-1.5">
+          {GENERAL_STEPS.map((step) => (
+            <StepButton
+              key={step.label}
+              step={step}
+              note={step.hint}
+              onAdd={addFromCatalog}
+              added={exercises.some((e) => e.label === step.label)}
+            />
+          ))}
+        </div>
+        <details className="rounded-lg bg-slate-50 dark:bg-slate-900 p-3 text-sm">
+          <summary className="cursor-pointer font-medium text-slate-700 dark:text-slate-300">
+            Stellschrauben (immer nur eine pro Änderung)
+          </summary>
+          {ADJUSTERS.map((g) => (
+            <div key={g.group} className="mt-2">
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">{g.group}</p>
+              <p className="text-slate-600 dark:text-slate-400">{g.items.join(" · ")}</p>
+            </div>
+          ))}
+        </details>
+      </div>
+
       <div>
-        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Übung hinzufügen</p>
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Weitere Übung hinzufügen</p>
         <div className="flex flex-wrap gap-2">
           {ACTIVITY_ICONS.map((a) => (
             <button

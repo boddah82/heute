@@ -8,6 +8,7 @@ import { QUESTIONNAIRES } from "@/lib/questionnaires";
 import { OEREBRO_SCORE_RANGE, OEREBRO_CUTOFF } from "@/lib/oerebro";
 import TrafficLightBadge from "./TrafficLightBadge";
 import PDDMPainTrendChart from "./PDDMPainTrendChart";
+import InterventionPlan from "./InterventionPlan";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("de-DE", {
@@ -59,6 +60,12 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
         return (
           <div key={regionId} className="space-y-3">
             <h3 className="font-semibold text-slate-900 dark:text-slate-100">{region.label}</h3>
+
+            <InterventionPlan
+              pddm={[...pddm].sort((x, y) => (x.date < y.date ? 1 : -1))[0]}
+              questionnaires={questionnaireResults}
+              goals={goals}
+            />
 
             {pddm.filter((a) => a.painBaseline).length > 1 && (
               <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
@@ -121,7 +128,14 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
               const latest = ratings[0];
               return (
                 <div key={goal.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between">
-                  <p className="text-sm text-slate-700 dark:text-slate-300">{goal.label}</p>
+                  <div>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">{goal.label}</p>
+                    {goal.importance !== undefined && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Wichtigkeit {goal.importance}/10 · Zuversicht {goal.confidence}/10
+                      </p>
+                    )}
+                  </div>
                   {latest && (
                     <p className="text-sm font-semibold text-brand-800 dark:text-brand-200 shrink-0">
                       {latest.value}/10 <span className="font-normal text-slate-400 dark:text-slate-500">({formatDate(latest.date)})</span>

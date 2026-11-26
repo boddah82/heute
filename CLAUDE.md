@@ -58,7 +58,7 @@ Erst diese Datei lesen. Details nur bei Bedarf (Tabelle „Wo steht was?“).
   - Hochrechnung mit nahem Ziel statt ferner Stufe, 🟢-Steinchen für heute sichere Wörter
   - 🚗 Auto-Modus (03.11.2026): fällige Wörter + Sätze nur per Sprache abfragen, Bewertung per Sprache; #59 Wartezeiten halbiert; 13.11.2026: Wartezeit nach Länge (Wörter kürzer), „richtig“/„falsch“, Töne statt Ansagen, keine Nachfrage, „später“ per Sprache
   - Klemmende Sätze (13.11.2026 live, ohne Zusatzkosten): nach jedem 2. „Nochmal“ erst die noch unsicheren Wörter des Satzes – überall, auch im Auto-Modus. Kein automatisches Teilen (würde Claude-API kosten, von Ricky abgelehnt); ✂️ Aufteilen bleibt nur als Knopf von Hand
-- Rhetorik-App live (gebaut ab 23.10.2026).
+- Rhetorik-App live (gebaut ab 23.10.2026). 26.11.2026: 🎬 Skripte üben – eigene Video-Skripte aus der „Skript-Übersicht“ (Apps Script) in 4 Stufen frei sprechen, Rückmeldung im Vergleich zum Skript.
 
 ## 7. Offene Punkte
 - Bei „Gut“ zeigte eine Karte immer „gleich“ – ob Fehler, unbestätigt.
@@ -70,7 +70,8 @@ Erst diese Datei lesen. Details nur bei Bedarf (Tabelle „Wo steht was?“).
 - Klemmende Sätze (Test 35) und automatisches Teilen nur simuliert getestet.
 - Auto-Modus nur simuliert getestet (Test 34); Erkennung bei Fahrgeräusch/Bluetooth unbekannt. „Verstehen“-Karten (`r:`) seit #58 dabei.
 - Weitere Ideen aus dem Video (nicht gebaut): Vorlage-Insel „Kennenlernen“ als Frage-Antwort-Paare, Zähler „sichere Sätze“.
-- Rhetorik-Ideen (nicht gebaut): Einwand-Rollenspiel, Ausdruck-Karteikarten, Sync.
+- Rhetorik-Ideen (nicht gebaut): Einwand-Rollenspiel, Ausdruck-Karteikarten, Sync, Kamera in Stufe „Frei“, Shorts aus langem Skript.
+- Rhetorik-Skripte: Apps Script muss Ricky einmalig selbst bereitstellen; bis dahin nur simuliert getestet.
 
 ## 8. Wo steht was?
 | Frage | Datei |

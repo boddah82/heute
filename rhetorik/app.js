@@ -35,7 +35,8 @@ function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 
 const settings = Object.assign({ model: 'claude-opus-5-5', record: true, rate: 1 }, load('rh.settings', {}));
 function saveSettings() { save('rh.settings', settings); }
-let state = Object.assign({ rounds: [], seen: {}, level: {}, custom: [], plan: null }, load('rh.data', {}));
+const STATE0 = () => ({ rounds: [], seen: {}, level: {}, custom: [], plan: null, skList: [], skTs: 0, sp: {} });
+let state = Object.assign(STATE0(), load('rh.data', {}));
 function persist() { save('rh.data', state); }
 // API-Schlüssel teilt sich die App mit der Sprach-App (gleiche Adresse → gleicher Speicher)
 const talkCfg = Object.assign({ key: '' }, load('sl.talkcfg', {}));
@@ -208,9 +209,9 @@ function highlight(text) {
   }
   return out + esc(text.slice(last));
 }
-function analysisHTML(tr, cat) {
+function analysisHTML(tr, cat) { // cat: Lage oder direkt die Zieldauer in Sekunden (Skripte)
   const a = analyze(tr.text, tr.sec);
-  const target = CATS[cat].sec;
+  const target = typeof cat === 'number' ? cat : CATS[cat].sec;
   return `
     <div class="stats">
       <div class="stat"><b>${fmtSec(tr.sec)}</b><span>Dauer (Ziel ~${fmtSec(target)})</span></div>
@@ -386,8 +387,16 @@ views.home = function (root) {
   const week = state.rounds.filter(r => r.ts > Date.now() - 7 * 86400000).length;
   const cmp = compareSuggestion();
   const ups = Object.keys(CATS).filter(readyForNext);
+  const skOpen = skSorted().filter(skOffen).slice(0, 2);
+  const skCard = !skConnected()
+    ? `<a class="card sk-home" href="#skripte"><b>🎬 Deine Video-Skripte frei sprechen üben</b><br><span class="small muted">Einmalig mit der Skript-Übersicht verbinden →</span></a>`
+    : skOpen.length
+      ? `<div class="card sk-home"><b>🎬 Als Nächstes aufnehmen</b>${skOpen.map(s => { const p = state.sp[s.code]; return `<a class="plan-sk" href="#skript/${encodeURIComponent(s.code)}"><span class="grow">${esc(s.titel || s.code)}<br><span class="small muted">${p && p.tries.length ? `Stufe ${p.stufe} · ${p.tries.length}× geübt` : 'noch nicht geübt'}</span></span><span>›</span></a>`; }).join('')}</div>`
+      : `<a class="card sk-home" href="#skripte"><b>🎬 Skripte üben</b> <span class="small muted">– gerade nichts offen, alle veröffentlichten Skripte zum Üben →</span></a>`;
+  skRefreshQuiet(() => { if (!location.hash || location.hash === '#home') views.home(root); });
   root.innerHTML = `
     <h1>Heute</h1>
+    ${skCard}
     <div class="card plan">
       <div class="row between"><b>3 Runden · ca. 10–15 Min.</b><span class="small muted">${doneToday.length} heute geübt</span></div>
       ${ids.map((id, i) => {
@@ -657,6 +666,22 @@ views.settings = function (root) {
       <p class="muted small">Eine Rückmeldung kostet mit Opus 5.5 grob 2–5 Cent (Schätzung, nicht gemessen). Diesen Monat geschätzt verbraucht (beide Apps, dieses Gerät): <b>$${spent.toFixed(2)}</b>.</p>
       <p class="muted small">Was du sprichst, geht bei der Rückmeldung als Text an Anthropic. Keine echten Namen, keine Patientendaten, nichts Vertrauliches aus MAV oder Klinik.</p>
     </div>
+    <div class="card stack" id="sk-set">
+      <b>🎬 Skripte verbinden</b>
+      <p class="small">Holt deine Skripte automatisch aus der Google-Tabelle „Skript-Übersicht“. Einmalig einrichten (ca. 5 Min., am besten am Chromebook):</p>
+      <details class="small"><summary>Anleitung</summary><ol>
+        <li>„Skript-Übersicht“ öffnen → Menü <b>Erweiterungen → Apps Script</b>.</li>
+        <li>Alles im Editor löschen, dann den Code einfügen: <button class="btn small" id="sk-copy">📋 Code kopieren</button></li>
+        <li>Oben 💾 speichern. Neben „Ausführen“ die Funktion <b>schluesselErzeugen</b> wählen → <b>Ausführen</b> → Zugriff erlauben (Google warnt, weil das Skript von dir selbst ist: „Erweitert“ → „Zu … wechseln“).</li>
+        <li>Im Protokoll unten steht „Dein Schlüssel …“ → kopieren, unten bei <b>Schlüssel</b> einfügen.</li>
+        <li><b>Bereitstellen → Neue Bereitstellung</b> → Zahnrad → <b>Web-App</b>. Ausführen als: <b>Ich</b>. Zugriff: <b>Jeder</b>. → Bereitstellen → die <b>Web-App-URL</b> kopieren und unten einfügen.</li>
+        <li><b>Verbinden</b> tippen. Das Skript liest nur – es ändert nichts in der Tabelle. Ohne den Schlüssel kommt niemand an die Daten.</li>
+      </ol></details>
+      <input id="sk-url" placeholder="Web-App-URL (https://script.google.com/macros/s/…/exec)" value="${esc(settings.skUrl || '')}" autocomplete="off">
+      <input type="password" id="sk-key" placeholder="Schlüssel" value="${esc(settings.skKey || '')}" autocomplete="off">
+      <button class="btn primary" id="sk-save">Verbinden</button>
+      ${skConnected() && state.skTs ? `<p class="muted small">Verbunden · ${state.skList.length} Skripte geladen.</p>` : ''}
+    </div>
     <div class="card stack">
       <label class="inline"><input type="checkbox" id="rec" ${settings.record ? 'checked' : ''}> Aufnahme mitschneiden (nur auf diesem Gerät)</label>
       <p class="muted small">Zum Nachhören und für den Vergleich nach 4 Wochen. Falls die Spracherkennung damit auf deinem Handy nicht mehr geht: ausschalten (nicht auf echten Geräten getestet).</p>
@@ -671,6 +696,22 @@ views.settings = function (root) {
   $('#m', root).onchange = e => { settings.model = e.target.value; saveSettings(); };
   $('#save', root).onclick = () => { talkCfg.key = $('#k', root).value.trim(); saveTalkCfg(); toast(talkCfg.key ? 'Gespeichert' : 'Kein Schlüssel'); };
   $('#rec', root).onchange = e => { settings.record = e.target.checked; saveSettings(); };
+  $('#sk-copy', root).onclick = async () => {
+    try {
+      const code = await (await fetch('apps-script/Code.gs')).text();
+      await navigator.clipboard.writeText(code);
+      toast('Code kopiert');
+    } catch (e) { toast('Kopieren ging nicht – Code liegt im Repo unter rhetorik/apps-script/Code.gs'); }
+  };
+  $('#sk-save', root).onclick = async () => {
+    settings.skUrl = $('#sk-url', root).value.trim();
+    settings.skKey = $('#sk-key', root).value.trim();
+    saveSettings();
+    if (!skConnected()) { toast('URL und Schlüssel eintragen'); return; }
+    const b = $('#sk-save', root); b.disabled = true; b.textContent = 'Verbinde …';
+    try { const n = await skFetch(); toast(n + ' Skripte geladen'); views.settings(root); }
+    catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Verbinden'; }
+  };
   $('#rate', root).onchange = e => { settings.rate = +e.target.value; saveSettings(); };
   $('#exp', root).onclick = () => {
     const a = document.createElement('a');
@@ -685,10 +726,293 @@ views.settings = function (root) {
       const data = JSON.parse(await f.text());
       if (!Array.isArray(data.rounds)) throw new Error();
       if (!confirm('Aktuellen Stand durch die Sicherung ersetzen?')) return;
-      state = Object.assign({ rounds: [], seen: {}, level: {}, custom: [], plan: null }, data);
+      state = Object.assign(STATE0(), data);
       persist(); toast('Geladen'); route();
     } catch (err) { toast('Datei nicht lesbar'); }
   };
+};
+
+// ---------- Skripte üben (Google Sheet „Skript-Übersicht“ über ein kleines Apps Script) ----------
+// Ziel: eigene Video-Skripte frei sprechen lernen – nicht auswendig. Hilfen werden Stufe für Stufe weniger.
+const SK_STUFEN = [
+  ['Lesen', 'Ganzer Text sichtbar. Einmal laut lesen und den Klang finden.'],
+  ['Stichpunkte', 'Nur Stichpunkte. Sag es in deinen eigenen Worten.'],
+  ['Gerüst', 'Nur der Aufbau. Den Rest sprichst du frei.'],
+  ['Frei', 'Nur Thema und Kernaussage – wie vor der Kamera.'],
+];
+const SK_WPM = 140; // Sprechtempo für die Zieldauer (Schätzung)
+const SK_STALE_MS = 30 * 60000;
+
+function skConnected() { return !!(settings.skUrl && settings.skKey); }
+function skOffen(s) { return !/veröffentlicht/i.test(s.status || ''); }
+function skDate(s) {
+  const m = (s.datum || '').match(/(\d{1,2})\.(\d{1,2})\.(\d{2,4})/);
+  if (!m) return 0;
+  const y = +m[3] < 100 ? 2000 + +m[3] : +m[3];
+  return Date.UTC(y, +m[2] - 1, +m[1]);
+}
+function skSorted() { return state.skList.slice().sort((a, b) => (skOffen(b) - skOffen(a)) || (skDate(b) - skDate(a))); }
+function skBy(code) { return state.skList.find(s => s.code === code); }
+function skP(code) { return state.sp[code] || (state.sp[code] = { stufe: 1, prep: null, tries: [], saved: [] }); }
+function skClean(t) { return String(t || '').replace(/\[[^\]]*\]/g, '').replace(/\n{3,}/g, '\n\n').trim(); }
+function skTarget(s) { const w = (skClean(s.sprechtext).match(/\S+/g) || []).length; return Math.max(20, Math.round(w / SK_WPM * 60)); }
+function skTextHTML(t) {
+  return esc(t).replace(/\[[^\]]*\]/g, m => `<span class="regie">${m}</span>`)
+    .split(/\n\s*\n/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+}
+function hashStr(s) { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.codePointAt(0)) | 0; return h; }
+
+async function skFetch() {
+  if (!skConnected()) throw new Error('Noch nicht verbunden – unter ⚙️ einrichten.');
+  const u = settings.skUrl + (settings.skUrl.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(settings.skKey);
+  let res, data;
+  try { res = await fetch(u); } catch (e) { throw new Error('Keine Verbindung zum Sheet (Internet?).'); }
+  try { data = await res.json(); } catch (e) { throw new Error('Antwort nicht lesbar – ist der Web-App-Link richtig?'); }
+  if (!data || !data.ok) throw new Error((data && data.error) || 'Fehler beim Sheet');
+  state.skList = (data.skripte || []).filter(s => s.code && s.sprechtext);
+  state.skTs = Date.now();
+  persist();
+  return state.skList.length;
+}
+// Im Hintergrund auffrischen, wenn die Liste älter als 30 Min. ist
+function skRefreshQuiet(rerender) {
+  if (!skConnected() || Date.now() - (state.skTs || 0) < SK_STALE_MS || skRefreshQuiet.busy) return;
+  skRefreshQuiet.busy = true;
+  skFetch().then(() => rerender && rerender()).catch(() => {}).finally(() => { skRefreshQuiet.busy = false; });
+}
+
+// Stichpunkte, Gerüst und Kernaussage: einmal pro Skript von Claude, danach gespeichert
+const SK_PREP_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['kern', 'stichpunkte', 'geruest'],
+  properties: { kern: { type: 'string' }, stichpunkte: { type: 'array', items: { type: 'string' } }, geruest: { type: 'array', items: { type: 'string' } } },
+};
+const SK_PREP_SYSTEM = `Du bereitest ein Video-Sprechskript zum freien Sprechen vor. Der Sprecher soll es NICHT auswendig lernen, sondern frei in eigenen Worten sprechen können.
+Text in eckigen Klammern sind Regieanweisungen (Bild, Texteinblendung) – ignorieren.
+- "kern": die Kernaussage des Videos in einem kurzen Satz.
+- "stichpunkte": 5 bis 9 Stichpunkte in der Reihenfolge des Skripts, je höchstens 6 Wörter, Schlagworte statt ganzer Sätze. Zahlen, Fachbegriffe und Beispiele, die für die Genauigkeit wichtig sind, gehören hinein. Nichts dazuerfinden.
+- "geruest": 3 bis 5 Abschnitte, je „Funktion: Thema“ mit höchstens 4 Wörtern Thema, z. B. „Hook: drei Fragen zur Bandscheibe“, „Einwand: Schonen ist verständlich“, „Schritt: Schmerz-Zahl vorher und nachher“, „Schluss: Frage an die Zuschauer“.`;
+function skFallbackPrep(s) {
+  const paras = skClean(s.sprechtext).split(/\n\s*\n/).filter(Boolean);
+  return { kern: s.hook || s.titel, stichpunkte: paras.map(p => p.split(/\s+/).slice(0, 6).join(' ') + ' …'), geruest: paras.map((p, i) => `Teil ${i + 1}: ${p.split(/\s+/).slice(0, 3).join(' ')} …`), auto: true };
+}
+async function skPrep(s) {
+  const p = skP(s.code);
+  const h = hashStr(s.sprechtext);
+  if (p.prep && p.prep.h === h && (!p.prep.auto || !talkCfg.key)) return p.prep;
+  if (!talkCfg.key) { p.prep = Object.assign(skFallbackPrep(s), { h }); persist(); return p.prep; }
+  const { data } = await callClaude(SK_PREP_SYSTEM, [{ role: 'user', content: `Titel: ${s.titel}\n\nSkript:\n${s.sprechtext}` }], SK_PREP_SCHEMA, 2000);
+  p.prep = Object.assign(data, { h });
+  persist();
+  return p.prep;
+}
+
+// Rückmeldung: Vergleich mit dem Skript – Inhalt und Genauigkeit, nicht Wortlaut
+const SK_FB_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['punkte', 'reihenfolge', 'genau', 'stark', 'eigene', 'besser', 'fokus', 'vergleich'],
+  properties: {
+    punkte: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['punkt', 'da'], properties: { punkt: { type: 'string' }, da: { type: 'string', enum: ['ja', 'teils', 'nein'] } } } },
+    reihenfolge: { type: 'string' },
+    genau: { type: 'string' },
+    stark: { type: 'string' },
+    eigene: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['zitat', 'warum'], properties: { zitat: { type: 'string' }, warum: { type: 'string' } } } },
+    besser: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['du', 'besser', 'warum'], properties: { du: { type: 'string' }, besser: { type: 'string' }, warum: { type: 'string' } } } },
+    fokus: { type: 'string' },
+    vergleich: { type: 'string' },
+  },
+};
+const SK_FB_SYSTEM = `Du bist Sprechtrainer für Ricky: Physiotherapeut und Content Creator (Videos zu Schmerz und Training, evidenzbasiert, biopsychosozial). Er übt, seine eigenen Video-Skripte FREI zu sprechen – in eigenen Worten, nicht auswendig. Sein Ziel: frei vor der Kamera sprechen und sein Fachwissen klar und genau rüberbringen.
+
+Du bekommst das Skript, die Stichpunkte, die Übungsstufe und das Transkript seines Versuchs. Das Transkript stammt aus der Spracherkennung: fehlende Satzzeichen, Großschreibung und offensichtlich falsch erkannte Wörter ignorieren. Füllwörter fehlen meist – dazu nichts sagen. Text in eckigen Klammern im Skript sind Regieanweisungen.
+
+Bewerte NICHT, ob er wörtlich am Skript bleibt – eigene Worte sind ausdrücklich erwünscht. Bewerte: Ist das Wichtige drin, bleibt es fachlich genau, ist der rote Faden da, klingt es natürlich gesprochen.
+
+Wie du antwortest:
+- Deutsch, Alltagssprache, kurz. Wie ein guter Trainer: ehrlich, nicht schmeicheln, nicht dramatisieren. Fachwörter sofort einfach in Klammern erklären.
+- "punkte": jeden vorgegebenen Stichpunkt genau wie vorgegeben, da = ja/teils/nein (sinngemäß gesagt zählt als ja).
+- "reihenfolge": nur wenn die Reihenfolge den roten Faden stört – kurz, wo. Sonst leer.
+- "genau": nur wenn etwas fachlich ungenauer, verfälscht, zu absolut oder angstmachend (Nocebo) geworden ist als im Skript – kurz mit Zitat und was im Skript stand. Sonst leer.
+- "stark": genau eine Sache, die wirklich gut war, konkret.
+- "eigene": höchstens 2 eigene Formulierungen aus dem Transkript, die genauso gut oder besser klingen als das Skript (natürlicher, treffender). Die soll er behalten. "zitat" wörtlich und vollständig lesbar, "warum" ein Satz. Sonst leere Liste.
+- "besser": höchstens 2 Stellen. "du" = wörtlich aus dem Transkript, "besser" = Sprechsprache in seiner Art, "warum" = ein Satz. Nichts dazuerfinden (keine Zahlen, Studien oder Fakten, die weder im Skript noch im Transkript stehen).
+- "fokus": ein einziger, konkreter Auftrag für den nächsten Versuch (ein Satz).
+- "vergleich": nur wenn ein früherer Versuch mitgeschickt wird: 1–2 Sätze, was besser oder schlechter geworden ist, gemessen am damaligen Fokus. Sonst leer.`;
+async function skFeedback(s, p, ti) {
+  const tr = p.tries[ti];
+  const prev = p.tries.slice(0, ti).reverse().find(t => t.fb);
+  const msg = `Titel: ${s.titel}
+Skript:
+${s.sprechtext}
+
+Stichpunkte: ${(p.prep ? p.prep.stichpunkte : []).join(' | ')}
+Übungsstufe: ${tr.stufe} (${SK_STUFEN[tr.stufe - 1][0]} – ${SK_STUFEN[tr.stufe - 1][1]})
+Zieldauer etwa ${skTarget(s)} Sekunden. Gesprochen: ${Math.round(tr.sec)} Sekunden.
+${prev ? `\nFrüherer Versuch (Stufe ${prev.stufe}): „${prev.text}“\nFokus damals: ${prev.fb.fokus}\n` : ''}
+Transkript dieses Versuchs: „${tr.text}“`;
+  return callClaude(SK_FB_SYSTEM, [{ role: 'user', content: msg }], SK_FB_SCHEMA, 4000);
+}
+function skFeedbackHTML(fb, p) {
+  if (!fb) return '';
+  const mark = { ja: '✓', teils: '◐', nein: '✗' };
+  const saved = new Set(p.saved);
+  return `<div class="card fb stack">
+    <h3>🧠 Rückmeldung</h3>
+    ${fb.vergleich ? `<p><b>Im Vergleich:</b> ${esc(fb.vergleich)}</p>` : ''}
+    <div><b>Ist alles drin?</b><ul class="steps">${fb.punkte.map(x => `<li class="st-${esc(x.da)}"><span>${mark[x.da] || '·'}</span> ${esc(x.punkt)}</li>`).join('')}</ul></div>
+    ${fb.reihenfolge ? `<p><b>Roter Faden:</b> ${esc(fb.reihenfolge)}</p>` : ''}
+    ${fb.genau ? `<p class="notice warn"><b>Genauigkeit:</b> ${esc(fb.genau)}</p>` : ''}
+    <p><b>Stark:</b> ${esc(fb.stark)}</p>
+    ${fb.eigene.length ? `<div><b>Deine Worte – behalten</b>${fb.eigene.map((e, i) => `<div class="better"><div class="neu">„${esc(e.zitat)}“</div><div class="small muted">${esc(e.warum)}</div>
+      <button class="btn small" data-keep="${i}" ${saved.has(e.zitat) ? 'disabled' : ''}>${saved.has(e.zitat) ? '⭐ gemerkt' : '⭐ merken'}</button></div>`).join('')}</div>` : ''}
+    ${fb.besser.length ? `<div><b>Besser sagen</b>${fb.besser.map(b => `<div class="better"><div class="du">„${esc(b.du)}“</div><div class="neu">→ „${esc(b.besser)}“</div><div class="small muted">${esc(b.warum)}</div></div>`).join('')}</div>` : ''}
+    <p class="focus"><b>Fokus für den nächsten Versuch:</b> ${esc(fb.fokus)}</p>
+  </div>`;
+}
+
+views.skripte = function (root) {
+  if (!skConnected()) {
+    root.innerHTML = `<h1>🎬 Skripte</h1>
+      <div class="card stack"><p>Hier übst du deine eigenen Video-Skripte frei zu sprechen. Sie kommen automatisch aus deiner „Skript-Übersicht“ in Google Drive.</p>
+      <a class="btn primary" href="#settings">Einmalig verbinden</a></div>`;
+    return;
+  }
+  const list = skSorted();
+  root.innerHTML = `<div class="row between"><h1>🎬 Skripte</h1><button class="btn small" id="sk-reload">↻ Aktualisieren</button></div>
+    ${list.length ? `<ul class="list card">${list.map(s => {
+      const p = state.sp[s.code];
+      return `<li><a class="grow" href="#skript/${encodeURIComponent(s.code)}"><span class="t">${esc(s.titel || s.code)}</span>
+        ${skOffen(s) ? `<span class="pill">${esc(s.status || 'neu')}</span>` : ''}
+        <div class="d">${esc(s.code)}${s.datum ? ' · ' + esc(s.datum) : ''}${p && p.tries.length ? ` · Stufe ${p.stufe} · ${p.tries.length}× geübt` : ''}</div></a></li>`;
+    }).join('')}</ul>` : '<p class="muted">Noch keine Skripte geladen.</p>'}
+    <p class="muted small">${state.skTs ? 'Stand: ' + new Date(state.skTs).toLocaleString('de-DE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''} · Oben stehen Skripte, die noch nicht veröffentlicht sind.</p>`;
+  const btn = $('#sk-reload', root);
+  btn.onclick = async () => {
+    btn.disabled = true; btn.textContent = '↻ Lädt …';
+    try { const n = await skFetch(); toast(n + ' Skripte geladen'); views.skripte(root); } catch (e) { toast(e.message); btn.disabled = false; btn.textContent = '↻ Aktualisieren'; }
+  };
+  if (!list.length) btn.click(); else skRefreshQuiet(() => { if (location.hash.startsWith('#skripte')) views.skripte(root); });
+};
+
+views.skript = function (root, arg) {
+  const code = decodeURIComponent(arg || '');
+  const s = skBy(code);
+  if (!s) { location.hash = '#skripte'; return; }
+  const p = skP(code);
+  const target = skTarget(s);
+
+  const aidHTML = (prep) => {
+    if (p.stufe === 1) return `<div class="card sk-text">${skTextHTML(s.sprechtext)}</div>`;
+    if (!prep) return `<div class="card muted" id="aid-wait">⏳ Stichpunkte werden vorbereitet …</div>`;
+    const note = prep.auto ? `<p class="muted small">Einfache Stichpunkte ohne Claude (kein API-Schlüssel). Mit Schlüssel werden sie besser.</p>` : '';
+    if (p.stufe === 2) return `<div class="card tool"><b>Stichpunkte</b><ol>${prep.stichpunkte.map(x => `<li>${esc(x)}</li>`).join('')}</ol>${note}</div>`;
+    if (p.stufe === 3) return `<div class="card tool"><b>Gerüst</b><ol>${prep.geruest.map(x => `<li>${esc(x)}</li>`).join('')}</ol>${note}</div>`;
+    return `<div class="card tool"><b>Kernaussage</b><p class="say">${esc(prep.kern)}</p></div>`;
+  };
+
+  const prepView = () => {
+    const last = p.tries[p.tries.length - 1];
+    const focus = last && last.fb && last.fb.fokus;
+    root.innerHTML = `
+      <div class="row between"><h1>🎬 ${esc(s.titel || s.code)}</h1><span class="pill">~${fmtSec(target)}</span></div>
+      <div class="chips" id="stufen">${SK_STUFEN.map(([n], i) => `<button class="chip ${p.stufe === i + 1 ? 'on' : ''}" data-st="${i + 1}">${i + 1} ${n}</button>`).join('')}</div>
+      <p class="small muted">${esc(SK_STUFEN[p.stufe - 1][1])}</p>
+      ${focus ? `<div class="notice"><b>Dein Fokus:</b> ${esc(focus)}</div>` : ''}
+      <div id="aid">${aidHTML(p.stufe === 1 ? null : (p.prep && p.prep.h === hashStr(s.sprechtext) && !(p.prep.auto && talkCfg.key) ? p.prep : null))}</div>
+      <div id="stage" class="stage"><button class="btn primary big" id="go">🎙 Los – sprechen</button></div>
+      ${p.saved.length ? `<div class="card"><b>⭐ Deine Formulierungen</b><ul class="saved">${p.saved.map((z, i) => `<li>„${esc(z)}“ <button class="link" data-unsave="${i}">entfernen</button></li>`).join('')}</ul></div>` : ''}
+      ${p.tries.length ? `<details class="card"><summary><b>Frühere Versuche (${p.tries.length})</b></summary><ul class="list">${p.tries.map((t, i) => ({ t, i })).reverse().slice(0, 10).map(({ t, i }) => `<li><a class="grow" href="#" data-try="${i}">${fmtDate(t.ts)} · Stufe ${t.stufe} · ${fmtSec(t.sec)}${t.rating ? ' · Gefühl ' + t.rating : ''}${t.fb ? ' · 🧠' : ''}</a></li>`).join('')}</ul></details>` : ''}`;
+    $$('#stufen .chip', root).forEach(b => b.onclick = () => { p.stufe = +b.dataset.st; persist(); prepView(); });
+    $$('[data-unsave]', root).forEach(b => b.onclick = () => { p.saved.splice(+b.dataset.unsave, 1); persist(); prepView(); });
+    $$('[data-try]', root).forEach(a => a.onclick = e => { e.preventDefault(); result(+a.dataset.try); });
+    $('#go', root).onclick = speak;
+    if (p.stufe > 1 && $('#aid-wait', root)) {
+      skPrep(s).then(prep => { if ($('#aid', root) && document.body.contains(root)) $('#aid', root).innerHTML = aidHTML(prep); })
+        .catch(e => { toast(e.message); p.prep = Object.assign(skFallbackPrep(s), { h: hashStr(s.sprechtext) }); persist(); if ($('#aid', root)) $('#aid', root).innerHTML = aidHTML(p.prep); });
+    }
+  };
+
+  const speak = async () => {
+    const stage = $('#stage', root);
+    stage.innerHTML = `<div class="count rec-dot" id="clock">0:00</div>
+      <div class="bar"><div id="bar"></div></div>
+      <p id="live" class="live muted">${SR ? 'Sprich – Pausen sind erlaubt.' : ''}</p>
+      ${SR ? '' : '<textarea id="typed" rows="5" placeholder="Keine Spracherkennung: Sprich laut (wird aufgenommen) und tippe danach kurz, was du gesagt hast."></textarea>'}
+      <div class="row center"><button class="btn primary big rec" id="done">✓ Fertig</button><button class="btn small" id="cancel">Abbrechen</button></div>`;
+    $('#go', root) && $('#go', root).remove();
+    const t0 = Date.now();
+    const rec = await startRecorder();
+    const dict = SR ? dictation(t => { const el = $('#live', root); if (el) { el.textContent = t; el.classList.remove('muted'); } }) : null;
+    const tick = setInterval(() => {
+      const sec = (Date.now() - t0) / 1000;
+      if ($('#clock', root)) $('#clock', root).textContent = fmtSec(sec);
+      if ($('#bar', root)) { $('#bar', root).style.width = Math.min(100, sec / target * 100) + '%'; $('#bar', root).classList.toggle('over', sec > target * 1.3); }
+    }, 250);
+    let finished = false;
+    cleanup = () => { if (finished) return; finished = true; clearInterval(tick); if (dict) dict.cancel(); if (rec) rec.stop(); };
+    $('#cancel', root).onclick = () => { cleanup(); prepView(); };
+    $('#done', root).onclick = async () => {
+      if (finished) return;
+      finished = true;
+      clearInterval(tick);
+      const sec = (Date.now() - t0) / 1000;
+      $('#done', root).disabled = true;
+      let text = '';
+      if (dict) { dict.stop(); try { text = await dict.done; } catch (e) { toast(e.message); } }
+      else text = ($('#typed', root).value || '').trim();
+      const blob = rec ? await rec.stop() : null;
+      const ti = p.tries.length;
+      p.tries.push({ ts: Date.now(), stufe: p.stufe, text, sec, rating: 0, fb: null, audio: !!blob });
+      persist();
+      if (blob) { try { await audioDB.put('sk:' + code + '|' + ti, blob); } catch (e) { p.tries[ti].audio = false; persist(); } }
+      result(ti);
+    };
+  };
+
+  const result = ti => {
+    const tr = p.tries[ti];
+    const next = tr.stufe < SK_STUFEN.length ? tr.stufe + 1 : 0;
+    const canFb = tr.stufe > 1;
+    root.innerHTML = `
+      <div class="row between"><h1>🎬 Versuch ${ti + 1}</h1><span class="pill">Stufe ${tr.stufe} · ${esc(SK_STUFEN[tr.stufe - 1][0])}</span></div>
+      <div class="card stack" id="ana">${analysisHTML(tr, target)}</div>
+      <details class="small"><summary>✎ Erkennungsfehler korrigieren</summary><textarea id="fix" rows="4">${esc(tr.text)}</textarea><button class="btn small" id="fix-save">Übernehmen</button></details>
+      <div id="audio"></div>
+      <div class="card">
+        <b>Wie frei hat es sich angefühlt?</b>
+        <div class="chips" id="rate">${[1, 2, 3, 4, 5].map(n => `<button class="chip ${tr.rating === n ? 'on' : ''}" data-r="${n}">${n}</button>`).join('')}</div>
+        <p class="small muted" id="rate-hint">${tr.rating >= 4 && next ? `Fühlt sich gut an – probier Stufe ${next}.` : '1 = ständig hängen geblieben · 5 = ganz frei.'}</p>
+      </div>
+      <div id="fb">${skFeedbackHTML(tr.fb, p)}</div>
+      <div class="stack">
+        ${tr.fb || !canFb ? '' : (talkCfg.key ? `<button class="btn" id="ask">🧠 Rückmeldung von Claude <span class="small muted">(ca. 2–5 Cent, Schätzung)</span></button>` : `<a class="btn" href="#settings">🧠 Rückmeldung von Claude einrichten</a>`)}
+        <button class="btn ${next && tr.rating >= 4 ? '' : 'primary'}" id="again">🔁 Nochmal – Stufe ${tr.stufe}</button>
+        ${next ? `<button class="btn ${tr.rating >= 4 ? 'primary' : ''}" id="next">→ Weiter zu Stufe ${next}: ${esc(SK_STUFEN[next - 1][0])}</button>` : ''}
+        <a class="btn" href="#skripte">✓ Fertig für heute</a>
+      </div>`;
+    if (tr.audio) audioPlayer('sk:' + code + '|' + ti, $('#audio', root));
+    $$('#rate .chip', root).forEach(b => b.onclick = () => { tr.rating = +b.dataset.r; persist(); result(ti); });
+    $('#fix-save', root).onclick = () => { tr.text = $('#fix', root).value.trim(); persist(); result(ti); };
+    $('#again', root).onclick = () => { p.stufe = tr.stufe; persist(); prepView(); };
+    if ($('#next', root)) $('#next', root).onclick = () => { p.stufe = next; persist(); prepView(); };
+    $$('[data-keep]', root).forEach(b => b.onclick = () => {
+      const z = tr.fb.eigene[+b.dataset.keep].zitat;
+      if (!p.saved.includes(z)) p.saved.push(z);
+      persist(); b.disabled = true; b.textContent = '⭐ gemerkt';
+    });
+    const ask = $('#ask', root);
+    if (ask) ask.onclick = async () => {
+      if (!tr.text) { toast('Kein Text zum Auswerten'); return; }
+      ask.disabled = true; ask.textContent = '🧠 Claude hört sich das an …';
+      try {
+        await skPrep(s);
+        const { data, cost } = await skFeedback(s, p, ti);
+        tr.fb = data; tr.cost = cost; persist();
+        result(ti);
+      } catch (e) { toast(e.message); ask.disabled = false; ask.textContent = '🧠 Nochmal versuchen'; }
+    };
+  };
+
+  prepView();
 };
 
 // ---------- Router ----------
@@ -697,7 +1021,7 @@ function route() {
   if (window.speechSynthesis) speechSynthesis.cancel();
   const [name, ...rest] = location.hash.slice(1).split('/');
   const view = views[name] ? name : 'home';
-  const tab = view === 'round' || view === 'pattern' ? 'practice' : view;
+  const tab = view === 'round' || view === 'pattern' ? 'practice' : view === 'skript' ? 'skripte' : view;
   $$('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === tab));
   views[view]($('#view'), rest.join('/'));
   window.scrollTo(0, 0);

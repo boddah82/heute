@@ -1,5 +1,5 @@
 // Offline-Cache für die App-Dateien. Bei Änderungen VERSION erhöhen.
-const VERSION = 'rh-v2';
+const VERSION = 'rh-v3';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'data/tasks.js', 'apps-script/Code.gs', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', '../lernen/vendor/anthropic-sdk.js'];
 
 self.addEventListener('install', e => {

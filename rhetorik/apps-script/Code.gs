@@ -1,3 +1,5 @@
+/** @OnlyCurrentDoc */
+// ↑ Zugriff nur auf diese eine Tabelle, nicht auf alle Tabellen im Konto.
 // Rhetorik-App: liest die „Skript-Übersicht“ und gibt die Skripte an die App weiter.
 // Nur lesen – dieses Skript ändert nichts im Sheet.
 // Einrichtung: siehe Einstellungen in der Rhetorik-App („Skripte verbinden“).

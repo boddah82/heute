@@ -51,7 +51,7 @@ main { max-width: 640px; margin: 0 auto; padding: 16px; }
 
 .tabs {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 5;
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  display: grid; grid-template-columns: repeat(5, 1fr);
   background: var(--card); border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -89,7 +89,7 @@ p { margin: 6px 0; }
 .btn.rec { background: var(--bad); border-color: var(--bad); color: #fff; }
 .btn[disabled] { opacity: 0.5; cursor: default; }
 
-.rate { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.rate { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .rate .btn { padding: 10px 4px; font-size: 14px; }
 .rate .btn small { display: block; font-size: 11px; font-weight: 400; color: var(--muted); margin-top: 2px; }
 .rate .again { color: var(--bad); }
@@ -250,3 +250,15 @@ table.cmp th, table.cmp td { text-align: center; padding: 4px; border-bottom: 1p
 audio { width: 100%; margin: 6px 0; }
 textarea, input, select { width: 100%; }
 label.inline input { width: auto; }
+
+/* Skripte üben */
+.sk-text p { margin: 0 0 10px; }
+.sk-text p:last-child { margin-bottom: 0; }
+.regie { color: var(--muted); font-size: 13px; font-style: italic; }
+.sk-home { display: block; text-decoration: none; color: var(--text); border-color: var(--accent); }
+.plan-sk { display: flex; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); text-decoration: none; color: var(--text); }
+.plan-sk:first-of-type { margin-top: 8px; }
+#stufen { margin-bottom: 4px; }
+.saved { margin: 6px 0 0; padding-left: 18px; }
+.saved li { margin: 4px 0; }
+button.link { background: none; border: 0; color: var(--muted); text-decoration: underline; font-size: 13px; cursor: pointer; padding: 0 4px; }

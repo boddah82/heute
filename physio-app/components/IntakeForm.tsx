@@ -61,7 +61,9 @@ export default function IntakeForm({
   regionId,
   onNext,
   onCancel,
+  audience = "therapist",
 }: {
+  audience?: "therapist" | "patient";
   regionId: string;
   onNext: (intake: IntakeData) => void;
   onCancel: () => void;
@@ -101,8 +103,14 @@ export default function IntakeForm({
   return (
     <form onSubmit={submit} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-4">
       <div>
-        <p className="text-xs font-medium text-brand-700 dark:text-brand-300 uppercase tracking-wide">Erstbogen · Teil A von 2</p>
-        <p className={sub}>Wie auf dem Papierbogen. Leer lassen, was nicht ausgefüllt ist. Danach folgen die Fragen zu den 5 Bereichen.</p>
+        <p className="text-xs font-medium text-brand-700 dark:text-brand-300 uppercase tracking-wide">
+          {audience === "patient" ? "Fragebogen · Teil A von 2" : "Erstbogen · Teil A von 2"}
+        </p>
+        <p className={sub}>
+          {audience === "patient"
+            ? "Es gibt kein Richtig oder Falsch. Lassen Sie leer, was Sie nicht beantworten möchten. Dauer etwa 10 Minuten."
+            : "Wie auf dem Papierbogen. Leer lassen, was nicht ausgefüllt ist. Danach folgen die Fragen zu den 5 Bereichen."}
+        </p>
       </div>
 
       <div className={section}>
@@ -161,7 +169,11 @@ export default function IntakeForm({
 
       <div className={section}>
         <p className={h}>5. Sicherheitsfragen</p>
-        <p className={sub}>Ein „Ja“ wird in der Auswertung ganz oben angezeigt.</p>
+        <p className={sub}>
+          {audience === "patient"
+            ? "Ein „Ja“ ist kein Grund zur Sorge – wir sprechen es im Termin kurz an."
+            : "Ein „Ja“ wird in der Auswertung ganz oben angezeigt."}
+        </p>
         {RED_FLAG_QUESTIONS.map((q) => (
           <div key={q.id} className="flex items-start justify-between gap-3">
             <p className="text-sm text-slate-700 dark:text-slate-300">{q.text}</p>
@@ -206,7 +218,7 @@ export default function IntakeForm({
 
       <div className="flex gap-2">
         <button type="submit" className="flex-1 rounded-lg bg-brand-700 text-white font-semibold py-2.5 text-sm hover:bg-brand-800 transition">
-          Weiter zu Teil B (5 Bereiche)
+          {audience === "patient" ? "Weiter zu Teil B" : "Weiter zu Teil B (5 Bereiche)"}
         </button>
         <button type="button" onClick={onCancel} className="rounded-lg px-3 text-sm text-slate-500 dark:text-slate-400">
           Abbrechen

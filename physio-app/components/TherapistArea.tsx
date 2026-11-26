@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Patient } from "@/lib/types";
-import { usePlan, usePatientRecord, buildHistoryBundle, importPatientRecord, seedDemoPatient } from "@/lib/storage";
+import { usePlan, usePatientRecord, buildHistoryBundle, importPatientRecord, seedDemoPatient, importIntoNewPatient } from "@/lib/storage";
+import { decodeHistoryFromText } from "@/lib/historyLink";
 import RegionSelector from "./RegionSelector";
 import PlanBuilder from "./PlanBuilder";
 import PatientRecordView from "./PatientRecordView";
@@ -102,6 +103,13 @@ export default function TherapistArea({
               Anlegen
             </button>
           </form>
+
+          <PasteImport
+            onImported={(id) => {
+              onSelectPatient(id);
+              setMandantView("uebersicht");
+            }}
+          />
 
           {patients.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-6">
@@ -236,6 +244,74 @@ export default function TherapistArea({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Fragebogen/Verlauf, den Patient:innen über "an Therapeut senden" geschickt
+// haben: Link oder Code einfügen -> neuer Mandant.
+function PasteImport({ onImported }: { onImported: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="text-sm font-medium text-brand-700 dark:text-brand-300 underline underline-offset-2">
+        Fragebogen / Verlauf vom Patienten einfügen
+      </button>
+    );
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-2">
+      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Fragebogen / Verlauf einfügen</p>
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        Den Link, den der Patient geschickt hat, komplett hier einfügen. Daraus wird ein neuer Mandant.
+      </p>
+      <textarea
+        rows={3}
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          setError("");
+        }}
+        placeholder="Link hier einfügen"
+        aria-label="Link oder Code"
+        className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-xs bg-white dark:bg-slate-900 font-mono"
+      />
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Name des Mandanten"
+        aria-label="Name des Mandanten"
+        className="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-900"
+      />
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          onClick={() => {
+            const bundle = decodeHistoryFromText(text);
+            if (!bundle) {
+              setError("Das sieht nicht wie ein gültiger Link aus. Bitte den kompletten Link einfügen.");
+              return;
+            }
+            const id = importIntoNewPatient(name.trim() || `Patient (eingefügt ${new Date().toLocaleDateString("de-DE")})`, bundle);
+            setText("");
+            setName("");
+            setOpen(false);
+            onImported(id);
+          }}
+          className="rounded-lg bg-brand-700 text-white px-3 py-2 text-sm font-medium hover:bg-brand-800 transition"
+        >
+          Übernehmen
+        </button>
+        <button onClick={() => setOpen(false)} className="text-sm text-slate-500 dark:text-slate-400 px-2">
+          Abbrechen
+        </button>
+      </div>
     </div>
   );
 }

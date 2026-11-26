@@ -308,6 +308,7 @@ export function usePSFSGoals(regionId: string) {
     (label: string) => {
       const goal: PSFSGoal = { id: crypto.randomUUID(), regionId, label, createdAt: new Date().toISOString() };
       psfsGoalsStore.set([goal, ...psfsGoalsStore.getSnapshot()]);
+      return goal.id;
     },
     [regionId]
   );
@@ -330,12 +331,12 @@ export function usePSFSRatings(regionId: string) {
   const ratings = useMemo(() => all.filter((r) => r.regionId === regionId), [all, regionId]);
 
   const addRating = useCallback(
-    (goalId: string, value: number) => {
+    (goalId: string, value: number, date?: string) => {
       const rating: PSFSRating = {
         id: crypto.randomUUID(),
         regionId,
         goalId,
-        date: new Date().toISOString().slice(0, 10),
+        date: date ?? new Date().toISOString().slice(0, 10),
         value,
         createdAt: new Date().toISOString(),
       };
@@ -741,4 +742,13 @@ export function useLeadSymptoms(patientId: string | null, regionId: string) {
   );
 
   return { symptoms, ratings, sleep: data.sleep, addSymptom, deleteSymptom, rate, rateSleep };
+}
+
+// Legt immer einen NEUEN Mandanten an und übernimmt den eingefügten Verlauf
+// (im Gegensatz zu seedDemoPatient wird nichts Bestehendes ersetzt).
+export function importIntoNewPatient(name: string, bundle: HistoryBundle): string {
+  const patient: Patient = { id: crypto.randomUUID(), name, createdAt: new Date().toISOString() };
+  patientsStore.set([patient, ...patientsStore.getSnapshot()]);
+  importPatientRecord(patient.id, bundle);
+  return patient.id;
 }

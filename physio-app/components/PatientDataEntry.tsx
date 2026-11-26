@@ -39,7 +39,12 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
   const { record } = usePatientRecord(patientId);
   const [regionId, setRegionId] = useState(() => {
     const counts = new Map<string, number>();
-    for (const c of record?.checkIns ?? []) counts.set(c.regionId, (counts.get(c.regionId) ?? 0) + 1);
+    const regionIds = [
+      ...(record?.checkIns ?? []).map((c) => c.regionId),
+      ...(record?.pddm ?? []).map((a) => a.regionId),
+      ...(record?.leadRatings ?? []).map((r) => r.regionId),
+    ];
+    for (const r of regionIds) counts.set(r, (counts.get(r) ?? 0) + 1);
     let best = "knie";
     let bestCount = 0;
     counts.forEach((n, r) => {

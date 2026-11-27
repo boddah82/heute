@@ -8,6 +8,8 @@ import {
   usePatientPSFSGoals,
   usePatientPSFSRatings,
   usePatientQuestionnaireResults,
+  usePatientRecord,
+  useLeadSymptoms,
 } from "@/lib/storage";
 import RegionSelector from "./RegionSelector";
 import CheckInForm from "./CheckInForm";
@@ -19,16 +21,42 @@ import PSFSPanel from "./PSFSPanel";
 import GoalActionSummary from "./GoalActionSummary";
 import QuestionnairePanel from "./QuestionnairePanel";
 import ActivityReliability from "./ActivityReliability";
+import LoadProgress from "./LoadProgress";
+import LeadSymptomPanel from "./LeadSymptomPanel";
+import IntakeForm from "./IntakeForm";
+import HypothesisCard from "./HypothesisCard";
+import { IntakeData } from "@/lib/types";
 
-type DataTab = "heute" | "verlauf" | "pddm" | "ziele" | "fragebogen";
+type DataTab = "heute" | "verlauf" | "leitsymptom" | "pddm" | "ziele" | "fragebogen";
 
 // Direkte Dateneingabe für einen Mandanten durch die Therapeutin/den
 // Therapeuten (z. B. Erstanamnese im Termin) – schreibt direkt in den
 // Mandanten-Datensatz (siehe usePatientCheckIns & Co. in lib/storage.ts),
 // unabhängig vom eigenen Tracking-Stand dieses Geräts.
 export default function PatientDataEntry({ patientId }: { patientId: string }) {
-  const [regionId, setRegionId] = useState("knie");
-  const [pddmMode, setPddmMode] = useState<null | "live" | "paper">(null);
+  // Startet in der Region mit den meisten Einträgen (z. B. Demo-Mandanten
+  // "Ellbogen"), sonst Knie.
+  const { record } = usePatientRecord(patientId);
+  const [regionId, setRegionId] = useState(() => {
+    const counts = new Map<string, number>();
+    const regionIds = [
+      ...(record?.checkIns ?? []).map((c) => c.regionId),
+      ...(record?.pddm ?? []).map((a) => a.regionId),
+      ...(record?.leadRatings ?? []).map((r) => r.regionId),
+    ];
+    for (const r of regionIds) counts.set(r, (counts.get(r) ?? 0) + 1);
+    let best = "knie";
+    let bestCount = 0;
+    counts.forEach((n, r) => {
+      if (n > bestCount) {
+        best = r;
+        bestCount = n;
+      }
+    });
+    return best;
+  });
+  const [pddmMode, setPddmMode] = useState<null | "live" | "paper" | "intakeA" | "intakeB">(null);
+  const [intake, setIntake] = useState<IntakeData | null>(null);
 
   const { entries, updateEntry, deleteEntry, addEntry } = usePatientCheckIns(patientId, regionId);
   const otherRegionIds = usePatientOtherRegionsWithEntries(patientId, regionId);
@@ -39,6 +67,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
   const { goals, addGoal, deleteGoal, updateGoal } = usePatientPSFSGoals(patientId, regionId);
   const { ratings, addRating } = usePatientPSFSRatings(patientId, regionId);
   const { results, addResult, deleteResult } = usePatientQuestionnaireResults(patientId, regionId);
+  const lead = useLeadSymptoms(patientId, regionId);
 
   // Sanfte Führung: erst Bestandsaufnahme (Bereiche), dann Ziele, erst
   // danach das laufende Tracking – frei änderbar, sobald einmal geladen.
@@ -58,6 +87,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
           { id: "ziele" as DataTab, label: "Ziele" },
           { id: "heute" as DataTab, label: "Heute" },
           { id: "verlauf" as DataTab, label: `Verlauf (${entries.length})` },
+          { id: "leitsymptom" as DataTab, label: "Leitsymptom" },
           { id: "fragebogen" as DataTab, label: "Fragebögen" },
         ].map((t) => (
           <button
@@ -89,6 +119,7 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
           <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-6">Noch keine Check-ins für diesen Bereich.</p>
         ) : (
           <div className="space-y-3">
+            <LoadProgress entries={entries} />
             <ActivityReliability entries={entries} />
             {entries.map((entry) => (
               <EntryCard key={entry.id} entry={entry} onUpdate={updateEntry} onDelete={deleteEntry} />
@@ -97,13 +128,38 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
         ))}
 
       {tab === "pddm" &&
-        (pddmMode ? (
+        (pddmMode === "intakeA" ? (
+          <IntakeForm
+            regionId={regionId}
+            onCancel={() => setPddmMode(null)}
+            onNext={(data) => {
+              setIntake(data);
+              setPddmMode("intakeB");
+            }}
+          />
+        ) : pddmMode ? (
           <PDDMForm
             key={pddmMode}
             regionId={regionId}
-            transcribe={pddmMode === "paper"}
+            transcribe={pddmMode === "paper" || pddmMode === "intakeB"}
+            title={pddmMode === "intakeB" ? "Erstbogen · Teil B: Die 5 Bereiche" : undefined}
             onSubmit={(a) => {
-              addAssessment(a);
+              if (pddmMode === "intakeB" && intake) {
+                addAssessment({ ...a, intake });
+                // Erstbogen-Angaben zusätzlich als laufende Verläufe anlegen.
+                if (intake.leadSymptom) {
+                  const sid = lead.addSymptom(intake.leadSymptom);
+                  if (intake.leadValue !== undefined) lead.rate(sid, a.date, intake.leadValue, intake.leadStartupMin);
+                }
+                for (const g of intake.goals) {
+                  const gid = addGoal(g.label);
+                  if (g.value !== undefined) addRating(gid, g.value, a.date);
+                }
+                if (intake.rested !== undefined) lead.rateSleep(a.date, intake.rested);
+                setIntake(null);
+              } else {
+                addAssessment(a);
+              }
               setPddmMode(null);
             }}
             onDone={() => setPddmMode(null)}
@@ -115,6 +171,12 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
                 Schritt 1 von 3 – Bestandsaufnahme
               </p>
             )}
+            <button
+              onClick={() => setPddmMode("intakeA")}
+              className="w-full rounded-lg bg-brand-800 text-white font-semibold py-2.5 text-sm hover:bg-brand-900 transition"
+            >
+              Erstbogen übertragen (mit Arbeitshypothese)
+            </button>
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setPddmMode("live")}
@@ -142,11 +204,26 @@ export default function PatientDataEntry({ patientId }: { patientId: string }) {
                 </button>
               </div>
             )}
+            {sortedAssessments[0] && <HypothesisCard assessment={sortedAssessments[0]} />}
             {sortedAssessments.map((a) => (
               <PDDMResultCard key={a.id} assessment={a} onDelete={deleteAssessment} />
             ))}
           </div>
         ))}
+
+      {tab === "leitsymptom" && (
+        <LeadSymptomPanel
+          regionId={regionId}
+          symptoms={lead.symptoms}
+          ratings={lead.ratings}
+          sleep={lead.sleep}
+          checkIns={entries}
+          onAddSymptom={lead.addSymptom}
+          onDeleteSymptom={lead.deleteSymptom}
+          onRate={lead.rate}
+          onRateSleep={lead.rateSleep}
+        />
+      )}
 
       {tab === "ziele" && (
         <div className="space-y-2">

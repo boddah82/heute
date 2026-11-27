@@ -21,11 +21,16 @@ import PSFSPanel from "@/components/PSFSPanel";
 import GoalActionSummary from "@/components/GoalActionSummary";
 import PainTrendChart from "@/components/PainTrendChart";
 import ActivityReliability from "@/components/ActivityReliability";
+import LoadProgress from "@/components/LoadProgress";
+import LeadSymptomPanel from "@/components/LeadSymptomPanel";
+import IntakeForm from "@/components/IntakeForm";
+import { IntakeData } from "@/lib/types";
 import PDDMPainTrendChart from "@/components/PDDMPainTrendChart";
 import QuestionnairePanel from "@/components/QuestionnairePanel";
 import {
   useActiveRegion,
   useCheckIns,
+  useLeadSymptoms,
   useOtherRegionsWithEntries,
   usePDDMAssessments,
   usePlan,
@@ -40,7 +45,7 @@ import { readPlanFromLocation, clearPlanFromUrl } from "@/lib/planLink";
 import { readHistoryFromLocation, clearHistoryFromUrl } from "@/lib/historyLink";
 import { TrainingPlan, HistoryBundle } from "@/lib/types";
 
-type Tab = "heute" | "rechner" | "verlauf" | "pddm" | "wissen" | "ziele" | "fragebogen";
+type Tab = "heute" | "rechner" | "verlauf" | "leitsymptom" | "pddm" | "wissen" | "ziele" | "fragebogen";
 type Mode = "patient" | "therapist";
 
 // Liest einen evtl. im Link enthaltenen Plan/Verlauf synchron beim ersten
@@ -71,6 +76,7 @@ export default function Home() {
   const { goals, addGoal, deleteGoal, updateGoal } = usePSFSGoals(regionId);
   const { ratings, addRating } = usePSFSRatings(regionId);
   const { results: questionnaireResults, addResult: addQuestionnaireResult, deleteResult: deleteQuestionnaireResult } = useQuestionnaireResults(regionId);
+  const lead = useLeadSymptoms(null, regionId);
   const { patients, addPatient, deletePatient } = usePatients();
   // Sanfte Führung beim Einstieg: erst Bestandsaufnahme (Bereiche), dann
   // Ziele, erst danach das laufende Tracking – aber frei änderbar, sobald
@@ -83,6 +89,10 @@ export default function Home() {
   const [mode, setMode] = useState<Mode>("patient");
   const [activePatientId, setActivePatientId] = useState<string | null>(null);
   const [showPDDMForm, setShowPDDMForm] = useState(false);
+  // Erstbogen für Patientinnen/Patienten: Teil A (IntakeForm) -> Teil B
+  // (PDDM-Fragen) -> Hinweis zum Senden an den Therapeuten.
+  const [intakeStep, setIntakeStep] = useState<null | "A" | "B" | "done">(null);
+  const [intake, setIntake] = useState<IntakeData | null>(null);
   const [pendingPlan, setPendingPlan] = useState<TrainingPlan | null>(readPendingPlan);
   const [pendingHistory, setPendingHistory] = useState<HistoryBundle | null>(readPendingHistory);
 
@@ -167,6 +177,7 @@ export default function Home() {
             { id: "ziele" as Tab, label: "Ziele" },
             { id: "heute" as Tab, label: "Heute" },
             { id: "verlauf" as Tab, label: `Verlauf (${entries.length})` },
+            { id: "leitsymptom" as Tab, label: "Leitsymptom" },
             { id: "rechner" as Tab, label: "Rechner" },
             { id: "fragebogen" as Tab, label: "Fragebögen" },
             { id: "wissen" as Tab, label: "Wissen" },
@@ -234,6 +245,7 @@ export default function Home() {
               ) : (
                 <>
                   <PainTrendChart entries={entries} />
+                  <LoadProgress entries={entries} />
                   <ActivityReliability entries={entries} />
                   {entries.map((entry) => (
                     <EntryCard key={entry.id} entry={entry} onUpdate={updateEntry} onDelete={deleteEntry} />
@@ -242,7 +254,55 @@ export default function Home() {
               ))}
 
             {tab === "pddm" &&
-              (showPDDMForm ? (
+              (intakeStep === "A" ? (
+                <IntakeForm
+                  audience="patient"
+                  regionId={regionId}
+                  onCancel={() => setIntakeStep(null)}
+                  onNext={(data) => {
+                    setIntake(data);
+                    setIntakeStep("B");
+                  }}
+                />
+              ) : intakeStep === "B" ? (
+                <PDDMForm
+                  regionId={regionId}
+                  title="Fragebogen · Teil B von 2"
+                  onSubmit={(a) => {
+                    if (!intake) {
+                      addAssessment(a);
+                      return;
+                    }
+                    addAssessment({ ...a, intake });
+                    if (intake.leadSymptom) {
+                      const sid = lead.addSymptom(intake.leadSymptom);
+                      if (intake.leadValue !== undefined) lead.rate(sid, a.date, intake.leadValue, intake.leadStartupMin);
+                    }
+                    for (const g of intake.goals) {
+                      const gid = addGoal(g.label);
+                      if (g.value !== undefined) addRating(gid, g.value, a.date);
+                    }
+                    if (intake.rested !== undefined) lead.rateSleep(a.date, intake.rested);
+                    setIntake(null);
+                  }}
+                  onDone={() => setIntakeStep("done")}
+                />
+              ) : intakeStep === "done" ? (
+                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 space-y-3">
+                  <p className="font-semibold text-slate-900 dark:text-slate-100">Danke – Ihr Fragebogen ist gespeichert.</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-300">
+                    Letzter Schritt: Schicken Sie ihn an Ihre Therapeutin / Ihren Therapeuten. Tippen Sie auf den Knopf, kopieren
+                    Sie den Link und senden Sie ihn z. B. per WhatsApp oder E-Mail.
+                  </p>
+                  <ExportPanel
+                    label="Fragebogen an Therapeut senden"
+                    buttonClassName="w-full rounded-lg bg-brand-700 text-white font-semibold py-2.5 text-sm hover:bg-brand-800 transition"
+                  />
+                  <button onClick={() => setIntakeStep(null)} className="w-full text-sm text-slate-500 dark:text-slate-400 py-1">
+                    Zur Übersicht
+                  </button>
+                </div>
+              ) : showPDDMForm ? (
                 <PDDMForm
                   regionId={regionId}
                   onSubmit={addAssessment}
@@ -250,6 +310,20 @@ export default function Home() {
                 />
               ) : (
                 <div className="space-y-4">
+                  {!assessments.some((a) => a.intake) && (
+                    <div className="bg-brand-50 dark:bg-brand-900/40 border border-brand-200 dark:border-brand-700 rounded-lg p-3 space-y-2">
+                      <p className="text-sm text-brand-900 dark:text-brand-100">
+                        <span className="font-semibold">Vor dem ersten Termin:</span> Fragebogen zu Ihren Beschwerden ausfüllen
+                        (ca. 10 Min.) und an Ihre Therapeutin / Ihren Therapeuten senden. Wählen Sie oben zuerst den Bereich, um den es geht.
+                      </p>
+                      <button
+                        onClick={() => setIntakeStep("A")}
+                        className="w-full rounded-lg bg-brand-800 text-white font-semibold py-2.5 text-sm hover:bg-brand-900 transition"
+                      >
+                        Fragebogen ausfüllen
+                      </button>
+                    </div>
+                  )}
                   {assessments.length === 0 && (
                     <p className="text-xs font-medium text-brand-700 dark:text-brand-300 uppercase tracking-wide">
                       Schritt 1 von 3 – Bestandsaufnahme
@@ -314,6 +388,20 @@ export default function Home() {
                   onRate={addRating}
                 />
               </div>
+            )}
+
+            {tab === "leitsymptom" && (
+              <LeadSymptomPanel
+                regionId={regionId}
+                symptoms={lead.symptoms}
+                ratings={lead.ratings}
+                sleep={lead.sleep}
+                checkIns={entries}
+                onAddSymptom={lead.addSymptom}
+                onDeleteSymptom={lead.deleteSymptom}
+                onRate={lead.rate}
+                onRateSleep={lead.rateSleep}
+              />
             )}
 
             {tab === "fragebogen" && (

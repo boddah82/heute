@@ -75,6 +75,9 @@ export interface PDDMAssessment {
   // "paper": vom ausgehändigten Papierbogen nachträglich übertragen (Datum =
   // Ausfülldatum des Bogens, nicht Eingabedatum). Fehlt bei Eingabe in der App.
   source?: "paper";
+  // Zusatzangaben aus dem Erstbogen (Teil A), falls über "Erstbogen
+  // übertragen" erfasst. Fehlt bei reinen PDDM-Einschätzungen.
+  intake?: IntakeData;
   // Freie Anmerkungen des Patienten je Frage (Schlüssel = Frage-ID), z. B.
   // handschriftliche Randnotizen auf dem Papierbogen. Fließen bewusst nicht
   // in die A/B-Einordnung ein, werden nur zur Einordnung angezeigt.
@@ -162,6 +165,10 @@ export interface PatientRecord {
   psfsGoals: PSFSGoal[];
   psfsRatings: PSFSRating[];
   questionnaireResults: QuestionnaireResult[];
+  // Optional, damit ältere Datensätze/Links ohne diese Felder gültig bleiben.
+  leadSymptoms?: LeadSymptom[];
+  leadRatings?: LeadSymptomRating[];
+  sleep?: SleepEntry[];
   importedAt: string; // ISO timestamp
 }
 
@@ -173,5 +180,57 @@ export interface HistoryBundle {
   psfsGoals: PSFSGoal[];
   psfsRatings: PSFSRating[];
   questionnaireResults: QuestionnaireResult[];
+  leadSymptoms?: LeadSymptom[];
+  leadRatings?: LeadSymptomRating[];
+  sleep?: SleepEntry[];
   exportedAt: string; // ISO timestamp
+}
+
+// Leitsymptom (eigene Umsetzung nach dem Prinzip Wiedertest-/Asterisk-Zeichen
+// + NPRS 0–10): eine feste Situation, die den Patienten am meisten stört
+// (z. B. "Erste Schritte morgens"), unabhängig von einer Aktivität immer
+// gleich bewertet. Zeigt, ob sich das Leitsymptom über Wochen verändert.
+export interface LeadSymptom {
+  id: string;
+  regionId: string;
+  label: string;
+  createdAt: string; // ISO timestamp
+}
+
+export interface LeadSymptomRating {
+  id: string;
+  regionId: string;
+  symptomId: string;
+  date: string; // ISO date (yyyy-mm-dd)
+  value: number; // 0-10
+  startupMin?: number; // optional: Minuten, bis es "eingelaufen"/besser ist
+  createdAt: string; // ISO timestamp
+}
+
+// Schlaf: eine Frage pro Morgen, unabhängig von der Region.
+export interface SleepEntry {
+  id: string;
+  date: string; // ISO date (yyyy-mm-dd)
+  rested: number; // 0 = gar nicht erholt, 10 = voll erholt
+  createdAt: string; // ISO timestamp
+}
+
+// Erstbogen Teil A: Angaben vor den PDDM-Fragen. Leitsymptom, Ziele und
+// Schlaf werden zusätzlich als normale Einträge angelegt (Leitsymptom-,
+// Ziele- und Schlaf-Verlauf); hier bleibt der Stand vom Erstbogen erhalten.
+export type IntakeDuration = "unter 6 Wochen" | "6 Wochen bis 3 Monate" | "über 3 Monate";
+export type IntakeCourse = "besser" | "gleich" | "schlechter" | "wechselnd";
+
+export interface IntakeData {
+  duration?: IntakeDuration;
+  course?: IntakeCourse;
+  redFlags: Record<string, "Ja" | "Nein">;
+  leadSymptom?: string;
+  leadValue?: number;
+  leadStartupMin?: number;
+  goals: { label: string; value?: number }[];
+  rested?: number;
+  ownExplanation?: string; // "Was glauben Sie selbst, woher die Beschwerden kommen?"
+  toldSoFar?: string; // "Was hat man Ihnen bisher dazu gesagt?"
+  expectation?: string; // "Was erhoffen Sie sich von der Behandlung?"
 }

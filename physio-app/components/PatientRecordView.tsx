@@ -9,6 +9,9 @@ import { OEREBRO_SCORE_RANGE, OEREBRO_CUTOFF } from "@/lib/oerebro";
 import TrafficLightBadge from "./TrafficLightBadge";
 import PDDMPainTrendChart from "./PDDMPainTrendChart";
 import InterventionPlan from "./InterventionPlan";
+import LoadProgress from "./LoadProgress";
+import LeadSymptomPanel from "./LeadSymptomPanel";
+import HypothesisCard from "./HypothesisCard";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("de-DE", {
@@ -35,6 +38,7 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
       ...record.pddm.map((a) => a.regionId),
       ...record.psfsGoals.map((g) => g.regionId),
       ...record.questionnaireResults.map((q) => q.regionId),
+      ...(record.leadSymptoms ?? []).map((l) => l.regionId),
     ])
   );
 
@@ -60,6 +64,10 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
         return (
           <div key={regionId} className="space-y-3">
             <h3 className="font-semibold text-slate-900 dark:text-slate-100">{region.label}</h3>
+
+            {pddm.length > 0 && (
+              <HypothesisCard assessment={[...pddm].sort((a, b) => (a.date < b.date ? 1 : -1))[0]} />
+            )}
 
             <InterventionPlan
               pddm={[...pddm].sort((x, y) => (x.date < y.date ? 1 : -1))[0]}
@@ -126,6 +134,7 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
                 .filter((r) => r.goalId === goal.id)
                 .sort((a, b) => (a.date < b.date ? 1 : -1));
               const latest = ratings[0];
+              const first = ratings[ratings.length - 1];
               return (
                 <div key={goal.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between">
                   <div>
@@ -138,12 +147,28 @@ export default function PatientRecordView({ record }: { record: PatientRecord })
                   </div>
                   {latest && (
                     <p className="text-sm font-semibold text-brand-800 dark:text-brand-200 shrink-0">
+                      {first && first !== latest && (
+                        <span className="font-normal text-slate-500 dark:text-slate-400">{first.value} → </span>
+                      )}
                       {latest.value}/10 <span className="font-normal text-slate-400 dark:text-slate-500">({formatDate(latest.date)})</span>
                     </p>
                   )}
                 </div>
               );
             })}
+
+            {(record.leadSymptoms ?? []).some((l) => l.regionId === regionId) && (
+              <LeadSymptomPanel
+                regionId={regionId}
+                readOnly
+                symptoms={(record.leadSymptoms ?? []).filter((l) => l.regionId === regionId)}
+                ratings={(record.leadRatings ?? []).filter((r) => r.regionId === regionId)}
+                sleep={record.sleep ?? []}
+                checkIns={checkIns}
+              />
+            )}
+
+            <LoadProgress entries={checkIns} />
 
             {checkIns.length === 0 ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">Keine Check-ins.</p>

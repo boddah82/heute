@@ -63,6 +63,14 @@ export const LADDERS: Record<string, LadderStep[]> = {
     { label: "Kleine Hüpfer (Pogo)", purpose: "aufbauen", hint: "Wenige Kontakte, Höhe niedrig." },
     { label: "Laufen/Springen aufbauen", purpose: "alltag", hint: "Gehen-Laufen-Wechsel, Laufanteil steigern." },
   ],
+  ellbogen: [
+    { label: "Halten: Handgelenk gegen Widerstand strecken", purpose: "lindern", hint: "30–45 s halten, Druck so wählen, dass es passt." },
+    { label: "Handgelenk strecken mit leichtem Gewicht", purpose: "aufbauen", hint: "Langsam ablassen, Gewicht in kleinen Schritten." },
+    { label: "Unterarm drehen mit Hammer oder Stab", purpose: "aufbauen", hint: "Hebel ist die Stellschraube: weiter unten greifen = leichter." },
+    { label: "Griffkraft (Ball, Handtrainer)", purpose: "aufbauen", hint: "Erst locker, dann fester." },
+    { label: "Tragen (Kurzhantel, Tasche)", purpose: "aufbauen", hint: "Gewicht oder Strecke steigern." },
+    { label: "Greifen wie im Alltag/Beruf", purpose: "alltag", hint: "Z. B. Tasse, Werkzeug, Händedruck." },
+  ],
   huefte: [
     { label: "Brücke", purpose: "lindern", hint: "Beidbeinig, später einbeinig." },
     { label: "Bein abspreizen in Seitlage", purpose: "aufbauen", hint: "Bewegungsumfang und Gewicht anpassen." },

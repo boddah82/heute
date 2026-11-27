@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
-import { CheckIn, PDDMAssessment, TrainingPlan, PSFSGoal, PSFSRating, Patient, PatientRecord, HistoryBundle, QuestionnaireResult } from "./types";
+import { CheckIn, PDDMAssessment, TrainingPlan, PSFSGoal, PSFSRating, Patient, PatientRecord, HistoryBundle, QuestionnaireResult, LeadSymptom, LeadSymptomRating, SleepEntry } from "./types";
 
 const THEME_KEY = "rrt.theme.v1";
 const STORAGE_KEY = "rrt.checkins.v1";
@@ -13,6 +13,9 @@ const PSFS_RATINGS_KEY = "rrt.psfsRatings.v1";
 const PATIENTS_KEY = "rrt.patients.v1";
 const PATIENT_RECORDS_KEY = "rrt.patientRecords.v1";
 const QUESTIONNAIRE_RESULTS_KEY = "rrt.questionnaireResults.v1";
+const LEAD_SYMPTOMS_KEY = "rrt.leadSymptoms.v1";
+const LEAD_RATINGS_KEY = "rrt.leadRatings.v1";
+const SLEEP_KEY = "rrt.sleep.v1";
 
 // Minimal external-store wrapper around localStorage so reads happen during
 // render (via useSyncExternalStore) instead of in an effect, and writes from
@@ -121,6 +124,9 @@ const psfsRatingsStore = createLocalStorageStore<PSFSRating[]>(PSFS_RATINGS_KEY,
 const patientsStore = createLocalStorageStore<Patient[]>(PATIENTS_KEY, []);
 const patientRecordsStore = createLocalStorageStore<PatientRecord[]>(PATIENT_RECORDS_KEY, []);
 const questionnaireResultsStore = createLocalStorageStore<QuestionnaireResult[]>(QUESTIONNAIRE_RESULTS_KEY, []);
+const leadSymptomsStore = createLocalStorageStore<LeadSymptom[]>(LEAD_SYMPTOMS_KEY, []);
+const leadRatingsStore = createLocalStorageStore<LeadSymptomRating[]>(LEAD_RATINGS_KEY, []);
+const sleepStore = createLocalStorageStore<SleepEntry[]>(SLEEP_KEY, []);
 
 export function useCheckIns(regionId: string) {
   const all = useSyncExternalStore(
@@ -230,6 +236,9 @@ export function buildHistoryBundle(): HistoryBundle {
     psfsGoals: psfsGoalsStore.getSnapshot(),
     psfsRatings: psfsRatingsStore.getSnapshot(),
     questionnaireResults: questionnaireResultsStore.getSnapshot(),
+    leadSymptoms: leadSymptomsStore.getSnapshot(),
+    leadRatings: leadRatingsStore.getSnapshot(),
+    sleep: sleepStore.getSnapshot(),
     exportedAt: new Date().toISOString(),
   };
 }
@@ -299,6 +308,7 @@ export function usePSFSGoals(regionId: string) {
     (label: string) => {
       const goal: PSFSGoal = { id: crypto.randomUUID(), regionId, label, createdAt: new Date().toISOString() };
       psfsGoalsStore.set([goal, ...psfsGoalsStore.getSnapshot()]);
+      return goal.id;
     },
     [regionId]
   );
@@ -325,12 +335,12 @@ export function usePSFSRatings(regionId: string) {
   const ratings = useMemo(() => all.filter((r) => r.regionId === regionId), [all, regionId]);
 
   const addRating = useCallback(
-    (goalId: string, value: number) => {
+    (goalId: string, value: number, date?: string) => {
       const rating: PSFSRating = {
         id: crypto.randomUUID(),
         regionId,
         goalId,
-        date: new Date().toISOString().slice(0, 10),
+        date: date ?? new Date().toISOString().slice(0, 10),
         value,
         createdAt: new Date().toISOString(),
       };
@@ -393,6 +403,9 @@ export function importPatientRecord(patientId: string, bundle: HistoryBundle) {
     psfsGoals: bundle.psfsGoals,
     psfsRatings: bundle.psfsRatings,
     questionnaireResults: bundle.questionnaireResults,
+    leadSymptoms: bundle.leadSymptoms ?? [],
+    leadRatings: bundle.leadRatings ?? [],
+    sleep: bundle.sleep ?? [],
     importedAt: new Date().toISOString(),
   };
   const others = patientRecordsStore.getSnapshot().filter((r) => r.patientId !== patientId);
@@ -531,6 +544,7 @@ export function usePatientPSFSGoals(patientId: string, regionId: string) {
       const rec = getOrCreatePatientRecord(patientId);
       const goal: PSFSGoal = { id: crypto.randomUUID(), regionId, label, createdAt: new Date().toISOString() };
       updatePatientRecord(patientId, { psfsGoals: [goal, ...rec.psfsGoals] });
+      return goal.id;
     },
     [patientId, regionId]
   );
@@ -572,13 +586,13 @@ export function usePatientPSFSRatings(patientId: string, regionId: string) {
   );
 
   const addRating = useCallback(
-    (goalId: string, value: number) => {
+    (goalId: string, value: number, date?: string) => {
       const rec = getOrCreatePatientRecord(patientId);
       const rating: PSFSRating = {
         id: crypto.randomUUID(),
         regionId,
         goalId,
-        date: new Date().toISOString().slice(0, 10),
+        date: date ?? new Date().toISOString().slice(0, 10),
         value,
         createdAt: new Date().toISOString(),
       };
@@ -634,4 +648,121 @@ export function useActiveRegion(defaultRegion: string) {
   }, []);
 
   return { regionId: stored ?? defaultRegion, select };
+}
+
+// Legt einen Demo-Mandanten samt fertigem Datensatz an (Therapeuten-Bereich,
+// "Testvorschau"). Ein schon vorhandener Mandant mit demselben Namen wird
+// ersetzt, damit wiederholtes Laden keine Dubletten erzeugt.
+export function seedDemoPatient(name: string, bundle: Omit<HistoryBundle, "exportedAt">): string {
+  const existing = patientsStore.getSnapshot().find((p) => p.name === name);
+  const patient: Patient = existing ?? { id: crypto.randomUUID(), name, createdAt: new Date().toISOString() };
+  if (!existing) patientsStore.set([patient, ...patientsStore.getSnapshot()]);
+  importPatientRecord(patient.id, { ...bundle, exportedAt: new Date().toISOString() });
+  return patient.id;
+}
+
+// ---------------------------------------------------------------------------
+// Leitsymptom + Schlaf. Ein Hook für beide Orte: eigenes Gerät (patientId
+// null) oder Mandanten-Datensatz im Therapeuten-Bereich (patientId gesetzt).
+// ---------------------------------------------------------------------------
+type LeadData = { symptoms: LeadSymptom[]; ratings: LeadSymptomRating[]; sleep: SleepEntry[] };
+
+function readLead(patientId: string | null): LeadData {
+  if (!patientId) {
+    return { symptoms: leadSymptomsStore.getSnapshot(), ratings: leadRatingsStore.getSnapshot(), sleep: sleepStore.getSnapshot() };
+  }
+  const rec = patientRecordsStore.getSnapshot().find((r) => r.patientId === patientId);
+  return { symptoms: rec?.leadSymptoms ?? [], ratings: rec?.leadRatings ?? [], sleep: rec?.sleep ?? [] };
+}
+
+function writeLead(patientId: string | null, patch: Partial<LeadData>) {
+  if (!patientId) {
+    if (patch.symptoms) leadSymptomsStore.set(patch.symptoms);
+    if (patch.ratings) leadRatingsStore.set(patch.ratings);
+    if (patch.sleep) sleepStore.set(patch.sleep);
+    return;
+  }
+  updatePatientRecord(patientId, {
+    ...(patch.symptoms ? { leadSymptoms: patch.symptoms } : {}),
+    ...(patch.ratings ? { leadRatings: patch.ratings } : {}),
+    ...(patch.sleep ? { sleep: patch.sleep } : {}),
+  });
+}
+
+export function useLeadSymptoms(patientId: string | null, regionId: string) {
+  const ownSymptoms = useSyncExternalStore(leadSymptomsStore.subscribe, leadSymptomsStore.getSnapshot, leadSymptomsStore.getServerSnapshot);
+  const ownRatings = useSyncExternalStore(leadRatingsStore.subscribe, leadRatingsStore.getSnapshot, leadRatingsStore.getServerSnapshot);
+  const ownSleep = useSyncExternalStore(sleepStore.subscribe, sleepStore.getSnapshot, sleepStore.getServerSnapshot);
+  const records = useSyncExternalStore(patientRecordsStore.subscribe, patientRecordsStore.getSnapshot, patientRecordsStore.getServerSnapshot);
+
+  const data = useMemo<LeadData>(() => {
+    if (!patientId) return { symptoms: ownSymptoms, ratings: ownRatings, sleep: ownSleep };
+    const rec = records.find((r) => r.patientId === patientId);
+    return { symptoms: rec?.leadSymptoms ?? [], ratings: rec?.leadRatings ?? [], sleep: rec?.sleep ?? [] };
+  }, [patientId, ownSymptoms, ownRatings, ownSleep, records]);
+
+  const symptoms = useMemo(() => data.symptoms.filter((s) => s.regionId === regionId), [data, regionId]);
+  const ratings = useMemo(() => data.ratings.filter((r) => r.regionId === regionId), [data, regionId]);
+
+  const addSymptom = useCallback(
+    (label: string) => {
+      const cur = readLead(patientId);
+      const s: LeadSymptom = { id: crypto.randomUUID(), regionId, label, createdAt: new Date().toISOString() };
+      writeLead(patientId, { symptoms: [s, ...cur.symptoms] });
+      return s.id;
+    },
+    [patientId, regionId]
+  );
+
+  const deleteSymptom = useCallback(
+    (id: string) => {
+      const cur = readLead(patientId);
+      writeLead(patientId, {
+        symptoms: cur.symptoms.filter((s) => s.id !== id),
+        ratings: cur.ratings.filter((r) => r.symptomId !== id),
+      });
+    },
+    [patientId]
+  );
+
+  // Eine Bewertung pro Leitsymptom und Tag: ein zweiter Eintrag am selben
+  // Tag ersetzt den ersten.
+  const rate = useCallback(
+    (symptomId: string, date: string, value: number, startupMin?: number) => {
+      const cur = readLead(patientId);
+      const r: LeadSymptomRating = {
+        id: crypto.randomUUID(),
+        regionId,
+        symptomId,
+        date,
+        value,
+        ...(startupMin !== undefined ? { startupMin } : {}),
+        createdAt: new Date().toISOString(),
+      };
+      writeLead(patientId, {
+        ratings: [r, ...cur.ratings.filter((x) => !(x.symptomId === symptomId && x.date === date))],
+      });
+    },
+    [patientId, regionId]
+  );
+
+  const rateSleep = useCallback(
+    (date: string, rested: number) => {
+      const cur = readLead(patientId);
+      const e: SleepEntry = { id: crypto.randomUUID(), date, rested, createdAt: new Date().toISOString() };
+      writeLead(patientId, { sleep: [e, ...cur.sleep.filter((x) => x.date !== date)] });
+    },
+    [patientId]
+  );
+
+  return { symptoms, ratings, sleep: data.sleep, addSymptom, deleteSymptom, rate, rateSleep };
+}
+
+// Legt immer einen NEUEN Mandanten an und übernimmt den eingefügten Verlauf
+// (im Gegensatz zu seedDemoPatient wird nichts Bestehendes ersetzt).
+export function importIntoNewPatient(name: string, bundle: HistoryBundle): string {
+  const patient: Patient = { id: crypto.randomUUID(), name, createdAt: new Date().toISOString() };
+  patientsStore.set([patient, ...patientsStore.getSnapshot()]);
+  importPatientRecord(patient.id, bundle);
+  return patient.id;
 }

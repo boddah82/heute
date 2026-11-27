@@ -44,3 +44,14 @@ export function clearHistoryFromUrl() {
   url.searchParams.delete(PARAM);
   window.history.replaceState(null, "", url.toString());
 }
+
+// Eingefügter Link oder reiner Code -> Verlauf. Für den Therapeuten-Bereich:
+// Links aus der App funktionieren nicht überall als Aufruf (z. B. in der
+// Artifact-Ansicht werden Adress-Parameter nicht weitergegeben), Einfügen
+// klappt immer.
+export function decodeHistoryFromText(text: string): HistoryBundle | null {
+  const t = text.trim();
+  if (!t) return null;
+  const m = t.match(new RegExp(`[?&]${PARAM}=([^&#\\s]+)`));
+  return decodeHistory(m ? decodeURIComponent(m[1]) : t);
+}

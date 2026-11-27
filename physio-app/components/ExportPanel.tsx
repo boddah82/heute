@@ -7,7 +7,10 @@ import { buildHistoryLink } from "@/lib/historyLink";
 
 type Mode = "text" | "link";
 
-export default function ExportPanel() {
+export default function ExportPanel({
+  label = "Verlauf an Therapeut senden",
+  buttonClassName = "text-xs font-medium text-brand-100 underline underline-offset-2",
+}: { label?: string; buttonClassName?: string } = {}) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("link");
   const [text, setText] = useState("");
@@ -38,9 +41,9 @@ export default function ExportPanel() {
     <>
       <button
         onClick={openPanel}
-        className="text-xs font-medium text-brand-100 underline underline-offset-2"
+        className={buttonClassName}
       >
-        Verlauf an Therapeut senden
+        {label}
       </button>
 
       {open && (
@@ -50,7 +53,7 @@ export default function ExportPanel() {
               <h2 className="font-semibold text-slate-900 dark:text-slate-100">Verlauf senden</h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 {mode === "link"
-                  ? "Link kopieren und schicken – Deine Therapeutin/Dein Therapeut öffnet ihn im Therapeuten-Bereich, der Verlauf wird dort direkt übernommen."
+                  ? "Link kopieren und schicken – Deine Therapeutin/Dein Therapeut fügt ihn im Therapeuten-Bereich ein, dann wird alles direkt übernommen."
                   : "Text kopieren und z. B. per WhatsApp oder E-Mail schicken – zum Nachlesen, nicht zum automatischen Import."}
               </p>
               <div className="flex gap-2">

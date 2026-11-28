@@ -657,6 +657,12 @@ views.settings = function (root) {
   const month = new Date().toISOString().slice(0, 7);
   const spent = load('sl.usage', {})[month] || 0;
   root.innerHTML = `<h1>Einstellungen</h1>
+    ${skConnected() || talkCfg.key ? `<div class="card stack" id="xfer">
+      <b>📱 Aufs Handy übertragen</b>
+      <p class="small">Überträgt Skripte-Verbindung und Claude-Schlüssel. Mit der Handy-Kamera scannen – fertig, nichts abtippen.</p>
+      <button class="btn primary" id="xfer-show">QR-Code zeigen</button>
+      <div id="xfer-qr" hidden></div>
+    </div>` : ''}
     <div class="card stack">
       <b>🧠 Claude-Rückmeldung</b>
       <p class="small">Derselbe API-Schlüssel wie in der Sprach-App. Ist er dort schon eingetragen, steht er hier automatisch.</p>
@@ -693,6 +699,23 @@ views.settings = function (root) {
       <p class="muted small">Ohne Aufnahmen. Kein Sync zwischen Geräten (noch nicht gebaut).</p>
     </div>
     <p class="small"><a href="../lernen/">→ Sprachtraining</a></p>`;
+  const xb = $('#xfer-show', root);
+  if (xb) xb.onclick = async () => {
+    const box = $('#xfer-qr', root);
+    if (!box.hidden) { box.hidden = true; box.innerHTML = ''; xb.textContent = 'QR-Code zeigen'; return; }
+    const link = setupLink();
+    box.innerHTML = `<div class="qr" style="background:#fff;padding:12px;display:inline-block;border-radius:8px"></div>
+      <p class="muted small">Der Code enthält deine Schlüssel. Nicht abfotografieren oder weitergeben. Danach wieder ausblenden.</p>
+      <button class="btn small" id="xfer-copy">🔗 Link kopieren (z. B. an dich selbst schicken)</button>`;
+    box.hidden = false; xb.textContent = 'QR-Code ausblenden';
+    try {
+      await loadScript('vendor/qrcode.min.js');
+      new QRCode($('.qr', box), { text: link, width: 280, height: 280, correctLevel: QRCode.CorrectLevel.L });
+    } catch (e) { $('.qr', box).textContent = 'QR-Code ging nicht – nimm „Link kopieren“.'; }
+    $('#xfer-copy', box).onclick = async () => {
+      try { await navigator.clipboard.writeText(link); toast('Link kopiert'); } catch (e) { toast('Kopieren ging nicht'); }
+    };
+  };
   $('#m', root).onchange = e => { settings.model = e.target.value; saveSettings(); };
   $('#save', root).onclick = () => { talkCfg.key = $('#k', root).value.trim(); saveTalkCfg(); toast(talkCfg.key ? 'Gespeichert' : 'Kein Schlüssel'); };
   $('#rec', root).onchange = e => { settings.record = e.target.checked; saveSettings(); };
@@ -1013,6 +1036,38 @@ views.skript = function (root, arg) {
   };
 
   prepView();
+};
+
+// ---------- Einstellungen aufs Handy übertragen (QR-Code / Link) ----------
+// Die Schlüssel stehen nur im Teil nach „#“ – der wird nie an einen Server geschickt.
+function setupLink() {
+  const d = {};
+  if (settings.skUrl) d.u = settings.skUrl;
+  if (settings.skKey) d.k = settings.skKey;
+  if (talkCfg.key) d.a = talkCfg.key;
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(d)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return location.href.split('#')[0] + '#setup/' + b64;
+}
+function loadScript(src) {
+  return new Promise((ok, fail) => {
+    if (window.QRCode) return ok();
+    const el = document.createElement('script');
+    el.src = src; el.onload = ok; el.onerror = fail;
+    document.head.appendChild(el);
+  });
+}
+views.setup = function (root, arg) {
+  // Schlüssel sofort aus Adresszeile und Verlauf entfernen
+  history.replaceState(null, '', location.href.split('#')[0] + '#home');
+  let d;
+  try { d = JSON.parse(decodeURIComponent(escape(atob(arg.replace(/-/g, '+').replace(/_/g, '/'))))); }
+  catch (e) { toast('Link unvollständig – nochmal scannen'); views.home(root); return; }
+  if (d.u && d.k) { settings.skUrl = d.u; settings.skKey = d.k; saveSettings(); }
+  if (d.a) { talkCfg.key = d.a; saveTalkCfg(); }
+  root.innerHTML = `<h1>Eingerichtet</h1><div class="card stack"><p>${d.a ? '✓ Claude-Schlüssel übernommen<br>' : ''}${d.u ? '✓ Skripte verbunden – lade …' : ''}</p></div>`;
+  if (!(d.u && d.k)) { setTimeout(() => views.home(root), 1200); return; }
+  skFetch().then(n => { toast(n + ' Skripte geladen'); location.hash = '#skripte'; })
+    .catch(e => { toast(e.message); location.hash = '#settings'; });
 };
 
 // ---------- Router ----------

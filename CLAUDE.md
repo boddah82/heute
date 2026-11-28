@@ -71,7 +71,7 @@ Erst diese Datei lesen. Details nur bei Bedarf (Tabelle „Wo steht was?“).
 - Auto-Modus nur simuliert getestet (Test 34); Erkennung bei Fahrgeräusch/Bluetooth unbekannt. „Verstehen“-Karten (`r:`) seit #58 dabei.
 - Weitere Ideen aus dem Video (nicht gebaut): Vorlage-Insel „Kennenlernen“ als Frage-Antwort-Paare, Zähler „sichere Sätze“.
 - Rhetorik-Ideen (nicht gebaut): Einwand-Rollenspiel, Ausdruck-Karteikarten, Sync, Kamera in Stufe „Frei“, Shorts aus langem Skript.
-- Rhetorik-Skripte: Apps Script muss Ricky einmalig selbst bereitstellen; bis dahin nur simuliert getestet.
+- Rhetorik-Skripte: Apps Script bereitgestellt (28.11.2026), am Chromebook verbunden. Handy per „📱 Aufs Handy übertragen“ (QR-Code) – echter Scan noch nicht bestätigt.
 
 ## 8. Wo steht was?
 | Frage | Datei |
